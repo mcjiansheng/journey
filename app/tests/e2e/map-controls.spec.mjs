@@ -52,7 +52,8 @@ test('map controls align, fit the viewport, and return home',async({page})=>{
  });
  expect(geometry.upper.width).toBeCloseTo(350,0);expect(geometry.upper.height).toBeCloseTo(56,0);
  expect(geometry.panel.width).toBeCloseTo(350,0);expect(geometry.panel.height).toBeCloseTo(56,0);
- expect(Math.abs((geometry.headerRight.x+geometry.headerRight.width/2)-(geometry.upper.x+geometry.upper.width/2))).toBeLessThan(2);
+ expect(1440-geometry.headerRight.x-geometry.headerRight.width).toBeCloseTo(42,0);
+ expect(Math.abs(geometry.headerRight.y-20)).toBeLessThan(1);
  await screenshot(page,'desktop');
  await page.locator('.map-home').click();await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:/继续旅程/})).toContainText('地图控件验收旅程');
@@ -194,4 +195,28 @@ test('WebKit 320px smoke covers route picker keyboard and manual detail actions'
   await page.getByRole('button',{name:'编辑地点资料',exact:true}).click();await page.getByRole('button',{name:'取消',exact:true}).click();
   await expect(page.getByRole('heading',{name:'WebKit地点',exact:true})).toBeVisible();
  }finally{await context.close();await browser.close()}
+});
+
+for(const width of [1440,1024,390,320])test(`sync control stays anchored across page switches at ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:844});await register(page);await createTrip(page);
+ await expect(page.locator('.sync-status.synced')).toBeVisible();
+ const samples=await page.evaluate(async()=>{
+  const status=document.querySelector('.sync-status'),label=status.querySelector('span'),nav=document.querySelector(innerWidth<=760?'.bottom-nav':'.sidebar nav');
+  const measure=()=>{
+   const bubble=document.querySelector('.header-right').getBoundingClientRect(),button=status.getBoundingClientRect(),text=label.getBoundingClientRect(),icon=status.querySelector('svg').getBoundingClientRect();
+   return {text:label.textContent,sameNode:status===document.querySelector('.sync-status'),bubble:{x:bubble.x,y:bubble.y,width:bubble.width,height:bubble.height},label:{x:text.x,y:text.y,width:text.width,height:text.height},icon:{x:icon.x,y:icon.y,width:icon.width,height:icon.height},centerError:Math.abs((icon.left+(text.width?text.right:icon.right))/2-(button.left+button.width/2))};
+  };
+  const before=measure(),frames=[];
+  for(const name of ['地图','费用','设置','行程','地图','行程']){
+   nav.querySelector(`[aria-label="${name}"]`).click();
+   const until=performance.now()+(frames.length>50?65:350);
+   while(performance.now()<until){await new Promise(requestAnimationFrame);frames.push(measure())}
+  }
+  await new Promise(resolve=>setTimeout(resolve,350));frames.push(measure());return{before,frames};
+ });
+ for(const frame of samples.frames){
+  expect(frame.sameNode).toBe(true);expect(frame.text).toBe('已同步');expect(frame.centerError).toBeLessThan(1);
+  for(const part of ['bubble','label','icon'])for(const axis of ['x','y','width','height'])expect(Math.abs(frame[part][axis]-samples.before[part][axis]),`${part}.${axis}`).toBeLessThan(1);
+ }
+ await openMap(page,{mobile:width<=760});await screenshot(page,`sync-position-${width}`);
 });

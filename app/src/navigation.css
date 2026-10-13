@@ -80,27 +80,35 @@
   :root:not([data-transparency=false]) .map-shell .header-right {background:var(--surface);backdrop-filter:none;-webkit-backdrop-filter:none}
 }
 
-/* Map utilities share the same left-hand column as route and place controls. */
+/* The account controls keep identical screen and internal anchors on every page. */
 :root {--map-controls-left:108px;--map-controls-width:350px;--map-controls-top:84px}
+.app-shell .trip-header {position:relative}
+.app-shell .header-right {
+  position:relative;margin-left:auto;display:grid;grid-template-columns:112px auto;flex-shrink:0;
+  align-items:center;gap:0;padding:0 6px;pointer-events:auto;border-radius:16px;
+}
+.app-shell .header-right>button {height:44px;min-height:44px;border-radius:11px;transition:background 160ms ease}
+.app-shell .header-right>button:hover {background:var(--accent-soft)}
+.app-shell .sync-status {justify-content:center;padding:0;gap:7px;font-size:12px;line-height:20px}
+.app-shell .members-button {gap:10px;padding:0 6px}
 :root .app-shell.map-shell .trip-header {
-  position:absolute;left:var(--map-controls-left);right:auto;top:12px;
-  width:var(--map-controls-width);height:56px;min-height:56px;padding:0;gap:0;
-  display:flex;justify-content:center;border:0;border-radius:0;background:transparent;
-  box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;pointer-events:none;
+  position:absolute;left:0;right:0;top:0;width:auto;height:84px;min-height:84px;padding:0 42px;
+  border:0;border-bottom:1px solid transparent;border-radius:0;background:transparent;box-shadow:none;
+  backdrop-filter:none;-webkit-backdrop-filter:none;pointer-events:none;
 }
 .map-shell .header-right {
-  display:flex;gap:10px;max-width:100%;padding:3px 7px;pointer-events:auto;
-  border-radius:16px;background:var(--glass);box-shadow:0 3px 14px var(--optical-shadow);
+  background:var(--glass);box-shadow:0 3px 14px var(--optical-shadow);
   backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
 }
-.map-shell .header-right>button {min-height:38px;padding:0 7px;border-radius:11px;transition:background 160ms ease,transform 160ms ease}
-.map-shell .header-right>button:hover {background:var(--accent-soft)}
-.map-shell .header-right>button:active {transform:scale(.96)}
-.map-shell .map-home {display:flex;align-items:center;justify-content:center;color:var(--muted);width:38px;flex-shrink:0}
-.map-shell .sync-status span {display:inline}
-.map-shell .members-button {gap:7px}
+.map-shell .map-home {
+  position:absolute;left:var(--map-controls-left);top:20px;display:flex;align-items:center;justify-content:center;
+  width:44px;height:44px;padding:0;border-radius:14px;color:var(--muted);background:var(--glass);pointer-events:auto;
+}
+.map-shell .map-home:hover {background:var(--accent-soft)}
 @media(max-width:760px) {
   :root {--map-controls-left:14px;--map-controls-width:calc(100vw - 28px);--map-controls-top:calc(72px + env(safe-area-inset-top))}
-  :root .app-shell.map-shell .trip-header {top:calc(10px + env(safe-area-inset-top));height:48px;min-height:48px}
-  .map-shell .header-right {gap:8px}
+  .app-shell .header-right {grid-template-columns:36px auto;padding:0 4px}
+  .app-shell .members-button {gap:5px;padding:0 4px}
+  :root .app-shell.map-shell .trip-header {height:70px;min-height:70px;padding:0 20px}
+  .map-shell .map-home {left:20px;top:13px}
 }
