@@ -9,13 +9,13 @@ let app,server,base;
 const password='JourneyMapControls2026!';
 const suffix=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 
-test.beforeAll(async()=>{
+test.beforeEach(async()=>{
  mkdirSync(resolve(process.cwd(),'../.local/evidence'),{recursive:true});
  app=createApp({distPath:fileURLToPath(new URL('../../dist/',import.meta.url)),databasePath:':memory:',securityPath:':memory:',config:{amapKey:''}});
  server=await new Promise(resolve=>{const listener=app.listen(0,'127.0.0.1',()=>resolve(listener))});
  base=`http://127.0.0.1:${server.address().port}`;app.locals.config.appOrigin=base;
 });
-test.afterAll(async()=>{if(server)await shutdownServer(server,app)});
+test.afterEach(async()=>{if(server)await shutdownServer(server,app)});
 
 async function register(page){
  await page.goto(base);await page.getByRole('button',{name:'创建账号',exact:true}).click();

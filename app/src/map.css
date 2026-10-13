@@ -67,6 +67,7 @@
 @keyframes map-control-label {from {opacity:.35;transform:translateY(3px)} to {opacity:1;transform:translateY(0)}}
 @media(max-width:760px) {
   .journey-map .map-panel {max-height:calc(var(--visual-height,100dvh) - var(--map-controls-top) - 158px - env(safe-area-inset-bottom))}
+  .journey-map .map-panel.mode-detail {max-height:calc(var(--visual-height,100dvh) - var(--map-controls-top) - 228px - env(safe-area-inset-bottom))}
   .journey-map.map-searching .map-panel,.journey-map.map-keyboard-open .map-panel {max-height:calc(var(--visual-height,100dvh) - var(--map-controls-top) - 84px)}
   .journey-map.map-searching .map-upper-controls {display:flex}
   .app-shell:has(.map-keyboard-open) .bottom-nav {display:none}

@@ -35,13 +35,14 @@ export default function MapView({journey:j,onEditActivity}) {
    panelHeight.current=after;
    if(before!==null&&Math.abs(after-before)>1&&!reducedMotion())
      panelAnimation.current=element.animate([{height:`${before}px`},{height:`${after}px`}],{duration:220,easing:'cubic-bezier(.2,.7,.2,1)'});
+   if(mode==='detail'&&selected&&before!==null&&Math.abs(after-before)>1)shiftCamera(selected);
  },[mode,expanded,selected,results,suggestions,error,filter,favorites.length]);
  useEffect(()=>()=>panelAnimation.current?.cancel(),[]);
  useLayoutEffect(()=>{if(mode==='filter')panel.current.querySelector('.map-panel-title button')?.focus()},[mode]);
  const routeActivities=useMemo(()=>routeDay&&snapshot.objects.some(x=>x.id===routeDay&&x.kind==='day'&&x.state==='active')?orderedActivities(snapshot,routeDay):[],[snapshot,routeDay]);
  const saveMap=patch=>{lastContext.current={...lastContext.current,...patch};j.setContext({map:lastContext.current});};
  selectRef.current=p=>choose(p);
- useEffect(()=>{let width=innerWidth;const resize=()=>{const v=window.visualViewport;document.documentElement.style.setProperty('--visual-height',`${v?.height||innerHeight}px`);setKeyboardOpen(!!v&&innerHeight-v.height-v.offsetTop>100);if(width!==innerWidth){width=innerWidth;shiftCamera(selectedPlaceRef.current);}};resize();window.visualViewport?.addEventListener('resize',resize);return()=>window.visualViewport?.removeEventListener('resize',resize);},[]);
+ useEffect(()=>{let width=innerWidth,height=window.visualViewport?.height||innerHeight;const resize=()=>{const v=window.visualViewport,nextHeight=v?.height||innerHeight;document.documentElement.style.setProperty('--visual-height',`${nextHeight}px`);setKeyboardOpen(!!v&&innerHeight-v.height-v.offsetTop>100);if(width!==innerWidth||height!==nextHeight){width=innerWidth;height=nextHeight;shiftCamera(selectedPlaceRef.current);}};resize();window.visualViewport?.addEventListener('resize',resize);return()=>window.visualViewport?.removeEventListener('resize',resize);},[]);
  useEffect(()=>{saveMap({query,selected,routeDay,filter});},[query,selected,routeDay,filter]);
  useEffect(()=>{
    alive.current=true;let instance,disposed=false,initialized=false,userMoved=false;
@@ -131,8 +132,22 @@ export default function MapView({journey:j,onEditActivity}) {
  function shiftCamera(p,allowInitialize=false){
    if(!located(p))return;
    if(!map.current){if(allowInitialize)setCameraChoice({place:p,destination:destinationKey(trip.destination)});return;}
-   clearTimeout(cameraTimer.current);const targetMap=map.current;
-   cameraTimer.current=setTimeout(()=>{if(map.current!==targetMap)return;targetMap.setZoomAndCenter(Math.max(15,targetMap.getZoom()),[p.lng,p.lat],true);const r=panel.current?.getBoundingClientRect(),mobile=innerWidth<760;if(r)targetMap.panBy(mobile?0:(r.width+80)/2,mobile?-(r.height+100)/2:0,0);},60);
+   clearTimeout(cameraTimer.current);const targetMap=map.current,intent=cameraIntent.current;
+   cameraTimer.current=setTimeout(async()=>{
+     // Retargeting the panel can cancel one animation and start another. Use its
+     // settled bounds so a growing detail panel cannot cover the selected marker.
+     while(panelAnimation.current?.playState==='running')await panelAnimation.current.finished.catch(()=>{});
+     if(map.current!==targetMap||cameraIntent.current!==intent)return;
+     targetMap.setZoomAndCenter(Math.max(15,targetMap.getZoom()),[p.lng,p.lat],true);
+     const r=panel.current?.getBoundingClientRect();if(!r)return;
+     if(innerWidth<=760){
+       const viewport=window.visualViewport,viewportBottom=(viewport?.offsetTop||0)+(viewport?.height||innerHeight);
+       const navigation=document.querySelector('.bottom-nav')?.getBoundingClientRect();
+       const bottom=Math.min(viewportBottom,navigation?.height?navigation.top:viewportBottom);
+       const canvasBounds=canvas.current.getBoundingClientRect();
+       targetMap.panBy(0,(r.bottom+bottom)/2-(canvasBounds.top+canvasBounds.height/2),0);
+     }else targetMap.panBy((r.width+80)/2,0,0);
+   },60);
  }
  async function choose(p){const sequence=++searchSeq.current;cameraIntent.current++;setBusy(false);setError('');try{if(p.providerPlaceId&&!located(p))p=await placeDetail(p.providerPlaceId)||p;if(sequence!==searchSeq.current||!alive.current)return;setSelected(p);setMode('detail');setExpanded(false);document.activeElement?.blur?.();shiftCamera(p,true);}catch(e){if(sequence===searchSeq.current&&alive.current)setError(e.message);}}
  async function pickHere(){if(!map.current)return;const c=map.current.getCenter();setBusy(true);try{let p;try{p=await reverseGeocode(c.lng,c.lat);}catch{p={name:'',address:'',lng:c.lng,lat:c.lat,provider:null,providerPlaceId:null,category:'',sourceUrl:'',fetchedAt:null,coordSystem:'GCJ-02'};}setSelected(p);setManual({name:p.name,address:p.address});setMode('manual');}finally{setBusy(false);}}
