@@ -31,20 +31,22 @@ async function createTrip(page,name='导航动效验收'){
  await page.getByRole('dialog').getByRole('button',{name:'创建旅程'}).click();
  await expect(page.getByRole('tab',{name:/第1天/})).toBeVisible();
 }
-async function addActivity(page,name){
+async function addActivity(page,name,{touch=false}={}){
  await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await page.getByLabel('活动名称').fill(name);
- await page.getByRole('dialog').getByRole('button',{name:'完成',exact:true}).click();
+ const done=page.getByRole('dialog').getByRole('button',{name:'完成',exact:true});
+ if(touch)await done.tap();else await done.click();
+ await expect(page.getByRole('dialog')).toHaveCount(0);
  await expect(page.getByRole('heading',{name,exact:true})).toBeVisible();await expect(page.locator('.sync-status.synced')).toBeVisible();
 }
 async function screenshot(page,name){await page.screenshot({path:`../.local/evidence/navigation-${name}.png`,fullPage:true,animations:'disabled',scale:'css'})}
 async function noOverflow(page){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)}
 async function sampleSidebarMotion(page,label){
  return page.evaluate(async label=>{
-  const sidebar=document.querySelector('.sidebar'),title=document.querySelector('.trip-title>span');
+  const sidebar=document.querySelector('.sidebar');
   const measure=()=>{
-   const r=sidebar.getBoundingClientRect(),t=title.getBoundingClientRect(),icons=[...sidebar.querySelectorAll('nav button svg')].map(svg=>{const box=svg.getBoundingClientRect();return{width:box.width,height:box.height}}),buttons=[...sidebar.querySelectorAll('nav button')].map(button=>button.getBoundingClientRect());
+   const r=sidebar.getBoundingClientRect(),t=document.querySelector('.trip-title>span')?.getBoundingClientRect(),icons=[...sidebar.querySelectorAll('nav button svg')].map(svg=>{const box=svg.getBoundingClientRect();return{width:box.width,height:box.height}}),buttons=[...sidebar.querySelectorAll('nav button')].map(button=>button.getBoundingClientRect());
    const extras=[...sidebar.querySelectorAll('.brand,.back-home,.sidebar-foot')].filter(element=>{const style=getComputedStyle(element);return style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)>.01}).map(element=>{const box=element.getBoundingClientRect();return [...buttons].some(button=>box.left<button.right&&box.right>button.left&&box.top<button.bottom&&box.bottom>button.top)});
-   return{width:r.width,top:r.top,height:r.height,center:r.top+r.height/2,titleX:t.x,titleY:t.y,icons,visibleExtrasOverlap:extras.some(Boolean)};
+   return{width:r.width,top:r.top,height:r.height,center:r.top+r.height/2,titleX:t?.x??null,titleY:t?.y??null,icons,visibleExtrasOverlap:extras.some(Boolean)};
   };
   const before=measure(),button=document.querySelector(`nav[aria-label="主导航"] button[aria-label="${label}"]`);if(!button)throw new Error(`Missing navigation button: ${label}`);button.click();
   const frames=[],started=performance.now();while(performance.now()-started<520){await new Promise(requestAnimationFrame);frames.push(measure())}
@@ -55,7 +57,7 @@ function expectSidebarFramesStable(sample,title){
  expect(sample.frames.length).toBeGreaterThan(0);
  for(const frame of sample.frames){
   expect(frame.icons.every(icon=>Math.abs(icon.width-20)<1&&Math.abs(icon.height-20)<1)).toBe(true);
-  expect(Math.abs(frame.titleX-title.x)).toBeLessThan(2);expect(Math.abs(frame.titleY-title.y)).toBeLessThan(2);
+  if(frame.titleX!==null){expect(Math.abs(frame.titleX-title.x)).toBeLessThan(2);expect(Math.abs(frame.titleY-title.y)).toBeLessThan(2)}
   expect(frame.visibleExtrasOverlap).toBe(false);
  }
 }
@@ -90,7 +92,7 @@ test('navigation indicator moves across pages and rapid reversals return home cl
  await expect(page.getByRole('button',{name:/继续旅程/})).toContainText('导航动效验收');await screenshot(page,'home');
 });
 
-test('map mode centers the compact sidebar and keeps title and navigation icons stable',async({page})=>{
+test('map mode centers the compact sidebar, hides its trip title, and keeps navigation icons stable',async({page})=>{
  await page.setViewportSize({width:1440,height:900});await register(page);await createTrip(page);
  await screenshot(page,'itinerary-desktop');
  const title=page.locator('.trip-title>span');const before=await page.evaluate(()=>{
@@ -102,7 +104,7 @@ test('map mode centers the compact sidebar and keeps title and navigation icons 
  const compact={width:opening.after.width,top:opening.after.top,height:opening.after.height,center:opening.after.center,title:{x:opening.after.titleX,y:opening.after.titleY},icons:opening.after.icons};
  expect(compact.width).toBeLessThan(100);expect(Math.abs(compact.center-450)).toBeLessThan(3);
  expect(compact.icons.every(icon=>Math.abs(icon.width-20)<1&&Math.abs(icon.height-20)<1)).toBe(true);
- expect(Math.abs(compact.title.x-before.x)).toBeLessThan(2);expect(Math.abs(compact.title.y-before.y)).toBeLessThan(2);
+ expect(compact.title.x).toBeNull();expect(compact.title.y).toBeNull();await expect(title).toHaveCount(0);
  const closing=await sampleSidebarMotion(page,'行程');expectSidebarFramesStable(closing,before);
  expect(closing.frames.some(frame=>frame.width>compact.width+5&&frame.width<Math.max(...closing.frames.map(x=>x.width))-5)).toBe(true);
  await expect(page.locator('.app-shell')).not.toHaveClass(/map-shell/);await screenshot(page,'map-return');
@@ -121,9 +123,10 @@ test('map mode centers the compact sidebar and keeps title and navigation icons 
  })).toBe(true);
 });
 
-test('day selection indicator travels with its content and rapid reverse switches settle correctly',async({page})=>{
+test('day content crossfades in place with smooth height changes and rapid reversals',async({page})=>{
  await page.setViewportSize({width:1440,height:900});await register(page);await createTrip(page);
- await addActivity(page,'第一天活动');await page.getByRole('tab',{name:/第2天/}).click();await addActivity(page,'第二天活动');
+ await addActivity(page,'第一天活动');await addActivity(page,'第一天第二项');await addActivity(page,'第一天第三项');
+ await page.getByRole('tab',{name:/第2天/}).click();await addActivity(page,'第二天活动');
  await page.getByRole('tab',{name:/第3天/}).click();await addActivity(page,'第三天活动');
  await page.getByRole('tab',{name:/第1天/}).click();const firstDay=page.getByRole('tab',{name:/第1天/});await expect(firstDay).toHaveAttribute('aria-selected','true');await expect(page.getByRole('heading',{name:'第一天活动',exact:true})).toBeVisible();
  await expect.poll(()=>page.evaluate(()=>{
@@ -132,19 +135,58 @@ test('day selection indicator travels with its content and rapid reverse switche
  })).toBeLessThan(1);
  expectIndicatorTravels(await sampleIndicator(page,'.day-tabs .selection-indicator','.day-tabs [role="tab"]:nth-of-type(3)'));
  await expect(page.getByRole('heading',{name:'第三天活动',exact:true})).toBeVisible();
- const content=await page.evaluate(async()=>{
-  const target=document.querySelector('.day-content')||document.querySelector('.activity-list');const positions=[];const start=performance.now();
-  document.querySelectorAll('.day-tabs [role="tab"]')[1].click();
-  while(performance.now()-start<520){await new Promise(requestAnimationFrame);positions.push(target.getBoundingClientRect().left)}
-  return{positions,selected:document.querySelector('.day-tabs [role="tab"][aria-selected="true"] strong')?.textContent};
- });
- expect(content.selected).toMatch('第2天');expect(content.positions.some(left=>Math.abs(left-content.positions[0])>0.1)).toBe(true);
+ for(const targetDay of [0,1]){
+  const content=await page.evaluate(async targetDay=>{
+   const target=document.querySelector('.day-content'),stage=target.parentElement;
+   const measure=()=>{
+    const heading=target.querySelector('.day-heading h2').getBoundingClientRect(),list=target.querySelector('.activity-list').getBoundingClientRect();
+    return{headingX:heading.x,headingY:heading.y,listX:list.x,listY:list.y,height:stage.getBoundingClientRect().height,opacity:Number(getComputedStyle(target).opacity),outgoing:[...stage.querySelectorAll('.day-content-outgoing')].map(node=>({inert:node.inert,hidden:node.getAttribute('aria-hidden'),text:node.textContent,opacity:Number(getComputedStyle(node).opacity)}))};
+   };
+   const before=measure(),frames=[],start=performance.now();document.querySelectorAll('.day-tabs [role="tab"]')[targetDay].click();
+   while(performance.now()-start<420){await new Promise(requestAnimationFrame);frames.push(measure())}
+   return{before,frames,after:measure(),selected:document.querySelector('.day-tabs [role="tab"][aria-selected="true"] strong')?.textContent};
+  },targetDay);
+  expect(content.selected).toMatch(`第${targetDay+1}天`);
+  for(const frame of content.frames){
+   for(const key of ['headingX','headingY','listX','listY'])expect(Math.abs(frame[key]-content.before[key]),key).toBeLessThan(1);
+   for(const outgoing of frame.outgoing){expect(outgoing.inert).toBe(true);expect(outgoing.hidden).toBe('true')}
+  }
+  expect(content.frames.some(frame=>frame.opacity>0&&frame.opacity<1&&frame.outgoing.some(outgoing=>outgoing.opacity>0&&outgoing.opacity<1))).toBe(true);
+  const low=Math.min(content.before.height,content.after.height),high=Math.max(content.before.height,content.after.height);
+  expect(high-low).toBeGreaterThan(100);
+  expect(content.frames.some(frame=>frame.height>low+5&&frame.height<high-5)).toBe(true);
+  expect(content.after.opacity).toBe(1);expect(content.after.outgoing).toHaveLength(0);
+ }
  const final=await page.evaluate(async()=>{
   const tabs=[...document.querySelectorAll('.day-tabs [role="tab"]')];
   tabs[0].click();await new Promise(r=>setTimeout(r,65));tabs[2].click();await new Promise(r=>setTimeout(r,65));tabs[1].click();
-  await new Promise(r=>setTimeout(r,520));return document.querySelector('.day-tabs [role="tab"][aria-selected="true"] strong')?.textContent;
+  await new Promise(r=>setTimeout(r,520));return{selected:document.querySelector('.day-tabs [role="tab"][aria-selected="true"] strong')?.textContent,opacity:getComputedStyle(document.querySelector('.day-content')).opacity,outgoing:document.querySelectorAll('.day-content-outgoing').length,transitioning:document.querySelector('.day-content-stage').hasAttribute('data-transitioning')};
  });
- expect(final).toMatch('第2天');await expect(page.getByRole('heading',{name:'第二天活动',exact:true})).toBeVisible();await screenshot(page,'day-two');
+ expect(final.selected).toMatch('第2天');expect(final.opacity).toBe('1');expect(final.outgoing).toBe(0);expect(final.transitioning).toBe(false);
+ await expect(page.getByRole('heading',{name:'第二天活动',exact:true})).toBeVisible();await screenshot(page,'day-two');
+ const closedListTop=await page.locator('.day-content .activity-list').evaluate(list=>list.getBoundingClientRect().top);
+ await page.getByRole('button',{name:'当天操作',exact:true}).click();await expect(page.locator('.day-content .day-lifecycle')).toBeVisible();
+ const menuSwitch=await page.evaluate(async()=>{
+  const content=document.querySelector('.day-content'),stage=content.parentElement,frames=[],start=performance.now();
+  document.querySelectorAll('.day-tabs [role="tab"]')[2].click();
+  while(performance.now()-start<350){await new Promise(requestAnimationFrame);frames.push({listTop:content.querySelector('.activity-list').getBoundingClientRect().top,height:stage.getBoundingClientRect().height,contentHeight:content.getBoundingClientRect().height,menu:!!content.querySelector('.day-lifecycle')})}
+  return frames;
+ });
+ expect(menuSwitch.every(frame=>!frame.menu&&Math.abs(frame.listTop-closedListTop)<1)).toBe(true);
+ const settledMenuSwitch=menuSwitch.at(-1);expect(Math.abs(settledMenuSwitch.height-settledMenuSwitch.contentHeight)).toBeLessThan(1);
+ const interruptedResize=await page.evaluate(async()=>{
+  const content=document.querySelector('.day-content'),stage=content.parentElement,frames=[],start=performance.now();
+  document.querySelectorAll('.day-tabs [role="tab"]')[1].click();await new Promise(resolve=>setTimeout(resolve,65));
+  content.querySelector('[aria-label="当天操作"]').click();
+  while(performance.now()-start<430){await new Promise(requestAnimationFrame);frames.push({height:stage.getBoundingClientRect().height,contentHeight:content.getBoundingClientRect().height})}
+  return frames;
+ });
+ const resized=interruptedResize.at(-1);expect(Math.abs(resized.height-resized.contentHeight)).toBeLessThan(1);
+ expect(interruptedResize.some(frame=>Math.abs(frame.height-frame.contentHeight)>2)).toBe(true);
+ for(let index=1;index<interruptedResize.length;index++)expect(Math.abs(interruptedResize[index].height-interruptedResize[index-1].height)).toBeLessThan(24);
+ await page.getByRole('navigation',{name:'主导航',exact:true}).getByRole('button',{name:'费用',exact:true}).click();
+ await page.getByRole('navigation',{name:'主导航',exact:true}).getByRole('button',{name:'行程',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'第二天活动',exact:true})).toBeVisible();await expect(page.locator('.day-content-outgoing')).toHaveCount(0);
 });
 
 test('mobile widths, reduced motion, and WebKit keep navigation reachable',async({page})=>{
@@ -162,6 +204,10 @@ test('mobile widths, reduced motion, and WebKit keep navigation reachable',async
  expect(await page.locator('.selection-indicator').evaluateAll(nodes=>nodes.every(node=>{
   const style=getComputedStyle(node);return style.transitionDuration.split(',').every(value=>Number.parseFloat(value)===0)&&style.animationDuration.split(',').every(value=>Number.parseFloat(value)===0);
  }))).toBe(true);
+ await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();
+ await page.getByRole('tab',{name:/第2天/}).click();
+ await expect(page.locator('.day-content h2')).toContainText('第2天');await expect(page.locator('.day-content-outgoing')).toHaveCount(0);
+ expect(await page.locator('.day-content-stage').evaluate(stage=>({animations:stage.getAnimations({subtree:true}).length,opacity:getComputedStyle(stage.querySelector('.day-content')).opacity}))).toEqual({animations:0,opacity:'1'});
  const browser=await launchWebKit();
  try{
   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:3});const webPage=await context.newPage();
@@ -169,6 +215,9 @@ test('mobile widths, reduced motion, and WebKit keep navigation reachable',async
   await webPage.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'地图',exact:true}).tap();
   await expect(webPage.locator('.map-shell')).toBeVisible();await webPage.screenshot({path:'../.local/evidence/navigation-webkit-map.png',fullPage:true,animations:'disabled',scale:'css'});
   await webPage.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).tap();
-  await expect(webPage.getByRole('heading',{name:'行程',exact:true})).toBeVisible();await noOverflow(webPage);await context.close();
+  await expect(webPage.getByRole('heading',{name:'行程',exact:true})).toBeVisible();await noOverflow(webPage);
+  await addActivity(webPage,'WebKit第一天活动',{touch:true});await webPage.getByRole('tab',{name:/第2天/}).tap();await addActivity(webPage,'WebKit第二天活动',{touch:true});
+  await webPage.getByRole('tab',{name:/第1天/}).tap();await expect(webPage.getByRole('heading',{name:'WebKit第一天活动',exact:true})).toBeVisible();
+  await expect(webPage.locator('.day-content-outgoing')).toHaveCount(0);await noOverflow(webPage);await context.close();
  }finally{await browser.close()}
 });
