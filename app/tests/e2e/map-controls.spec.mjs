@@ -45,7 +45,7 @@ async function checkNoOverflow(page){
 test('map controls align, fit the viewport, and return home',async({page})=>{
  await page.setViewportSize({width:1440,height:900});await register(page);await createTrip(page);await openMap(page);
  await expect(page.locator('.trip-title')).toHaveCount(0);
- await expect(page.locator('.map-home')).toBeVisible();await expect(page.locator('.map-load-error')).toContainText('地图暂时无法载入');
+ await expect(page.getByRole('button',{name:'我的旅程',exact:true})).toBeVisible();await expect(page.locator('.map-load-error')).toContainText('地图暂时无法载入');
  const geometry=await page.evaluate(()=>{
   const rect=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height}};
   return{upper:rect('.map-upper-controls'),panel:rect('.map-panel.mode-browse:not(.expanded)'),headerRight:rect('.map-shell .header-right')};
@@ -55,7 +55,7 @@ test('map controls align, fit the viewport, and return home',async({page})=>{
  expect(1440-geometry.headerRight.x-geometry.headerRight.width).toBeCloseTo(42,0);
  expect(Math.abs(geometry.headerRight.y-20)).toBeLessThan(1);
  await screenshot(page,'desktop');
- await page.locator('.map-home').click();await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'我的旅程',exact:true}).click();await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:/继续旅程/})).toContainText('地图控件验收旅程');
 });
 
@@ -197,14 +197,14 @@ test('WebKit 320px smoke covers route picker keyboard and manual detail actions'
  }finally{await context.close();await browser.close()}
 });
 
-for(const width of [1440,1024,390,320])test(`sync control stays anchored across page switches at ${width}px`,async({page})=>{
+for(const width of [1440,1024,390,320])test(`sync and return controls retain their navigation anchors at ${width}px`,async({page})=>{
  await page.setViewportSize({width,height:844});await register(page);await createTrip(page);
  await expect(page.locator('.sync-status.synced')).toBeVisible();
  const samples=await page.evaluate(async()=>{
-  const status=document.querySelector('.sync-status'),label=status.querySelector('span'),nav=document.querySelector(innerWidth<=760?'.bottom-nav':'.sidebar nav');
+  const status=document.querySelector('.sync-status'),label=status.querySelector('span'),nav=document.querySelector(innerWidth<=760?'.bottom-nav':'.sidebar nav'),home=document.querySelector(innerWidth<=760?'.header-home':'.sidebar .back-home');
   const measure=()=>{
-   const bubble=document.querySelector('.header-right').getBoundingClientRect(),button=status.getBoundingClientRect(),text=label.getBoundingClientRect(),icon=status.querySelector('svg').getBoundingClientRect();
-   return {text:label.textContent,sameNode:status===document.querySelector('.sync-status'),bubble:{x:bubble.x,y:bubble.y,width:bubble.width,height:bubble.height},label:{x:text.x,y:text.y,width:text.width,height:text.height},icon:{x:icon.x,y:icon.y,width:icon.width,height:icon.height},centerError:Math.abs((icon.left+(text.width?text.right:icon.right))/2-(button.left+button.width/2))};
+   const bubble=document.querySelector('.header-right').getBoundingClientRect(),button=status.getBoundingClientRect(),text=label.getBoundingClientRect(),icon=status.querySelector('svg').getBoundingClientRect(),returnBox=home.getBoundingClientRect(),returnStyle=getComputedStyle(home);
+   return {home:{x:returnBox.x,y:returnBox.y,width:returnBox.width,height:returnBox.height},sameHome:home===document.querySelector(innerWidth<=760?'.header-home':'.sidebar .back-home'),homeVisible:returnStyle.display!=='none'&&returnStyle.visibility==='visible'&&Number(returnStyle.opacity)===1,homeGap:innerWidth>760?nav.getBoundingClientRect().top-returnBox.bottom:null,text:label.textContent,sameNode:status===document.querySelector('.sync-status'),bubble:{x:bubble.x,y:bubble.y,width:bubble.width,height:bubble.height},label:{x:text.x,y:text.y,width:text.width,height:text.height},icon:{x:icon.x,y:icon.y,width:icon.width,height:icon.height},centerError:Math.abs((icon.left+(text.width?text.right:icon.right))/2-(button.left+button.width/2))};
   };
   const before=measure(),frames=[];
   for(const name of ['地图','费用','设置','行程','地图','行程']){
@@ -215,8 +215,12 @@ for(const width of [1440,1024,390,320])test(`sync control stays anchored across 
   await new Promise(resolve=>setTimeout(resolve,350));frames.push(measure());return{before,frames};
  });
  for(const frame of samples.frames){
+  expect(frame.sameHome).toBe(true);expect(frame.homeVisible).toBe(true);
+  if(width>760)expect(frame.homeGap).toBeCloseTo(16,0);
+  else for(const axis of ['x','y','width','height'])expect(Math.abs(frame.home[axis]-samples.before.home[axis]),`home.${axis}`).toBeLessThan(1);
   expect(frame.sameNode).toBe(true);expect(frame.text).toBe('已同步');expect(frame.centerError).toBeLessThan(1);
   for(const part of ['bubble','label','icon'])for(const axis of ['x','y','width','height'])expect(Math.abs(frame[part][axis]-samples.before[part][axis]),`${part}.${axis}`).toBeLessThan(1);
  }
- await openMap(page,{mobile:width<=760});await screenshot(page,`sync-position-${width}`);
+ await openMap(page,{mobile:width<=760});await screenshot(page,`return-position-${width}`);
+ await page.getByRole('button',{name:width<=760?'返回我的旅程':'我的旅程',exact:true}).click();await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
 });
