@@ -40,11 +40,11 @@ async function screenshot(page,name){await page.screenshot({path:`../.local/evid
 async function noOverflow(page){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)}
 async function sampleSidebarMotion(page,label){
  return page.evaluate(async label=>{
-  const sidebar=document.querySelector('.sidebar'),title=document.querySelector('.trip-title>span');
+  const sidebar=document.querySelector('.sidebar');
   const measure=()=>{
-   const r=sidebar.getBoundingClientRect(),t=title.getBoundingClientRect(),icons=[...sidebar.querySelectorAll('nav button svg')].map(svg=>{const box=svg.getBoundingClientRect();return{width:box.width,height:box.height}}),buttons=[...sidebar.querySelectorAll('nav button')].map(button=>button.getBoundingClientRect());
+   const r=sidebar.getBoundingClientRect(),t=document.querySelector('.trip-title>span')?.getBoundingClientRect(),icons=[...sidebar.querySelectorAll('nav button svg')].map(svg=>{const box=svg.getBoundingClientRect();return{width:box.width,height:box.height}}),buttons=[...sidebar.querySelectorAll('nav button')].map(button=>button.getBoundingClientRect());
    const extras=[...sidebar.querySelectorAll('.brand,.back-home,.sidebar-foot')].filter(element=>{const style=getComputedStyle(element);return style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)>.01}).map(element=>{const box=element.getBoundingClientRect();return [...buttons].some(button=>box.left<button.right&&box.right>button.left&&box.top<button.bottom&&box.bottom>button.top)});
-   return{width:r.width,top:r.top,height:r.height,center:r.top+r.height/2,titleX:t.x,titleY:t.y,icons,visibleExtrasOverlap:extras.some(Boolean)};
+   return{width:r.width,top:r.top,height:r.height,center:r.top+r.height/2,titleX:t?.x??null,titleY:t?.y??null,icons,visibleExtrasOverlap:extras.some(Boolean)};
   };
   const before=measure(),button=document.querySelector(`nav[aria-label="主导航"] button[aria-label="${label}"]`);if(!button)throw new Error(`Missing navigation button: ${label}`);button.click();
   const frames=[],started=performance.now();while(performance.now()-started<520){await new Promise(requestAnimationFrame);frames.push(measure())}
@@ -55,7 +55,7 @@ function expectSidebarFramesStable(sample,title){
  expect(sample.frames.length).toBeGreaterThan(0);
  for(const frame of sample.frames){
   expect(frame.icons.every(icon=>Math.abs(icon.width-20)<1&&Math.abs(icon.height-20)<1)).toBe(true);
-  expect(Math.abs(frame.titleX-title.x)).toBeLessThan(2);expect(Math.abs(frame.titleY-title.y)).toBeLessThan(2);
+  if(frame.titleX!==null){expect(Math.abs(frame.titleX-title.x)).toBeLessThan(2);expect(Math.abs(frame.titleY-title.y)).toBeLessThan(2)}
   expect(frame.visibleExtrasOverlap).toBe(false);
  }
 }
@@ -90,7 +90,7 @@ test('navigation indicator moves across pages and rapid reversals return home cl
  await expect(page.getByRole('button',{name:/继续旅程/})).toContainText('导航动效验收');await screenshot(page,'home');
 });
 
-test('map mode centers the compact sidebar and keeps title and navigation icons stable',async({page})=>{
+test('map mode centers the compact sidebar, hides its trip title, and keeps navigation icons stable',async({page})=>{
  await page.setViewportSize({width:1440,height:900});await register(page);await createTrip(page);
  await screenshot(page,'itinerary-desktop');
  const title=page.locator('.trip-title>span');const before=await page.evaluate(()=>{
@@ -102,7 +102,7 @@ test('map mode centers the compact sidebar and keeps title and navigation icons 
  const compact={width:opening.after.width,top:opening.after.top,height:opening.after.height,center:opening.after.center,title:{x:opening.after.titleX,y:opening.after.titleY},icons:opening.after.icons};
  expect(compact.width).toBeLessThan(100);expect(Math.abs(compact.center-450)).toBeLessThan(3);
  expect(compact.icons.every(icon=>Math.abs(icon.width-20)<1&&Math.abs(icon.height-20)<1)).toBe(true);
- expect(Math.abs(compact.title.x-before.x)).toBeLessThan(2);expect(Math.abs(compact.title.y-before.y)).toBeLessThan(2);
+ expect(compact.title.x).toBeNull();expect(compact.title.y).toBeNull();await expect(title).toHaveCount(0);
  const closing=await sampleSidebarMotion(page,'行程');expectSidebarFramesStable(closing,before);
  expect(closing.frames.some(frame=>frame.width>compact.width+5&&frame.width<Math.max(...closing.frames.map(x=>x.width))-5)).toBe(true);
  await expect(page.locator('.app-shell')).not.toHaveClass(/map-shell/);await screenshot(page,'map-return');

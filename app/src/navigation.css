@@ -55,23 +55,8 @@
     transition:opacity 100ms ease,visibility 0s;
   }
 
-  /* The trip name and account actions retain their screen anchors on the map. */
   .app-shell .trip-header {height:84px;min-height:84px;padding:0 42px;gap:16px}
   .app-shell .trip-title {min-height:44px;padding:0 6px;max-width:50%;flex:0 1 auto;gap:8px}
-  .map-shell .trip-header {
-    top:0;left:var(--sidebar-space);right:0;width:auto;max-width:none;
-    border:0;border-radius:0;background:transparent;box-shadow:none;
-    backdrop-filter:none;-webkit-backdrop-filter:none;pointer-events:none;
-  }
-  .map-shell .trip-title,.map-shell .header-right {
-    pointer-events:auto;border-radius:16px;background:var(--glass);
-    box-shadow:0 3px 16px var(--optical-shadow);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  }
-  .map-shell .header-right {gap:24px}
-  .map-shell .mobile-logo,.map-shell .mobile-home {display:none}
-  .map-upper-controls {top:88px;max-width:290px}
-  .map-upper-controls select {min-width:0;max-width:230px}
-  .map-panel {top:152px;max-height:calc(100dvh - 176px)}
   .journey-map .amap-scalecontrol {top:auto!important;bottom:28px!important;left:112px!important}
 }
 @media(min-width:761px) and (max-width:1100px) {
@@ -84,22 +69,38 @@
   .app-shell:not(.map-shell) .sidebar nav {top:max(20px,calc(100dvh - 390px))}
 }
 @media(max-width:760px) {
-  /* Mobile keeps the same title row in both views, above the map filters. */
-  .map-shell .trip-header {
-    top:0;left:0;right:0;width:auto;max-width:none;height:70px;min-height:70px;
-    padding:0 20px;gap:16px;border:0;border-radius:0;
-    background:var(--glass);box-shadow:none;
-  }
-  .map-shell .trip-title {flex:1;min-width:0;max-width:none;padding:2px 6px;gap:8px}
   .bottom-nav.selection-track {position:fixed}
   .bottom-nav .selection-indicator {border-radius:14px}
   .day-tabs .selection-indicator {border-radius:12px}
 }
 :root[data-transparency=true] .selection-indicator,
-:root[data-transparency=true] .map-shell .trip-title,
 :root[data-transparency=true] .map-shell .header-right {background:var(--surface);backdrop-filter:none;-webkit-backdrop-filter:none}
 @media(prefers-reduced-transparency:reduce) {
   :root:not([data-transparency=false]) .selection-indicator,
-  :root:not([data-transparency=false]) .map-shell .trip-title,
   :root:not([data-transparency=false]) .map-shell .header-right {background:var(--surface);backdrop-filter:none;-webkit-backdrop-filter:none}
+}
+
+/* Map utilities share the same left-hand column as route and place controls. */
+:root {--map-controls-left:108px;--map-controls-width:350px;--map-controls-top:84px}
+:root .app-shell.map-shell .trip-header {
+  position:absolute;left:var(--map-controls-left);right:auto;top:12px;
+  width:var(--map-controls-width);height:56px;min-height:56px;padding:0;gap:0;
+  display:flex;justify-content:center;border:0;border-radius:0;background:transparent;
+  box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;pointer-events:none;
+}
+.map-shell .header-right {
+  display:flex;gap:10px;max-width:100%;padding:3px 7px;pointer-events:auto;
+  border-radius:16px;background:var(--glass);box-shadow:0 3px 14px var(--optical-shadow);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+}
+.map-shell .header-right>button {min-height:38px;padding:0 7px;border-radius:11px;transition:background 160ms ease,transform 160ms ease}
+.map-shell .header-right>button:hover {background:var(--accent-soft)}
+.map-shell .header-right>button:active {transform:scale(.96)}
+.map-shell .map-home {display:flex;align-items:center;justify-content:center;color:var(--muted);width:38px;flex-shrink:0}
+.map-shell .sync-status span {display:inline}
+.map-shell .members-button {gap:7px}
+@media(max-width:760px) {
+  :root {--map-controls-left:14px;--map-controls-width:calc(100vw - 28px);--map-controls-top:calc(72px + env(safe-area-inset-top))}
+  :root .app-shell.map-shell .trip-header {top:calc(10px + env(safe-area-inset-top));height:48px;min-height:48px}
+  .map-shell .header-right {gap:8px}
 }
