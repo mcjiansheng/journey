@@ -13,7 +13,7 @@ test.beforeAll(async()=>{
 test.afterAll(async()=>{if(server)await shutdownServer(server,app);});
 async function start(page){
  const response=await page.goto(base);expect(response.status()).toBe(200);await page.getByRole('button',{name:'创建账号',exact:true}).click();
- await page.getByLabel('手机号或邮箱').fill(`place-${Date.now()}@example.test`);await page.getByLabel('你的称呼').fill('地点验收');await page.getByLabel('密码',{exact:true}).fill('CourseJourney2026!');await page.getByRole('button',{name:'创建账号并继续'}).click();
+ await page.getByLabel('手机号或邮箱').fill(`place-${Date.now()}@example.test`);await page.getByLabel('你的称呼').fill('地点验收');await page.getByLabel('密码',{exact:true}).fill('CourseJourney2026!');await page.getByLabel('确认密码',{exact:true}).fill('CourseJourney2026!');await page.getByRole('button',{name:'创建账号并继续'}).click();
  await page.getByRole('button',{name:'创建旅程',exact:true}).click();await page.getByLabel('旅程名称').fill('地点输入验收');await page.getByLabel('目的地',{exact:true}).fill('南京');await page.getByLabel('出发日期',{exact:true}).fill('2026-11-01');await page.getByLabel('结束日期',{exact:true}).fill('2026-11-01');await page.getByRole('radio',{name:'平等团队',exact:true}).check();await page.getByRole('dialog').getByRole('button',{name:'创建旅程'}).click();
  await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await page.getByLabel('活动名称').fill('湖边散步');return page.getByRole('combobox',{name:'地点 选填'});
 }

@@ -1,4 +1,5 @@
-import {test,expect,webkit,devices} from '@playwright/test';
+import {test,expect,devices} from '@playwright/test';
+import {launchWebKit} from '../../scripts/browser-runtime.mjs';
 import {readFileSync} from 'node:fs';
 const reusableAccounts=process.env.E2E_ACCOUNTS_FILE?JSON.parse(readFileSync(process.env.E2E_ACCOUNTS_FILE,'utf8')):{};
 const suffix=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -11,7 +12,7 @@ async function register(page,name){
   await page.getByRole('button',{name:'创建账号',exact:true}).click();
   await page.getByLabel('手机号或邮箱').fill(`qa-${suffix()}@example.test`);
   await page.getByLabel('你的称呼').fill(name);await page.getByLabel('密码',{exact:true}).fill('CourseJourney2026!');
-  await page.getByRole('button',{name:'创建账号并继续'}).click();
+  await page.getByLabel('确认密码',{exact:true}).fill('CourseJourney2026!');await page.getByRole('button',{name:'创建账号并继续'}).click();
  }
  await expect(page.getByRole('button',{name:'创建旅程',exact:true})).toBeVisible();
 }
@@ -104,7 +105,7 @@ async function cleanup(page){try{const r=await readApi(page,'api/trips');if(r.st
 test.afterEach(async({page})=>{await cleanup(page);});
 
 test('iOS WebKit touch layout, real editor and shared feedback settings',async()=>{
- const browser=await webkit.launch({headless:true,channel:'',ignoreDefaultArgs:[]});const context=await browser.newContext({...devices['iPhone 15'],baseURL:process.env.E2E_URL||'http://127.0.0.1:4177/'});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const browser=await launchWebKit();const context=await browser.newContext({...devices['iPhone 15'],baseURL:process.env.E2E_URL||'http://127.0.0.1:4177/'});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{
  await register(page,'iOS验收');await createTrip(page,'iOS旅程');await addActivity(page,'手机编辑活动');await expect(page.getByRole('navigation',{name:'手机主导航'})).toBeVisible();
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'设置',exact:true}).click();await page.getByLabel('轻提示音',{exact:true}).check();await expect(page.getByLabel('轻提示音',{exact:true})).toBeChecked();await page.getByLabel('减少动态效果').selectOption('true');

@@ -11,8 +11,9 @@
     "build": "vite build && node scripts/finalize-build.mjs",
     "start": "node server/index.mjs",
     "test": "node --test tests/*.test.mjs",
-    "test:e2e": "PLAYWRIGHT_BROWSERS_PATH=../.local/browsers playwright test",
-    "check": "npm run test && npm run build"
+    "test:e2e": "node scripts/run-browser-tests.mjs",
+    "check": "npm run test && npm run build",
+    "test:browser": "node scripts/run-browser-tests.mjs --script"
   },
   "dependencies": {
     "@amap/amap-jsapi-loader": "^1.0.1",

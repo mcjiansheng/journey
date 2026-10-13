@@ -1,8 +1,8 @@
 // Rebuild PNG install icons from the existing vector with local Chrome.
-import {chromium} from '@playwright/test';
+import {launchChrome} from './browser-runtime.mjs';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-const browser=await chromium.launch({channel:'chrome',headless:true,chromiumSandbox:true,ignoreDefaultArgs:['--use-mock-keychain','--password-store=basic']});
+const browser=await launchChrome();
 try {
  const page=await browser.newPage({deviceScaleFactor:1});
  const svg=await readFile(new URL('../public/icon-maskable.svg',import.meta.url),'utf8');
