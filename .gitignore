@@ -1,0 +1,8 @@
+.local/
+.workbuddy/
+.DS_Store
+node_modules/
+
+# 原型与界面可视化仅保留在本地。
+/prototype*/
+/sites/
