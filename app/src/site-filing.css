@@ -1,0 +1,40 @@
+/* Public entry pages share a static footer, including before React loads. */
+body{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
+#root{flex:1}
+/* These pages previously occupied the whole viewport without a footer. */
+#root .home,#root .auth-page{min-height:0;background:none}
+#root .auth-page .login-wrap{margin-bottom:32px}
+.site-filing{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:center;
+  gap:0 16px;
+  flex-shrink:0;
+  padding:16px 24px max(20px,env(safe-area-inset-bottom));
+  color:var(--muted,#69746d);
+  font:400 12px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+.site-filing a{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-height:44px;
+  max-width:100%;
+  color:inherit;
+  text-decoration:none;
+  text-underline-offset:4px;
+  border-radius:4px;
+}
+.site-filing a:hover{color:var(--accent,#246b58);text-decoration:underline}
+.site-filing a:focus-visible{outline:2px solid var(--accent,#246b58);outline-offset:4px}
+.site-filing img{flex-shrink:0;object-fit:contain}
+.site-filing-divider{height:12px;width:1px;background:var(--line,#dce2d9)}
+/* Trip workspaces keep their full viewport; filing remains on the entry/home page. */
+body:has(.app-shell)>.site-filing{display:none}
+@media(max-width:600px){
+  #root .auth-page .login-wrap{margin-bottom:24px}
+  .site-filing{flex-direction:column;gap:0;padding:12px 20px max(16px,env(safe-area-inset-bottom))}
+  .site-filing-divider{display:none}
+}
