@@ -6,7 +6,7 @@
 
 每次 push 或合并到 main，GitHub 托管的 Ubuntu runner 使用 Node.js 22.22.1 执行部署引擎 Python 测试、`npm ci`、`npm test`，随后调用 `app/ops/package-release.mjs` 构建并打包。任一步失败都不会开始部署。Actions 页的 Run workflow 可重跑 main。
 
-发布 ID 为 `提交SHA-运行ID-重跑次数`，对应唯一发布目录，重复上传同一个 ID 会被拒绝。发布包包含生产依赖、前端、服务端、来源提交和文件 SHA-256 清单；测试产物在 Actions 中保留七天。
+发布 ID 为 `提交SHA-运行ID-重跑次数`，对应唯一发布目录，重复上传同一个 ID 会被拒绝。发布包包含生产依赖、前端、服务端、来源提交和文件 SHA-256 清单；测试产物在 Actions 中保留七天。React、图标库、二维码和地图 Loader 等前端构建依赖归入 devDependencies，在构建时使用，服务器部署包只安装后端运行依赖。打包前启动仅含生产依赖的临时服务，检查健康接口、构建编号和全部前端静态资源。
 
 工作流采用 `journey-production` 并发组，`cancel-in-progress: false`，已有部署执行完后再运行等待任务。GitHub 会合并等待中的重复触发；上传前核对 main 仍指向该次测试的提交，过期提交跳过部署。
 
@@ -34,6 +34,8 @@ deploy 的标准输入为发布包；status 输出 JSON。sudo 仅授权固定�
 部署接收器限制压缩包为 100 MiB，并校验归档 SHA-256。独立 systemd 单元执行解压和切换，CPUQuota 为 20%、MemoryMax 为 256 MiB、Nice 为 19、IOWeight 为 1。归档展开上限为 400 MiB、条目数上限为 30,000；拒绝越界路径、特殊文件、硬链接及越界符号链接。发布清单与实际文件、来源提交必须一致。
 
 GitHub 到服务器的上传最多等待 15 分钟，客户端 SSH 最多等待 16 分钟，部署 job 总上限为 50 分钟。实测较慢链路会超过原先的三分钟上传时限；上传超时在版本切换前失败，线上版本继续运行。
+
+若 SSH 上传中断并出现 `Archive SHA256 mismatch`，在 Actions 选择 **Re-run all jobs**，或对 main 触发新的 Run workflow，让打包步骤生成新的发布 ID。仅选择 Re-run failed jobs 会复用已预约的旧 ID，无法重新上传。上传日志记录包体字节数和连接耗时，便于区分传输中断与后续激活错误。
 
 上传和解压前要求剩余空间足以容纳最大归档、展开文件并额外保留 1 GiB；不足时停止本次发布，现有服务继续运行。服务器保留历史发布目录，管理员可在确认当前版本和回滚目标后清理更早版本。
 

@@ -40,7 +40,9 @@ def main():
                '-o', f'UserKnownHostsFile={known_hosts}', '-o', 'ConnectTimeout=15',
                '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
                '-i', str(key), '-p', port, f'{user}@{host}']
-        print(f'Uploading release {release} ({commit})', flush=True)
+        size = archive.stat().st_size
+        started = time.monotonic()
+        print(f'Uploading release {release} ({commit}), {size} bytes', flush=True)
         try:
             with archive.open('rb') as stream:
                 uploaded = subprocess.run(ssh + [f'deploy {release} {digest} {commit}'],
@@ -50,6 +52,7 @@ def main():
                 print(f'Upload response exit {uploaded.returncode}: {uploaded.stderr.strip()}', flush=True)
         except subprocess.TimeoutExpired:
             print('Upload connection timed out; checking durable server status.', flush=True)
+        print(f'Upload connection ended after {time.monotonic() - started:.1f}s; checking server status.', flush=True)
         deadline = time.monotonic() + 30 * 60
         last_status, failures = None, 0
         while time.monotonic() < deadline:
