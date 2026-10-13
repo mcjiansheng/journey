@@ -33,6 +33,8 @@ deploy 的标准输入为发布包；status 输出 JSON。sudo 仅授权固定�
 
 部署接收器限制压缩包为 100 MiB，并校验归档 SHA-256。独立 systemd 单元执行解压和切换，CPUQuota 为 20%、MemoryMax 为 256 MiB、Nice 为 19、IOWeight 为 1。归档展开上限为 400 MiB、条目数上限为 30,000；拒绝越界路径、特殊文件、硬链接及越界符号链接。发布清单与实际文件、来源提交必须一致。
 
+GitHub 到服务器的上传最多等待 15 分钟，客户端 SSH 最多等待 16 分钟，部署 job 总上限为 50 分钟。实测较慢链路会超过原先的三分钟上传时限；上传超时在版本切换前失败，线上版本继续运行。
+
 上传和解压前要求剩余空间足以容纳最大归档、展开文件并额外保留 1 GiB；不足时停止本次发布，现有服务继续运行。服务器保留历史发布目录，管理员可在确认当前版本和回滚目标后清理更早版本。
 
 服务器锁串行保护版本切换。部署状态保存在 root 专属的 `/var/lib/journey-deploy/state/<发布ID>.json`。SSH 断开后，服务器上的事务继续执行，客户端重新读取状态。
@@ -67,4 +69,9 @@ sudo systemctl status journey.service --no-pager
 - 游戏 PID `2503473`、控制器 PID `2427712`，部署前后均相同，重启次数均为 0。崩溃记录器和 nginx 的进程、启动时刻、重启次数也相同；既有 nginx 站点和 L4D2 单元文件校验值相同。
 - 固定备份脚本运行成功；部署密钥尝试普通 `id` 命令被拒绝，部署账号的 sudo 授权仅包含接收发布包和读取状态。
 
-首次正常自动发布等待现有功能及备案修改提交、推送到 main 后启用。等待期间仓库变量 `JOURNEY_DEPLOY_ENABLED=false`，工作流执行测试和打包，跳过生产部署。
+2026-10-13，现有功能及备案修改全部进入远端 main 后，已设置 `JOURNEY_DEPLOY_ENABLED=true`。后续 main 更新通过测试后自动部署。
+
+- 首次完整 GitHub 发布：[运行 38343123774](https://github.com/mcjiansheng/journey/actions/runs/38343123774)，由 main 推送触发，`test-and-package` 和 `deploy` 均成功。
+- 已发布提交 `0ff13b8c0e8611f0dfa0de6d61619a410712e240`，发布目录 `0ff13b8c0e8611f0dfa0de6d61619a410712e240-38343123774-1`，前端 build ID `d48542785b679ff4`。
+- 服务器发布清单的提交号与 GitHub 一致；回环和公网 HTTPS 的健康检查及前端构建编号一致。
+- 发布前后游戏、控制器、崩溃记录器和 nginx 的 PID、启动时间、重启次数完全一致，既有 nginx 站点及 L4D2 systemd 单元校验值相同。
