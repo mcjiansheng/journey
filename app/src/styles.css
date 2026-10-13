@@ -39,7 +39,7 @@ body{background:var(--bg)}
  --optical-sheen:#ffffff94;--optical-selected:#ffffffd9;--optical-shadow:#294b3b12;
  --timeline-line:#abc6b777;
 }
-.app-shell:not(.map-shell),.home,.auth-page{
+body:has(>.site-filing),.app-shell:not(.map-shell),.home,.auth-page{
  background:radial-gradient(ellipse at 2% 5%,var(--ambient-mint),transparent 50%),radial-gradient(ellipse at 93% 15%,var(--ambient-sky),transparent 50%),radial-gradient(ellipse at 64% 96%,var(--ambient-warm),transparent 55%),var(--bg);
 }
 .home,.auth-page{min-height:100dvh}
@@ -181,3 +181,5 @@ html.has-modal,html.has-modal body{overflow:hidden;overscroll-behavior:none}
 }
 :root[data-transparency=true] .bottom-nav{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}
 @media(prefers-reduced-transparency:reduce){:root:not([data-transparency=false]) .bottom-nav{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}}
+
+.create-trip-dates{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.create-trip-dates input{min-width:0}

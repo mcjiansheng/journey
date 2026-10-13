@@ -13,7 +13,7 @@ JSON 请求/响应；错误 {error:{code,message,details?}}。Cookie HttpOnly �
 - POST /api/auth/logout；PATCH /api/me {displayName?,preferences?} -> user。
 - POST /api/clock {deviceId} -> {leaseId,serverTime,expiresAt}，租约绑定用户。操作 clock={leaseId,elapsedMs,uncertaintyMs,uncertain?}；发生时刻=serverTime+elapsedMs，不用到达顺序。客户端以 performance.now 单调差计算，侦测墙钟突变；已排队时钟不可改写。离线刷新后的新编辑若无法建立时间依据，保留队列，联网后允许用户明确重新应用。不同租约竞争时间区间无法判断且无因果依据时返回 CLOCK_UNCERTAIN，原值不变。精确同刻用 operationId 稳定定序。服务端拒绝未来、超租期及不合法证据。
 - GET /api/trips -> {trips:[Trip],navigation:{lastTripId?,contexts?}}
-- POST /api/trips {id,name,teamMode:'admin'|'equal',timezone,currency,dayCount?,startDate?,destination?} -> Snapshot，创建显式选择模式；名称外的业务资料可空。
+- POST /api/trips {id,name,teamMode:'admin'|'equal',timezone,currency,dayCount,startDate,destination} -> Snapshot。新建要求目的地 trim 后非空、合法非空 startDate、显式 dayCount（1–365，按含首尾日期的自然日计算），并显式选择团队模式。客户端根据真实目的地行政区划确定当地 IANA 时区并预填 timezone，用户可手动调整；未能解析时须手动选择；服务端核验提交时区。客户端将必填的起止日期转换为 startDate + dayCount，存储与 API 不新增 endDate。历史无日期旅程继续允许读取、编辑与既有改期操作。
 - GET /api/trips/:id -> Snapshot={trip:Trip,members:[Member],objects:[Object],cursor:number,epoch:number}。
 - Trip={id,name,ownerId,createdBy,teamMode,timezone,currency,destination,startDate:null|string,dayCount,state,generation,...}；Member={userId,displayName,isAdmin,canInvite,joinOrder}。
 - Object={id,tripId,kind:'day'|'activity'|'favorite'|'expense'|'route',payload,state:'active'|'deleted',generation,clocks?,expressions?}。expressions 数组 {userId,notParticipating,wishDelete,wishRestore}，只含当前成员。

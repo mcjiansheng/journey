@@ -83,3 +83,13 @@ export function travelAdvice(previous,target,route) {
 export function planDayId(tripId,{date=null,ordinal}) {
   return date ? `plan-day-${tripId}-date-${date}` : `plan-day-${tripId}-ordinal-${ordinal}`;
 }
+
+// Calendar dates use UTC arithmetic so daylight-saving transitions cannot alter trip length.
+export function dateRangeDays(start,end) {
+ const valid=value=>/^\d{4}-\d{2}-\d{2}$/.test(value||'')&&!Number.isNaN(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value;
+ if(!valid(start)||!valid(end))throw new Error('请选择出发日期和结束日期');
+ const days=(Date.parse(end)-Date.parse(start))/86400000+1;
+ if(days<1)throw new Error('结束日期不能早于出发日期');
+ if(days>365)throw new Error('旅程最多安排 365 天');
+ return days;
+}

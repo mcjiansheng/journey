@@ -1,12 +1,21 @@
 import {test,expect,webkit,devices} from '@playwright/test';
+import {readFileSync} from 'node:fs';
+const reusableAccounts=process.env.E2E_ACCOUNTS_FILE?JSON.parse(readFileSync(process.env.E2E_ACCOUNTS_FILE,'utf8')):{};
 const suffix=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 async function register(page,name){
- await page.goto('./');await page.getByRole('button',{name:'创建账号',exact:true}).click();
- await page.getByLabel('手机号或邮箱').fill(`qa-${suffix()}@example.test`);
- await page.getByLabel('你的称呼').fill(name);await page.getByLabel('密码',{exact:true}).fill('CourseJourney2026!');
- await page.getByRole('button',{name:'创建账号并继续'}).click();await expect(page.getByRole('button',{name:'创建旅程',exact:true})).toBeVisible();
+ await page.goto('./');
+ if(reusableAccounts[name]){
+  await page.getByLabel('手机号或邮箱').fill(reusableAccounts[name]);await page.getByLabel('密码',{exact:true}).fill('CourseJourney2026!');
+  await page.getByRole('button',{name:'登录并继续'}).click();
+ }else{
+  await page.getByRole('button',{name:'创建账号',exact:true}).click();
+  await page.getByLabel('手机号或邮箱').fill(`qa-${suffix()}@example.test`);
+  await page.getByLabel('你的称呼').fill(name);await page.getByLabel('密码',{exact:true}).fill('CourseJourney2026!');
+  await page.getByRole('button',{name:'创建账号并继续'}).click();
+ }
+ await expect(page.getByRole('button',{name:'创建旅程',exact:true})).toBeVisible();
 }
-async function createTrip(page,name){await page.getByRole('button',{name:'创建旅程',exact:true}).click();await page.getByLabel('旅程名称').fill(name);await page.getByLabel('团队类型',{exact:true}).selectOption('equal');await page.getByRole('dialog').getByRole('button',{name:'创建旅程'}).click();await expect(page.getByRole('button',{name:'添加活动',exact:true}).first()).toBeVisible();}
+async function createTrip(page,name){await page.getByRole('button',{name:'创建旅程',exact:true}).click();await page.getByLabel('旅程名称').fill(name);await page.getByLabel('目的地',{exact:true}).fill('南京');await page.getByLabel('出发日期',{exact:true}).fill('2026-11-01');await page.getByLabel('结束日期',{exact:true}).fill('2026-11-01');await page.getByLabel('团队类型',{exact:true}).selectOption('equal');await page.getByRole('dialog').getByRole('button',{name:'创建旅程'}).click();await expect(page.getByRole('button',{name:'添加活动',exact:true}).first()).toBeVisible();}
 async function addActivity(page,name){await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await page.getByLabel('活动名称').fill(name);await page.getByLabel('所在日').selectOption({index:1});await page.getByRole('dialog').getByRole('button',{name:'完成',exact:true}).click();await expect(page.getByRole('button',{name:name,exact:false}).first()).toBeVisible();await expect(page.locator('.sync-status.synced')).toBeVisible();}
 test('desktop registration, create, edit, context and mobile layout',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.setViewportSize({width:1440,height:900});
@@ -53,6 +62,14 @@ test('two real sessions: invite, realtime, offline reload and occurrence-time me
 test('real AMap POI search, shared favorite and viewport map',async({page})=>{
  test.setTimeout(90000);await register(page,'地图验收');await createTrip(page,'南京地图验收');await nav(page,'地图');
  await expect(page.locator('.amap-maps')).toBeVisible({timeout:30000});
+ const initialTrips=(await readApi(page,'api/trips')).data.trips;const tripId=initialTrips[0].id;
+ const savedCamera=async()=>((await readApi(page,'api/trips')).data.navigation.contexts[tripId]?.map||{});
+ await expect.poll(async()=>(await savedCamera()).cameraDestination,{timeout:20000}).toBe('南京');
+ const destinationCamera=await savedCamera();expect(destinationCamera.center[0]).toBeGreaterThan(118.5);expect(destinationCamera.center[0]).toBeLessThan(119.1);expect(destinationCamera.center[1]).toBeGreaterThan(31.8);expect(destinationCamera.center[1]).toBeLessThan(32.3);
+ await page.screenshot({path:'../.local/evidence/map-destination-nanjing.png',fullPage:true,scale:'css'});
+ await page.getByRole('button',{name:'放大地图',exact:true}).click();await expect.poll(async()=>(await savedCamera()).zoom).toBeGreaterThan(destinationCamera.zoom);const zoomed=await savedCamera();
+ await page.getByTitle('返回我的旅程',{exact:true}).click();await page.getByRole('button',{name:/继续旅程/}).click();await expect(page.locator('.amap-maps')).toBeVisible({timeout:30000});
+ await expect.poll(async()=>(await savedCamera()).zoom).toBe(zoomed.zoom);const restored=await savedCamera();expect(restored.center[0]).toBeCloseTo(zoomed.center[0],4);expect(restored.center[1]).toBeCloseTo(zoomed.center[1],4);
  await page.getByLabel('搜索地点').fill('南京博物院');
  await expect(page.locator('.map-result').first()).toBeVisible({timeout:30000});
  await page.getByRole('button',{name:'南京博物院 中山东路321号',exact:true}).click();await page.getByRole('button',{name:'收藏',exact:true}).click();await expect(page.getByRole('button',{name:'已收藏',exact:true})).toBeVisible();
@@ -63,6 +80,9 @@ test('real AMap POI search, shared favorite and viewport map',async({page})=>{
  await page.setViewportSize({width:1280,height:800});await page.getByRole('button',{name:'加入行程',exact:true}).click();await page.getByLabel('所在日').selectOption({index:1});await page.getByRole('dialog').getByRole('button',{name:'完成',exact:true}).click();
  await page.getByLabel('搜索地点').fill('南京明孝陵');await page.locator('.map-result').filter({hasText:'明孝陵'}).filter({has:page.locator('small')}).first().click();await page.getByRole('button',{name:'加入行程',exact:true}).click();await page.getByLabel('所在日').selectOption({index:1});await page.getByRole('dialog').getByRole('button',{name:'完成',exact:true}).click();await page.getByLabel('地图路线日期').selectOption({index:1});
  await expect.poll(async()=>{const r=await readApi(page,`api/trips/${trips[0].id}`);return r.data.objects.find(o=>o.kind==='route'&&o.payload.path.length>2)?.payload.minutes||0;},{timeout:35000}).toBeGreaterThan(0);await expect(page.locator('.sync-status.synced')).toBeVisible();await page.screenshot({path:'../.local/evidence/desktop-route.png',fullPage:true,scale:'css'});
+ await nav(page,'设置');await page.getByLabel('目的地',{exact:true}).fill('杭州');await page.getByLabel('目的地',{exact:true}).blur();await expect(page.locator('.sync-status.synced')).toBeVisible();await nav(page,'地图');
+ await expect.poll(async()=>(await savedCamera()).cameraDestination,{timeout:20000}).toBe('杭州');const changed=await savedCamera();expect(changed.center[0]).toBeGreaterThan(120);expect(changed.center[0]).toBeLessThan(120.5);expect(changed.center[1]).toBeGreaterThan(30);expect(changed.center[1]).toBeLessThan(30.5);
+ await page.screenshot({path:'../.local/evidence/map-destination-hangzhou.png',fullPage:true,scale:'css'});
 });
 test('trip and day recovery, settings shared with home, and draft return',async({page})=>{
  await register(page,'恢复验收');await createTrip(page,'日期恢复验收');await addActivity(page,'保留的活动');
@@ -102,5 +122,26 @@ test('stock Android Chrome touch feedback and small screen editor',async({browse
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('journey.appearance')).interactionHaptics)).toBe(false);
  await page.getByLabel('减少透明效果').selectOption('true');await expect(page.locator('html')).toHaveAttribute('data-transparency','true');
  await page.screenshot({path:'../.local/evidence/android-settings.png',fullPage:true,scale:'css'});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+ }finally{await cleanup(page);await context.close();}
+});
+
+
+test('creation requires destination and dates and uses destination timezone regardless of device',async({browser})=>{
+ const context=await browser.newContext({timezoneId:'America/Los_Angeles',baseURL:process.env.E2E_URL||'http://127.0.0.1:4177/',viewport:{width:1440,height:900}});const page=await context.newPage();
+ try{
+ await register(page,'课程甲');
+ const user=(await readApi(page,'api/session')).data.user;const draftKey=`journey.form:${user.id}:createTrip`;
+ await page.evaluate(({draftKey})=>localStorage.setItem(draftKey,JSON.stringify({name:'保存过的行程',destination:'纽约',teamMode:'equal',startDate:'2027-03-13',dayCount:'3',currency:'CNY',timezone:'America/New_York'})),{draftKey});
+ await page.getByRole('button',{name:'创建旅程',exact:true}).click();await expect(page.getByLabel('旅程名称')).toHaveValue('保存过的行程');await expect(page.getByLabel('结束日期')).toHaveValue('2027-03-15');await page.getByText('更多设置',{exact:true}).click();await expect(page.getByLabel('旅程时区')).toHaveValue('America/New_York');await closeDialog(page);
+ await page.evaluate(key=>localStorage.removeItem(key),draftKey);await page.getByRole('button',{name:'创建旅程',exact:true}).click();
+ const dialog=page.getByRole('dialog');await page.getByLabel('旅程名称').fill('南京目的地时区');await page.getByLabel('团队类型',{exact:true}).selectOption('equal');
+ await expect(page.getByLabel('目的地',{exact:true})).toBeVisible();await expect(page.getByLabel('出发日期',{exact:true})).toBeVisible();await expect(page.getByLabel('结束日期',{exact:true})).toBeVisible();await expect(page.getByLabel('旅程时区',{exact:true})).not.toBeVisible();
+ await dialog.getByRole('button',{name:'创建旅程',exact:true}).click();expect(await page.getByLabel('目的地',{exact:true}).evaluate(el=>el.validity.valueMissing)).toBe(true);await expect(dialog).toBeVisible();
+ await page.getByLabel('目的地',{exact:true}).fill('南京');await page.getByLabel('出发日期').fill('2027-03-13');await page.getByLabel('结束日期').fill('2027-03-12');expect(await page.getByLabel('结束日期').evaluate(el=>el.validity.rangeUnderflow)).toBe(true);await dialog.getByRole('button',{name:'创建旅程',exact:true}).click();await expect(dialog).toBeVisible();
+ await page.getByLabel('结束日期').fill('2027-03-15');await page.getByText('更多设置',{exact:true}).click();await expect(page.getByLabel('旅程时区')).toHaveValue('destination');await expect(page.getByLabel('旅程时区').locator('option:checked')).toHaveText(/目的地当地.*北京/);await page.getByText('更多设置',{exact:true}).click();
+ await page.screenshot({path:'../.local/evidence/create-trip-desktop.png',fullPage:true,scale:'css'});
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:'../.local/evidence/create-trip-mobile.png',fullPage:true,scale:'css'});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+ await dialog.getByRole('button',{name:'创建旅程',exact:true}).click();await expect(dialog).not.toBeVisible();const list=(await readApi(page,'api/trips')).data.trips;const trip=list.find(t=>t.name==='南京目的地时区');expect(trip.timezone).toBe('Asia/Shanghai');expect(trip.destination).toBe('南京');expect(trip.startDate).toBe('2027-03-13');expect(trip.dayCount).toBe(3);
+ const snapshot=(await readApi(page,`api/trips/${trip.id}`)).data;expect(snapshot.objects.filter(o=>o.kind==='day').map(o=>o.payload.date).sort()).toEqual(['2027-03-13','2027-03-14','2027-03-15']);
  }finally{await cleanup(page);await context.close();}
 });

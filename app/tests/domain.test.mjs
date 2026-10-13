@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {orderedActivities,visibleDays,outsideDays,timeLabel,routeSignature,endpointSignature,previewReschedule,planDayId} from '../src/domain.js';
+import {orderedActivities,visibleDays,outsideDays,timeLabel,routeSignature,endpointSignature,previewReschedule,planDayId,dateRangeDays} from '../src/domain.js';
 const activity=(id,order,time)=>({id,kind:'activity',state:'active',payload:{dayId:'day',order,time}});
 test('flexible positions survive precise activity sorting without invented times',()=>{
  const a=activity('late',0,{mode:'precise',start:'16:00'}),b=activity('coffee',1,{mode:'flexible',period:'afternoon'}),c=activity('early',2,{mode:'precise',start:'14:00'});
@@ -25,4 +25,15 @@ test('offline date preview establishes stable days while preserving unselected a
  assert.equal(p.objects.find(o=>o.id==='keep').payload.dayId,'historic');assert.equal(s.trip.startDate,null);
  p.objects.find(o=>o.kind==='day'&&o.payload.date==='2026-11-11').state='deleted';
  assert.throws(()=>previewReschedule(p,{startDate:'2026-11-10',dayCount:2,moves:[]}),{code:'DAY_DELETED'});
+});
+
+test('creation dates count inclusive calendar days through DST, leap days and year boundaries',()=>{
+ assert.equal(dateRangeDays('2026-03-07','2026-03-09'),3);
+ assert.equal(dateRangeDays('2026-11-01','2026-11-01'),1);
+ assert.equal(dateRangeDays('2028-02-28','2028-03-01'),3);
+ assert.equal(dateRangeDays('2026-12-31','2027-01-01'),2);
+ assert.throws(()=>dateRangeDays('','2026-11-01'));
+ assert.throws(()=>dateRangeDays('2026-02-29','2026-03-01'));
+ assert.throws(()=>dateRangeDays('2026-11-02','2026-11-01'));
+ assert.throws(()=>dateRangeDays('2026-01-01','2027-01-01'));
 });

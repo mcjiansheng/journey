@@ -1,7 +1,8 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {Search,Star,Plus,X,LocateFixed,SlidersHorizontal,ChevronUp,ChevronDown,MapPin,Navigation,RefreshCw,ArrowLeft,List} from 'lucide-react';
-import {loadAmap,searchPlaces,suggestPlaces,placeDetail,reverseGeocode,estimateRoute} from './amap';
+import {loadAmap,searchPlaces,suggestPlaces,placeDetail,reverseGeocode,estimateRoute,geocode} from './amap';
 import {orderedActivities,visibleDays,dayLabel,routeSignature,endpointSignature} from './domain';
+import {destinationKey,validCenter,planMapCamera,resolveMapCamera,cameraContext} from './map-camera.js';
 import './map.css';
 
 const located=p=>Number.isFinite(p?.lng)&&Number.isFinite(p?.lat);
@@ -10,9 +11,10 @@ const category=p=>/餐|食|咖啡|茶/.test(p.category)?'餐饮':/住宿|酒店/
 export default function MapView({journey:j,onEditActivity}) {
  const {snapshot,context}=j,trip=snapshot.trip,initial=context.map||{};
  const initialPlace=initial.selectedActivityId?snapshot.objects.find(o=>o.id===initial.selectedActivityId)?.payload.place:initial.selected;
- const [query,setQuery]=useState(initial.query||''),[results,setResults]=useState([]),[suggestions,setSuggestions]=useState([]),[selected,setSelected]=useState(initialPlace||null),[mode,setMode]=useState(initialPlace?'detail':'browse'),[expanded,setExpanded]=useState(false),[error,setError]=useState(''),[mapError,setMapError]=useState(''),[busy,setBusy]=useState(false),[ready,setReady]=useState(0),[mapEpoch,setMapEpoch]=useState(0),[routeDay,setRouteDay]=useState(initial.dayId||initial.routeDay||''),[filter,setFilter]=useState(initial.filter||{category:'全部',arranged:'全部'}),[filterDraft,setFilterDraft]=useState(filter),[manual,setManual]=useState({name:'',address:''}),[keyboardInset,setKeyboardInset]=useState(0);
- const canvas=useRef(null),panel=useRef(null),map=useRef(null),markers=useRef([]),lines=useRef([]),searchSeq=useRef(0),composing=useRef(false),cameraTimer=useRef(null),autoRoutes=useRef(new Set()),lastContext=useRef(initial),alive=useRef(true),snapshotRef=useRef(snapshot),selectRef=useRef(null);
+ const [query,setQuery]=useState(initial.query||''),[results,setResults]=useState([]),[suggestions,setSuggestions]=useState([]),[selected,setSelected]=useState(initialPlace||null),[mode,setMode]=useState(initialPlace?'detail':'browse'),[expanded,setExpanded]=useState(false),[error,setError]=useState(''),[mapError,setMapError]=useState(''),[busy,setBusy]=useState(false),[ready,setReady]=useState(0),[mapEpoch,setMapEpoch]=useState(0),[routeDay,setRouteDay]=useState(initial.dayId||initial.routeDay||''),[filter,setFilter]=useState(initial.filter||{category:'全部',arranged:'全部'}),[filterDraft,setFilterDraft]=useState(filter),[manual,setManual]=useState({name:'',address:''}),[keyboardInset,setKeyboardInset]=useState(0),[cameraChoice,setCameraChoice]=useState(null),[cameraLoading,setCameraLoading]=useState(false);
+ const canvas=useRef(null),panel=useRef(null),map=useRef(null),markers=useRef([]),lines=useRef([]),searchSeq=useRef(0),composing=useRef(false),cameraTimer=useRef(null),lastContext=useRef(initial),alive=useRef(true),snapshotRef=useRef(snapshot),selectRef=useRef(null);
  snapshotRef.current=snapshot;
+ const cameraGeneration=useRef(0),cameraIntent=useRef(0),activityIntent=useRef(initial.selectedActivityId||null),consumedChoice=useRef(null);
  const selectedPlaceRef=useRef(selected);selectedPlaceRef.current=selected;
  const favorites=snapshot.objects.filter(x=>x.kind==='favorite'&&x.state==='active');
  const days=visibleDays(snapshot);
@@ -26,23 +28,39 @@ export default function MapView({journey:j,onEditActivity}) {
  useEffect(()=>{let width=innerWidth;const resize=()=>{const v=window.visualViewport;document.documentElement.style.setProperty('--visual-height',`${v?.height||innerHeight}px`);setKeyboardInset(v?Math.max(0,innerHeight-v.height-v.offsetTop):0);if(width!==innerWidth){width=innerWidth;shiftCamera(selectedPlaceRef.current);}};resize();window.visualViewport?.addEventListener('resize',resize);return()=>window.visualViewport?.removeEventListener('resize',resize);},[]);
  useEffect(()=>{saveMap({query,selected,routeDay,filter});},[query,selected,routeDay,filter]);
  useEffect(()=>{
-   alive.current=true;let instance,disposed=false;
-   setMapError('');
-   loadAmap(j.config).then(AMap=>{
-     if(disposed)return;
-     const saved=lastContext.current;
-     const first=favorites.find(o=>located(o.payload))?.payload;
-     instance=new AMap.Map(canvas.current,{viewMode:'2D',zoom:saved.zoom||12,...(saved.center?{center:saved.center}:first?{center:[first.lng,first.lat]}:{}),resizeEnable:true});
-     map.current=instance;instance.addControl(new AMap.Scale({position:'LT',offset:new AMap.Pixel(16,96)}));
-     if(!saved.center&&!first&&trip.destination)instance.setCity(trip.destination);
-     instance.on('complete',()=>{if(!disposed){setReady(v=>v+1);if(initialPlace)shiftCamera(initialPlace);}});
-     instance.on('moveend',()=>{const c=instance.getCenter();saveMap({center:[c.lng,c.lat],zoom:instance.getZoom()});});
-     instance.on('zoomend',()=>{saveMap({zoom:instance.getZoom()});});
-     instance.on('dragstart',()=>{clearTimeout(cameraTimer.current);instance.stopMove?.();});
-     setReady(v=>v+1);
-   }).catch(e=>{if(!disposed)setMapError(e.message);});
-   return()=>{alive.current=false;disposed=true;clearTimeout(cameraTimer.current);searchSeq.current++;instance?.destroy();map.current=null;};
- },[trip.id,mapEpoch]);
+   alive.current=true;let instance,disposed=false,initialized=false,userMoved=false;
+   const generation=++cameraGeneration.current,entryIntent=cameraIntent.current,controller=new AbortController();
+   setMapError('');setCameraLoading(true);
+   const currentActivity=activityIntent.current?snapshotRef.current.objects.find(o=>o.id===activityIntent.current&&o.kind==='activity'&&o.state==='active'&&snapshotRef.current.objects.some(d=>d.id===o.payload.dayId&&d.state==='active')):null;
+   const plan=planMapCamera({destination:trip.destination,saved:lastContext.current,activityPlace:currentActivity?.payload.place,userPlace:cameraChoice&&cameraChoice!==consumedChoice.current&&cameraChoice.destination===destinationKey(trip.destination)?cameraChoice.place:null,favorites:snapshotRef.current.objects.filter(o=>o.kind==='favorite'&&o.state==='active')});
+   if(plan.source==='destination'&&!currentActivity&&lastContext.current.cameraDestination!==destinationKey(trip.destination)){selectedPlaceRef.current=null;setSelected(null);setMode('browse');}
+   function current(){return !disposed&&generation===cameraGeneration.current;}
+   function persistCamera(source='viewport',extra={}){
+     if(!current()||map.current!==instance||!initialized)return;
+     const center=instance.getCenter(),point=[center.lng,center.lat];
+     if(validCenter(point))saveMap({...cameraContext({center:point,zoom:instance.getZoom(),destination:destinationKey(trip.destination),source}),...extra});
+   }
+   (async()=>{
+     const AMap=await loadAmap(j.config);
+     if(!current())return;
+     const camera=await resolveMapCamera(plan,(destination,signal)=>geocode(destination,'',{signal}),controller.signal);
+     if(!current())return;
+     instance=new AMap.Map(canvas.current,{viewMode:'2D',zoom:camera.zoom,center:camera.center,resizeEnable:true});
+     map.current=instance;
+     instance.on('complete',()=>{
+       if(!current()||initialized||map.current!==instance)return;
+       initialized=true;activityIntent.current=null;consumedChoice.current=cameraChoice;setReady(v=>v+1);setCameraLoading(false);
+       if(!userMoved&&entryIntent===cameraIntent.current&&(camera.source==='activity'||camera.source==='place'))shiftCamera(camera.place);
+       persistCamera(camera.source,{selectedActivityId:null});
+     });
+     instance.on('moveend',()=>persistCamera());
+     instance.on('zoomend',()=>persistCamera());
+     instance.on('dragstart',()=>{userMoved=true;cameraIntent.current++;clearTimeout(cameraTimer.current);instance.stopMove?.();});
+     instance.addControl(new AMap.Scale({position:'LT',offset:new AMap.Pixel(16,96)}));
+
+   })().catch(error=>{if(current()){instance?.destroy();if(map.current===instance)map.current=null;setCameraLoading(false);setMapError(error.message);}});
+   return()=>{alive.current=false;disposed=true;controller.abort();clearTimeout(cameraTimer.current);searchSeq.current++;instance?.destroy();if(map.current===instance){map.current=null;markers.current=[];lines.current=[];}};
+ },[trip.id,trip.destination,mapEpoch,cameraChoice]);
  useEffect(()=>{
    if(!map.current||!window.AMap)return;
    const AMap=window.AMap,m=map.current;m.remove(markers.current);m.remove(lines.current);markers.current=[];lines.current=[];
@@ -71,7 +89,6 @@ export default function MapView({journey:j,onEditActivity}) {
      if(old?.payload.inputSignature===signature)continue;
      // A manual duration survives mode/time changes while its endpoints stay fixed.
      if(old?.payload.manual){try{if(JSON.parse(old.payload.inputSignature)[0]===endpointSignature(from,to))continue;}catch{}}
-     if(autoRoutes.current.has(signature))continue;autoRoutes.current.add(signature);
      try{
        const route=await estimateRoute(from.payload.place,to.payload.place,mode,trip.destination);
        if(disposed||!alive.current)return;
@@ -95,8 +112,13 @@ export default function MapView({journey:j,onEditActivity}) {
      }catch(e){if(seq===searchSeq.current)setError(e.message);}finally{if(seq===searchSeq.current)setBusy(false);}
    },350);return()=>{clearTimeout(timer);searchSeq.current++;};
  },[query,mode,trip.destination]);
- function shiftCamera(p){if(!located(p)||!map.current)return;clearTimeout(cameraTimer.current);cameraTimer.current=setTimeout(()=>{const m=map.current;if(!m)return;m.setZoomAndCenter(Math.max(15,m.getZoom()),[p.lng,p.lat],true);const r=panel.current?.getBoundingClientRect(),mobile=innerWidth<760;if(r)m.panBy(mobile?0:(r.width+80)/2,mobile?-(r.height+100)/2:0,0);},60);}
- async function choose(p){searchSeq.current++;setBusy(false);setError('');try{if(p.providerPlaceId&&!located(p))p=await placeDetail(p.providerPlaceId)||p;setSelected(p);setMode('detail');setExpanded(false);document.activeElement?.blur?.();shiftCamera(p);}catch(e){setError(e.message);}}
+ function shiftCamera(p,allowInitialize=false){
+   if(!located(p))return;
+   if(!map.current){if(allowInitialize)setCameraChoice({place:p,destination:destinationKey(trip.destination)});return;}
+   clearTimeout(cameraTimer.current);const targetMap=map.current;
+   cameraTimer.current=setTimeout(()=>{if(map.current!==targetMap)return;targetMap.setZoomAndCenter(Math.max(15,targetMap.getZoom()),[p.lng,p.lat],true);const r=panel.current?.getBoundingClientRect(),mobile=innerWidth<760;if(r)targetMap.panBy(mobile?0:(r.width+80)/2,mobile?-(r.height+100)/2:0,0);},60);
+ }
+ async function choose(p){const sequence=++searchSeq.current;cameraIntent.current++;setBusy(false);setError('');try{if(p.providerPlaceId&&!located(p))p=await placeDetail(p.providerPlaceId)||p;if(sequence!==searchSeq.current||!alive.current)return;setSelected(p);setMode('detail');setExpanded(false);document.activeElement?.blur?.();shiftCamera(p,true);}catch(e){if(sequence===searchSeq.current&&alive.current)setError(e.message);}}
  async function pickHere(){if(!map.current)return;const c=map.current.getCenter();setBusy(true);try{let p;try{p=await reverseGeocode(c.lng,c.lat);}catch{p={name:'',address:'',lng:c.lng,lat:c.lat,provider:null,providerPlaceId:null,category:'',sourceUrl:'',fetchedAt:null,coordSystem:'GCJ-02'};}setSelected(p);setManual({name:p.name,address:p.address});setMode('manual');}finally{setBusy(false);}}
  async function favorite(){if(!selected)return;setBusy(true);setError('');try{const existing=snapshot.objects.find(x=>x.kind==='favorite'&&keyOf(x.payload)===keyOf(selected));if(existing){if(existing.state==='deleted')setError('此收藏已删除，可在设置的已删除内容中恢复');return;}await j.mutate({kind:'create',objectId:crypto.randomUUID(),objectType:'favorite',patch:selected});}catch(e){setError(e.message);}finally{setBusy(false);}}
  const selectedFavorite=selected&&snapshot.objects.find(o=>o.kind==='favorite'&&keyOf(o.payload)===keyOf(selected));
@@ -116,13 +138,19 @@ export default function MapView({journey:j,onEditActivity}) {
      onEditActivity(existing||null,{...next,_draftId:target});
    }else onEditActivity(null,{place:selected,title:selected.name,...(routeDay?{dayId:routeDay}:{})});
  };
- function locate(){setError('');if(!navigator.geolocation){setError('此浏览器无法定位，请通过搜索选择地点');return;}navigator.geolocation.getCurrentPosition(async pos=>{try{const AMap=await loadAmap();AMap.convertFrom([pos.coords.longitude,pos.coords.latitude],'gps',(status,result)=>{if(status==='complete'&&result.locations?.[0])map.current?.setZoomAndCenter(15,result.locations[0]);else setError('定位转换未完成，请重试');});}catch(e){setError(e.message);} },()=>setError('未取得定位权限，请通过搜索选择地点'),{timeout:12000,maximumAge:30000});}
+ function locate(){
+   setError('');if(!navigator.geolocation){setError('此浏览器无法定位，请通过搜索选择地点');return;}
+   const generation=cameraGeneration.current,intent=++cameraIntent.current;
+   const current=()=>alive.current&&generation===cameraGeneration.current&&intent===cameraIntent.current;
+   navigator.geolocation.getCurrentPosition(async pos=>{if(!current())return;try{const AMap=await loadAmap();if(!current())return;AMap.convertFrom([pos.coords.longitude,pos.coords.latitude],'gps',(status,result)=>{if(!current())return;const p=result.locations?.[0];if(status==='complete'&&p)shiftCamera({name:'当前位置',lng:p.getLng?.()??p.lng,lat:p.getLat?.()??p.lat},true);else setError('定位转换未完成，请重试');});}catch(e){if(current())setError(e.message);}},()=>{if(current())setError('未取得定位权限，请通过搜索选择地点');},{timeout:12000,maximumAge:30000});
+ }
  return <section className={`journey-map ${mode==='search'?'map-searching':''}`} aria-label="地图与共享收藏">
    <div ref={canvas} className="map-canvas"/>
    <div className="map-upper-controls glass">
      <select aria-label="地图路线日期" value={routeDay} onChange={e=>setRouteDay(e.target.value)}><option value="">全部收藏</option>{days.map(d=><option key={d.id} value={d.id}>{dayLabel(d,trip)}路线{d.payload.date?` · ${d.payload.date}`:''}</option>)}</select>
      <button className="map-icon" aria-label="筛选收藏" onClick={()=>{setFilterDraft(filter);setMode('filter');setExpanded(true)}}><SlidersHorizontal size={19}/></button>
    </div>
+   {cameraLoading&&<div className="map-load-error glass" role="status"><MapPin size={22}/><span>正在定位地图…</span></div>}
    {mapError&&<div className="map-load-error glass" role="status"><MapPin size={22}/><span>{mapError}</span><button onClick={()=>setMapEpoch(v=>v+1)}><RefreshCw size={16}/>重试</button></div>}
    {mode==='pick'&&<div className="map-crosshair" aria-hidden="true">+</div>}
    <div className="map-tools glass"><button className="map-icon" aria-label="放大地图" onClick={()=>map.current?.zoomIn()}><Plus size={20}/></button><button className="map-icon" aria-label="缩小地图" onClick={()=>map.current?.zoomOut()}>−</button><button className="map-icon" aria-label="定位到我" onClick={locate}><LocateFixed size={20}/></button></div>

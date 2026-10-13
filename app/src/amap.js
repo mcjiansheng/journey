@@ -1,5 +1,6 @@
 import AMapLoader from '@amap/amap-jsapi-loader';
 import { api } from './sync';
+import {timezoneFromGeocodes} from './destination-timezone.js';
 
 let promise;
 export async function loadAmap(config) {
@@ -26,15 +27,19 @@ export function normalizePlace(p) {
  const category=str(p.type).split(';')[0]||'';
  return {name:str(p.name),address:str(p.address)||str(p.district),lng:num(lng),lat:num(lat),provider:'amap',providerPlaceId:str(p.id)||null,category,sourceUrl:'',fetchedAt:Date.now(),coordSystem:'GCJ-02'};
 }
-function call(service,method,args) {
+function call(service,method,args,{signal}={}) {
  return new Promise((resolve,reject)=>{
-   const timeout=setTimeout(()=>reject(new Error('地图查询超时，请重试')),15000);
-   service[method](...args,(status,result)=>{
-     clearTimeout(timeout);
-     if(status==='complete')resolve(result);
-     else if(status==='no_data')resolve(null);
-     else reject(new Error('地图查询未完成，请重试'));
-   });
+   let settled=false,timer;
+   const finish=(handler,value)=>{if(settled)return;settled=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);handler(value);};
+   const abort=()=>finish(reject,signal.reason||new DOMException('地图查询已取消','AbortError'));
+   if(signal?.aborted){abort();return;}
+   signal?.addEventListener('abort',abort,{once:true});
+   timer=setTimeout(()=>finish(reject,new Error('地图查询超时，请重试')),15000);
+   try {service[method](...args,(status,result)=>{
+     if(status==='complete')finish(resolve,result);
+     else if(status==='no_data')finish(resolve,null);
+     else finish(reject,new Error('地图查询未完成，请重试'));
+   });}catch(error){finish(reject,error);}
  });
 }
 export async function searchPlaces(query,city='') {
@@ -50,9 +55,20 @@ export async function placeDetail(id) {
  const AMap=await loadAmap();const result=await call(new AMap.PlaceSearch({extensions:'base'}),'getDetails',[id]);
  return result?.poiList?.pois?.[0]?normalizePlace(result.poiList.pois[0]):null;
 }
-export async function geocode(address,city='') {
- const AMap=await loadAmap();const result=await call(new AMap.Geocoder({city:city||'全国'}),'getLocation',[address]);
+async function geocodeResponse(address,city='',{signal}={}) {
+ if(signal?.aborted)throw signal.reason||new DOMException('地图查询已取消','AbortError');
+ const AMap=await loadAmap();
+ return call(new AMap.Geocoder({city:city||'全国'}),'getLocation',[address],{signal});
+}
+export async function geocode(address,city='',{signal}={}) {
+ const result=await geocodeResponse(address,city,{signal});
  const p=result?.geocodes?.[0];return p?normalizePlace({...p,name:address,address:p.formattedAddress}):null;
+}
+export async function resolveDestinationTimezone(destination,{signal}={}) {
+ const result=await geocodeResponse(destination,'',{signal});
+ const timezone=timezoneFromGeocodes(result?.geocodes);
+ if(!timezone)throw new Error('未能确定目的地时区，请在更多设置中手动选择。');
+ return timezone;
 }
 export async function reverseGeocode(lng,lat) {
  const AMap=await loadAmap();const result=await call(new AMap.Geocoder({extensions:'base'}),'getAddress',[[lng,lat]]);
