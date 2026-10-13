@@ -183,3 +183,9 @@ html.has-modal,html.has-modal body{overflow:hidden;overscroll-behavior:none}
 @media(prefers-reduced-transparency:reduce){:root:not([data-transparency=false]) .bottom-nav{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}}
 
 .create-trip-dates{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.create-trip-dates input{min-width:0}
+
+/* Day headings and schedules crossfade in place, including unequal list heights. */
+.day-content-stage{position:relative;isolation:isolate}
+.day-content-stage[data-transitioning]{overflow:clip;overflow-clip-margin:30px}
+.day-content,.day-content-outgoing{display:flow-root}
+.day-content-outgoing{position:absolute;inset:0 0 auto;pointer-events:none}

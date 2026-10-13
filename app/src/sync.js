@@ -238,7 +238,18 @@ function setContext(patch) {
   const epoch=authEpoch;
   navigationTimer=setTimeout(()=>{if(account&&epoch===authEpoch)void api('/api/navigation',{method:'PUT',body:{tripId:id,context:account.contexts[id],lastTripId:account.lastTripId}}).catch(()=>{});},700);
 }
-function setDraft(key,value) {setContext({drafts:{...state.context.drafts,[key]:value}});}
+function updateDrafts(updater) {
+  if(!account||!selected)return;
+  const drafts=state.context.drafts,next=updater(drafts);
+  if(next!==drafts)setContext({drafts:next});
+}
+function setDraft(key,value) {updateDrafts(drafts=>({...drafts,[key]:value}));}
+async function persistLocal() {
+  const epoch=authEpoch,owner=account;
+  await persist();requireCurrent(epoch,owner);
+  if(state.error?.code==='LOCAL_STORAGE')emit({error:null});
+  renderAccount();void flush();
+}
 async function retry(options={}) {
   const epoch=authEpoch,owner=account;
   emit({error:null});
@@ -261,5 +272,5 @@ setInterval(()=>{if(account&&navigator.onLine&&!state.sessionExpired&&account.qu
 export function useJourney() {
   loadPromise ||= initialize();
   const value=useSyncExternalStore(fn=>{listeners.add(fn);return()=>listeners.delete(fn);},()=>state);
-  return {...value,lastTripId:account?.lastTripId,pendingOperations:account?.queue||[],api,login,logout,openTrip,goHome,refresh,createTrip,joinTrip,mutate,setContext,setDraft,clearError,retry,updateProfile,refreshTrips};
+  return {...value,lastTripId:account?.lastTripId,pendingOperations:account?.queue||[],api,login,logout,openTrip,goHome,refresh,createTrip,joinTrip,mutate,setContext,setDraft,updateDrafts,persistLocal,clearError,retry,updateProfile,refreshTrips};
 }
