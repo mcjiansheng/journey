@@ -6,3 +6,14 @@ node_modules/
 # 原型与界面可视化仅保留在本地。
 /prototype*/
 /sites/
+
+# 正式应用构建、运行数据与凭据。
+/app/dist/
+/app/data/
+/app/test-results/
+/app/playwright-report/
+/app/.env
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+/releases/

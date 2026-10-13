@@ -1,0 +1,2 @@
+import {defineConfig} from '@playwright/test';
+export default defineConfig({testDir:'tests/e2e',timeout:60000,expect:{timeout:12000},workers:1,retries:0,reporter:[['list'],['html',{open:'never'}]],use:{baseURL:process.env.E2E_URL||'http://127.0.0.1:4177/',channel:'chrome',headless:true,launchOptions:{chromiumSandbox:true,ignoreDefaultArgs:['--use-mock-keychain','--password-store=basic']},screenshot:'only-on-failure',trace:'retain-on-failure'},outputDir:'test-results'});

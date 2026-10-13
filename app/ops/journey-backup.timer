@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Journey encrypted backup
+
+[Timer]
+OnCalendar=*-*-* 04:35:00
+RandomizedDelaySec=15min
+Persistent=true
+Unit=journey-backup.service
+
+[Install]
+WantedBy=timers.target
