@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { cp, mkdir, mkdtemp, rm, writeFile, chmod, readdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
@@ -12,13 +13,15 @@ const root=join(repo,'.local/releases'), archive=join(root,`${id}.tar.gz`);
 await mkdir(root,{recursive:true,mode:0o700});
 // Refuse replacing a release with the same immutable identity.
 await writeFile(archive,'',{flag:'wx',mode:0o600});
-const stage=await mkdtemp(join(root,'.stage-'));
+// Keep runtime resolution outside the checkout and avoid sendFile's dot-directory filter.
+const stage=await mkdtemp(join(tmpdir(),'journey-release-'));
 async function digest(path){const hash=createHash('sha256');for await(const chunk of createReadStream(path))hash.update(chunk);return hash.digest('hex');}
 try{
  execFileSync('npm',['run','build'],{cwd:app,stdio:'inherit',env:{...process.env,APP_BASE_PATH:'/'}});
  for(const name of ['package.json','package-lock.json','server','dist','ops'])await cp(join(app,name),join(stage,name),{recursive:true});
  await mkdir(join(stage,'src'));await cp(join(app,'src/domain.js'),join(stage,'src/domain.js'));
  execFileSync('npm',['ci','--omit=dev','--ignore-scripts','--cache',join(repo,'.local/npm-cache')],{cwd:stage,stdio:'inherit'});
+ execFileSync(process.execPath,['ops/verify-release.mjs'],{cwd:stage,stdio:'inherit'});
  const files=[];
  async function inventory(dir,prefix=''){for(const entry of await readdir(dir,{withFileTypes:true})){const name=prefix+entry.name,path=join(dir,entry.name);if(entry.isDirectory())await inventory(path,name+'/');else if(entry.isFile())files.push({path:name,sha256:await digest(path)});else if(entry.isSymbolicLink()) { /* npm executable links are preserved by tar. */ }else throw new Error(`Unsupported release entry: ${name}`);}}
  await inventory(stage);
