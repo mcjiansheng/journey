@@ -1,16 +1,64 @@
-.team-mode{margin:20px 0;min-width:0}
-.team-mode>legend{margin-bottom:10px;font-size:13px;font-weight:500;color:var(--text)}
-.team-mode-panel{padding:5px;border:1px solid var(--line);border-radius:17px;background:color-mix(in srgb,var(--accent-soft) 42%,var(--surface))}
-.team-mode-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding:3px;border-radius:12px;background:var(--accent-soft)}
-.team-mode-option{position:relative;min-width:0;cursor:pointer}
-.team-mode-option input[type=radio]{position:absolute;inset:0;width:100%;height:100%;min-height:0;margin:0;padding:0;border:0;opacity:0;cursor:inherit}
-.team-mode-face{display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:10px 8px;border:1px solid transparent;border-radius:10px;font-size:13px;line-height:1.5;color:var(--muted);transition:background 160ms ease,color 160ms ease,box-shadow 160ms ease}
-.team-mode-face svg{flex-shrink:0}
-.team-mode-option input:checked+.team-mode-face{background:var(--surface);color:var(--accent);font-weight:600;border-color:color-mix(in srgb,var(--accent) 18%,var(--line));box-shadow:0 2px 7px var(--optical-shadow)}
-.team-mode-option input:focus-visible+.team-mode-face{outline:3px solid var(--accent);outline-offset:2px}
-.team-mode:disabled .team-mode-option{cursor:default;opacity:.6}
-.team-mode-copy{padding:14px 13px 10px;font-size:13px;line-height:1.8;color:var(--text)}
-.team-mode-copy .team-mode-common{margin-top:6px;font-size:12px;color:var(--muted)}
+.team-mode{margin:24px 0 20px;min-width:0}
+.team-mode>legend{margin-bottom:12px;font-size:13px;font-weight:500;color:var(--text)}
+/* Respond to the space in the form or settings panel, not just the viewport. */
+.team-mode-panel{container-type:inline-size}
+.team-mode-options{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.team-mode-option{position:relative;display:flex;min-width:0;cursor:pointer}
+.team-mode-option input[type=radio]{position:absolute;inset:0;z-index:1;width:100%;height:100%;min-height:0;margin:0;padding:0;border:0;opacity:0;cursor:inherit}
+.team-mode-face{
+ position:relative;display:flex;align-items:center;gap:16px;width:100%;min-width:0;padding:20px 38px 20px 16px;
+ border:1px solid color-mix(in srgb,var(--line) 80%,var(--optical-edge));border-radius:20px;
+ background:linear-gradient(140deg,var(--optical-sheen),transparent 65%),var(--glass);
+ box-shadow:inset 0 1px 0 var(--optical-edge),0 4px 14px var(--optical-shadow);
+ color:var(--text);transition:background 180ms ease,border-color 180ms ease,box-shadow 180ms ease,transform 180ms ease;
+}
+.team-mode-art{display:block;flex-shrink:0;width:76px;height:auto;color:var(--accent)}
+.team-mode-content{display:flex;flex-direction:column;gap:8px;min-width:0}
+.team-mode-title{display:block;font-size:15px;font-weight:600;line-height:1.5}
+.team-mode-description{display:block;font-size:13px;line-height:1.8;overflow-wrap:anywhere}
+.team-mode-description>span{display:block}
+.team-mode-detail{margin-top:3px;color:var(--muted);font-size:12px}
+.team-mode-indicator{position:absolute;top:17px;right:16px;display:grid;place-items:center;width:20px;height:20px;border:1.5px solid var(--muted);border-radius:50%;background:var(--surface);color:var(--surface);transition:background 160ms ease,border-color 160ms ease}
+.team-mode-indicator svg{opacity:0;transform:scale(.6);transition:opacity 160ms ease,transform 160ms ease}
+.team-mode-option input:checked+.team-mode-face{
+ border-color:var(--accent);
+ background:linear-gradient(140deg,var(--optical-sheen),transparent 65%),color-mix(in srgb,var(--accent-soft) 78%,var(--glass));
+ box-shadow:inset 0 0 0 .5px var(--accent),inset 0 1px 0 var(--optical-edge),0 5px 18px var(--optical-shadow);
+}
+.team-mode-option input:checked+.team-mode-face .team-mode-title{color:var(--accent)}
+.team-mode-option input:checked+.team-mode-face .team-mode-indicator{background:var(--accent);border-color:var(--accent)}
+.team-mode-option input:checked+.team-mode-face .team-mode-indicator svg{opacity:1;transform:scale(1)}
+.team-mode-option input:focus-visible+.team-mode-face{outline:3px solid var(--accent);outline-offset:3px}
+.team-mode:disabled .team-mode-option{cursor:default}
+.team-mode:disabled .team-mode-face{opacity:.65}
+.team-mode[aria-busy=true] .team-mode-face{opacity:.8}
+.team-mode-common{margin:12px 2px 0;font-size:12px;line-height:1.8;color:var(--muted)}
 .team-mode-status{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--muted)}
-@media(hover:hover){.team-mode-option input:not(:disabled):not(:checked):hover+.team-mode-face{color:var(--accent);background:color-mix(in srgb,var(--surface) 55%,transparent)}}
-@media(max-width:380px){.team-mode-face{gap:6px;padding-inline:5px}.team-mode-copy{padding-inline:10px}}
+@container (min-width:400px){
+ .team-mode-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+ .team-mode-face{flex-direction:column;align-items:flex-start;gap:14px;padding:20px}
+ .team-mode-art{width:112px;height:70px}
+ .team-mode-title{font-size:16px}
+}
+@container (max-width:299px){
+ .team-mode-face{gap:10px;padding:17px 32px 17px 12px}
+ .team-mode-art{width:56px}
+ .team-mode-indicator{top:14px;right:12px;width:18px;height:18px}
+}
+@media(hover:hover){
+ .team-mode-option input:not(:disabled):hover+.team-mode-face{border-color:var(--accent);transform:translateY(-2px);box-shadow:inset 0 1px 0 var(--optical-edge),0 8px 22px var(--optical-shadow)}
+ .team-mode-option input:not(:disabled):active+.team-mode-face{transform:translateY(0)}
+}
+:root[data-transparency=true] .team-mode-face{background:var(--surface)}
+:root[data-transparency=true] .team-mode-option input:checked+.team-mode-face{background:var(--accent-soft)}
+@media(prefers-reduced-transparency:reduce){
+ :root:not([data-transparency=false]) .team-mode-face{background:var(--surface)}
+ :root:not([data-transparency=false]) .team-mode-option input:checked+.team-mode-face{background:var(--accent-soft)}
+}
+@media(forced-colors:active){
+ .team-mode-face{border-color:ButtonText}
+ .team-mode-option input:checked+.team-mode-face{outline:2px solid Highlight;outline-offset:-3px}
+ .team-mode-indicator{forced-color-adjust:none;background:Canvas;color:Canvas;border-color:CanvasText}
+ .team-mode-option input:checked+.team-mode-face .team-mode-indicator{background:Highlight;border-color:Highlight;color:HighlightText}
+ .team-mode-option input:focus-visible+.team-mode-face{outline:3px solid Highlight;outline-offset:3px}
+}
