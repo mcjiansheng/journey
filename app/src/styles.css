@@ -183,3 +183,27 @@ html.has-modal,html.has-modal body{overflow:hidden;overscroll-behavior:none}
 @media(prefers-reduced-transparency:reduce){:root:not([data-transparency=false]) .bottom-nav{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}}
 
 .create-trip-dates{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.create-trip-dates input{min-width:0}
+
+/* Direct route lifecycle actions and activity reordering. */
+.route-editor-actions{margin-top:22px}
+.route-editor-actions>.primary{margin-left:auto}
+.route-lifecycle{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+.route-lifecycle>span{font-size:13px;font-weight:500}
+.prominent-actions{justify-content:flex-end}
+.prominent-actions .lifecycle-action{min-height:44px;padding:10px 16px;font-size:13px}
+.drag-handle{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;margin-left:auto;border-radius:10px;color:var(--muted);cursor:grab;touch-action:none}
+.drag-handle:hover,.drag-handle:focus-visible{background:var(--accent-soft);color:var(--accent)}
+.drag-handle:active{cursor:grabbing}
+.activity-card.dragging{opacity:.58;transform:scale(.99)}
+.activity-card.drop-before::before,.activity-card.drop-after::before{content:"";position:absolute;left:12px;right:12px;height:3px;border-radius:3px;background:var(--accent);z-index:3;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent-soft) 75%,transparent)}
+.activity-card.drop-before::before{top:-8px}
+.activity-card.drop-after::before{bottom:-8px}
+.reschedule-row{border-radius:10px;padding-left:8px;padding-right:8px}
+.reschedule-row.selected{background:color-mix(in srgb,var(--accent-soft) 62%,transparent)}
+
+@media(max-width:760px){
+ .route-editor-actions>*{flex:1}
+ .route-lifecycle{align-items:stretch;flex-direction:column}
+ .prominent-actions,.prominent-actions .lifecycle-action{width:100%}
+ .drag-handle{width:44px;height:44px}
+}
