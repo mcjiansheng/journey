@@ -1,16 +1,40 @@
-.team-mode{margin:20px 0;min-width:0}
-.team-mode>legend{margin-bottom:10px;font-size:13px;font-weight:500;color:var(--text)}
-.team-mode-panel{padding:5px;border:1px solid var(--line);border-radius:17px;background:color-mix(in srgb,var(--accent-soft) 42%,var(--surface))}
-.team-mode-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding:3px;border-radius:12px;background:var(--accent-soft)}
+.team-mode{margin:24px 0;min-width:0;padding:0;border:0;container-type:inline-size}
+.team-mode>legend{margin-bottom:12px;padding:0;font-size:13px;font-weight:500;color:var(--text)}
+.team-mode-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .team-mode-option{position:relative;min-width:0;cursor:pointer}
-.team-mode-option input[type=radio]{position:absolute;inset:0;width:100%;height:100%;min-height:0;margin:0;padding:0;border:0;opacity:0;cursor:inherit}
-.team-mode-face{display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:10px 8px;border:1px solid transparent;border-radius:10px;font-size:13px;line-height:1.5;color:var(--muted);transition:background 160ms ease,color 160ms ease,box-shadow 160ms ease}
-.team-mode-face svg{flex-shrink:0}
-.team-mode-option input:checked+.team-mode-face{background:var(--surface);color:var(--accent);font-weight:600;border-color:color-mix(in srgb,var(--accent) 18%,var(--line));box-shadow:0 2px 7px var(--optical-shadow)}
-.team-mode-option input:focus-visible+.team-mode-face{outline:3px solid var(--accent);outline-offset:2px}
-.team-mode:disabled .team-mode-option{cursor:default;opacity:.6}
-.team-mode-copy{padding:14px 13px 10px;font-size:13px;line-height:1.8;color:var(--text)}
-.team-mode-copy .team-mode-common{margin-top:6px;font-size:12px;color:var(--muted)}
+.team-mode-option input[type=radio]{position:absolute;z-index:1;inset:0;width:100%;height:100%;min-height:0;margin:0;padding:0;border:0;opacity:0;cursor:inherit}
+.team-mode-face{position:relative;display:flex;flex-direction:column;align-items:center;height:100%;padding:20px 18px;border:1px solid var(--line);border-radius:20px;color:var(--muted);background:linear-gradient(140deg,var(--optical-sheen),transparent 55%),var(--optical-panel);box-shadow:inset 0 1px 0 var(--optical-edge),inset 0 -1px 0 var(--optical-edge-low),0 4px 14px var(--optical-shadow);-webkit-backdrop-filter:blur(18px) saturate(135%);backdrop-filter:blur(18px) saturate(135%);transition:border-color 180ms ease,background 180ms ease,box-shadow 180ms ease,transform 180ms ease}
+.team-mode-sketch{display:block;width:144px;max-width:100%;height:90px;flex-shrink:0;margin:0 0 16px;color:var(--accent)}
+.team-mode-sketch-tint{fill:color-mix(in srgb,var(--accent) 9%,transparent);stroke:none}
+.team-mode-sketch-paper{fill:var(--surface)}
+.team-mode-sketch-ground{stroke:var(--line)}
+.team-mode-details{display:flex;flex-direction:column;gap:6px;min-width:0;width:100%}
+.team-mode-title{font-size:15px;font-weight:600;line-height:1.5;color:var(--text)}
+.team-mode-summary{font-size:12px;line-height:1.5;color:var(--accent)}
+.team-mode-description{margin-top:4px;font-size:12px;line-height:1.8;color:var(--muted);overflow-wrap:anywhere}
+.team-mode-indicator{position:absolute;right:14px;top:14px;display:flex;align-items:center;justify-content:center;width:20px;height:20px;border:1px solid var(--muted);border-radius:50%;color:var(--surface);background:color-mix(in srgb,var(--surface) 50%,transparent);transition:background 180ms ease,border-color 180ms ease}
+.team-mode-indicator svg{opacity:0}
+.team-mode-option input:checked+.team-mode-face{border-color:var(--accent);background:linear-gradient(140deg,var(--optical-sheen),transparent 55%),color-mix(in srgb,var(--accent-soft) 62%,var(--optical-selected));box-shadow:inset 0 1px 0 var(--optical-edge),0 0 0 1px var(--accent),0 6px 18px var(--optical-shadow)}
+.team-mode-option input:checked+.team-mode-face .team-mode-indicator{background:var(--accent);border-color:var(--accent)}
+.team-mode-option input:checked+.team-mode-face .team-mode-indicator svg{opacity:1}
+.team-mode-option input:focus-visible+.team-mode-face{outline:3px solid var(--accent);outline-offset:4px}
+.team-mode:disabled .team-mode-option{cursor:default}
+.team-mode:disabled .team-mode-face{opacity:.65}
+.team-mode-common{margin-top:12px;font-size:12px;line-height:1.8;color:var(--muted)}
 .team-mode-status{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--muted)}
-@media(hover:hover){.team-mode-option input:not(:disabled):not(:checked):hover+.team-mode-face{color:var(--accent);background:color-mix(in srgb,var(--surface) 55%,transparent)}}
-@media(max-width:380px){.team-mode-face{gap:6px;padding-inline:5px}.team-mode-copy{padding-inline:10px}}
+@media(hover:hover){.team-mode-option input:not(:disabled):not(:checked):hover+.team-mode-face{border-color:color-mix(in srgb,var(--accent) 60%,var(--line));transform:translateY(-2px);box-shadow:inset 0 1px 0 var(--optical-edge),0 8px 20px var(--optical-shadow)}}
+/* Respond to the containing form, including narrow desktop dialogs. */
+@container(max-width:419px){
+ .team-mode-options{grid-template-columns:1fr;gap:10px}
+ .team-mode-face{flex-direction:row;align-items:center;gap:14px;padding:18px 36px 18px 14px;border-radius:17px}
+ .team-mode-sketch{width:88px;height:66px;margin:0}
+ .team-mode-title{font-size:14px}
+ .team-mode-details{gap:4px}
+ .team-mode-description{margin-top:2px}
+ .team-mode-indicator{right:11px;top:12px;width:18px;height:18px}
+}
+@container(max-width:299px){.team-mode-face{gap:10px;padding-left:10px}.team-mode-sketch{width:62px;height:52px}}
+:root[data-transparency=true] .team-mode-face{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}
+:root[data-transparency=true] .team-mode-option input:checked+.team-mode-face{background:var(--accent-soft)}
+@media(prefers-reduced-transparency:reduce){:root:not([data-transparency=false]) .team-mode-face{background:var(--surface);-webkit-backdrop-filter:none;backdrop-filter:none}:root:not([data-transparency=false]) .team-mode-option input:checked+.team-mode-face{background:var(--accent-soft)}}
+@media(forced-colors:active){.team-mode-face{border-color:ButtonText}.team-mode-option input:checked+.team-mode-face{border-color:Highlight;outline:2px solid Highlight}.team-mode-indicator{forced-color-adjust:none;background:Canvas;color:CanvasText;border-color:CanvasText}.team-mode-option input:checked+.team-mode-face .team-mode-indicator{background:Highlight;color:HighlightText;border-color:Highlight}}
