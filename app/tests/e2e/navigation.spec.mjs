@@ -41,7 +41,11 @@ async function noOverflow(page){expect(await page.evaluate(()=>document.document
 async function sampleSidebarMotion(page,label){
  return page.evaluate(async label=>{
   const sidebar=document.querySelector('.sidebar'),title=document.querySelector('.trip-title>span');
-  const measure=()=>{const r=sidebar.getBoundingClientRect(),t=title.getBoundingClientRect(),icons=[...sidebar.querySelectorAll('nav button svg')].map(svg=>{const box=svg.getBoundingClientRect();return{width:box.width,height:box.height}});return{width:r.width,top:r.top,height:r.height,center:r.top+r.height/2,titleX:t.x,titleY:t.y,icons}};
+  const measure=()=>{
+   const r=sidebar.getBoundingClientRect(),t=title.getBoundingClientRect(),icons=[...sidebar.querySelectorAll('nav button svg')].map(svg=>{const box=svg.getBoundingClientRect();return{width:box.width,height:box.height}}),buttons=[...sidebar.querySelectorAll('nav button')].map(button=>button.getBoundingClientRect());
+   const extras=[...sidebar.querySelectorAll('.brand,.back-home,.sidebar-foot')].filter(element=>{const style=getComputedStyle(element);return style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)>.01}).map(element=>{const box=element.getBoundingClientRect();return [...buttons].some(button=>box.left<button.right&&box.right>button.left&&box.top<button.bottom&&box.bottom>button.top)});
+   return{width:r.width,top:r.top,height:r.height,center:r.top+r.height/2,titleX:t.x,titleY:t.y,icons,visibleExtrasOverlap:extras.some(Boolean)};
+  };
   const before=measure(),button=document.querySelector(`nav[aria-label="主导航"] button[aria-label="${label}"]`);if(!button)throw new Error(`Missing navigation button: ${label}`);button.click();
   const frames=[],started=performance.now();while(performance.now()-started<520){await new Promise(requestAnimationFrame);frames.push(measure())}
   return{before,frames,after:measure()};
@@ -52,6 +56,7 @@ function expectSidebarFramesStable(sample,title){
  for(const frame of sample.frames){
   expect(frame.icons.every(icon=>Math.abs(icon.width-20)<1&&Math.abs(icon.height-20)<1)).toBe(true);
   expect(Math.abs(frame.titleX-title.x)).toBeLessThan(2);expect(Math.abs(frame.titleY-title.y)).toBeLessThan(2);
+  expect(frame.visibleExtrasOverlap).toBe(false);
  }
 }
 async function sampleIndicator(page,selector,clickSelector){

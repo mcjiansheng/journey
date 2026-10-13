@@ -42,7 +42,7 @@
   .app-shell .sidebar nav button>svg {width:20px;height:20px;flex:0 0 20px}
   .app-shell .sidebar nav button>span {display:block;white-space:nowrap;opacity:1;transition:opacity 140ms ease}
   .app-shell .sidebar>.brand,.app-shell .sidebar .back-home,.app-shell .sidebar-foot {
-    transition:opacity 140ms ease,visibility 140ms;white-space:nowrap;
+    transition:opacity 120ms ease 240ms,visibility 0s linear 240ms;white-space:nowrap;
   }
   .app-shell .sidebar-foot {position:absolute;bottom:20px;left:25px;right:25px;padding:0}
   .app-shell.map-shell>.sidebar {width:72px;height:276px;padding:11px;border-radius:22px}
@@ -52,6 +52,7 @@
   .map-shell .sidebar nav button>span {opacity:0}
   .map-shell .sidebar>.brand,.map-shell .sidebar .back-home,.map-shell .sidebar-foot {
     display:flex;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity 100ms ease,visibility 0s;
   }
 
   /* The trip name and account actions retain their screen anchors on the map. */
