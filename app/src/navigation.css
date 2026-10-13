@@ -1,0 +1,60 @@
+/* The map's trip controls share one compact surface, leaving the canvas open. */
+.map-shell .trip-header {
+  left:auto;right:22px;top:18px;width:max-content;max-width:calc(100vw - 430px);
+  height:56px;min-height:56px;padding:5px 9px 5px 15px;gap:10px;border-radius:28px;
+  border-color:var(--optical-edge);background:var(--glass);
+  box-shadow:inset 0 1px 0 var(--optical-edge),0 6px 24px var(--optical-shadow);
+}
+.map-shell .trip-title {flex:0 1 auto;min-width:0;max-width:200px;min-height:44px;padding:0 4px;gap:8px}
+.map-shell .trip-title>span {min-width:0}
+.map-shell .mobile-logo {display:none}
+.map-shell .mobile-home {display:block;order:-1;flex-shrink:0;color:var(--muted)}
+.map-shell .header-right {gap:4px;flex-shrink:0}
+.map-shell .sync-status {width:44px;min-height:44px;justify-content:center;border-radius:50%;flex-shrink:0}
+.map-shell .sync-status>span {display:none}
+.map-shell .sync-status:hover {background:var(--accent-soft)}
+.map-shell .members-button {gap:8px;padding:0 8px 0 4px;border-radius:22px}
+.map-shell .members-button:hover {background:var(--accent-soft)}
+.map-shell .avatar-stack .avatar {width:27px;height:27px}
+.trip-title {view-transition-name:trip-title}
+.header-right {view-transition-name:trip-actions}
+.trip-header {view-transition-name:trip-header}
+.sidebar {view-transition-name:sidebar}
+.bottom-nav {view-transition-name:mobile-nav}
+
+@media(min-width:761px) {
+  .map-shell .sidebar {top:18px}
+  .map-upper-controls {top:18px;max-width:290px}
+  .map-upper-controls select {min-width:0;max-width:230px}
+  .map-panel {top:82px;max-height:calc(100dvh - 106px)}
+  .journey-map .amap-scalecontrol {top:auto!important;bottom:28px!important;left:112px!important}
+}
+@media(max-width:760px) {
+  .map-shell .trip-header {
+    top:calc(12px + env(safe-area-inset-top));right:12px;left:auto;
+    max-width:calc(100vw - 24px);height:52px;min-height:52px;padding:3px 6px 3px 10px;gap:4px;
+  }
+  .map-shell .trip-title {max-width:min(180px,calc(100vw - 180px));font-size:14px}
+  .map-shell .members-button {gap:5px;padding-right:6px}
+}
+
+/* Shared controls travel between their positions; page content crossfades beneath. */
+::view-transition {pointer-events:none}
+::view-transition-group(*) {animation-duration:340ms;animation-timing-function:cubic-bezier(.22,1,.36,1)}
+::view-transition-old(root) {animation:page-fade-out 160ms ease-out both}
+::view-transition-new(root) {animation:page-fade-in 280ms ease-out both}
+::view-transition-old(trip-title),::view-transition-new(trip-title),
+::view-transition-old(trip-actions),::view-transition-new(trip-actions) {height:100%;object-fit:none;object-position:right center}
+@keyframes page-fade-out {to {opacity:0}}
+@keyframes page-fade-in {from {opacity:0}}
+@supports not (view-transition-name:root) {
+  .main-content>.page,.main-content>.journey-map {animation:page-fade-in 220ms ease-out}
+}
+:root[data-motion=true]::view-transition-group(*),
+:root[data-motion=true]::view-transition-old(*),
+:root[data-motion=true]::view-transition-new(*) {animation:none!important}
+@media(prefers-reduced-motion:reduce) {
+  :root:not([data-motion=false])::view-transition-group(*),
+  :root:not([data-motion=false])::view-transition-old(*),
+  :root:not([data-motion=false])::view-transition-new(*) {animation:none!important}
+}
