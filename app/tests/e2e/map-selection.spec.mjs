@@ -50,6 +50,15 @@ async function visibleSelectedMarker(page){
   return panel.getAnimations().every(animation=>animation.playState!=='running');
  })).toBe(true);
  await expect.poll(()=>page.evaluate(()=>{
+  const panel=document.querySelector('.map-panel').getBoundingClientRect();
+  const nav=document.querySelector('.bottom-nav').getBoundingClientRect();
+  return ['.amap-logo','.amap-copyright','.amap-scalecontrol'].every(selector=>{
+   const element=document.querySelector(selector);if(!element)return false;
+   const bounds=element.getBoundingClientRect();
+   return bounds.top>=panel.bottom&&bounds.bottom<=nav.top&&bounds.left>=0&&bounds.right<=innerWidth;
+  });
+ })).toBe(true);
+ await expect.poll(()=>page.evaluate(()=>{
   const marker=document.querySelector('.selected-marker').getBoundingClientRect();
   const panel=document.querySelector('.map-panel').getBoundingClientRect();
   const nav=document.querySelector('.bottom-nav').getBoundingClientRect();
