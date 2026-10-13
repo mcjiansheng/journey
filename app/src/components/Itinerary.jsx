@@ -123,25 +123,58 @@ export function Reschedule({journey:j,onClose}){
 }
 
 export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
- const[route,setRoute]=useState(null),[dayMenu,setDayMenu]=useState(false),[dragging,setDragging]=useState(null);
- const dragRef=useRef(null),dragCleanup=useRef(null),dayContent=useRef(null),previousDay=useRef(null),dayAnimation=useRef(null);
+ const[route,setRoute]=useState(null),[dayMenuId,setDayMenuId]=useState(null),[dragging,setDragging]=useState(null);
+ const dragRef=useRef(null),dragCleanup=useRef(null),dayContent=useRef(null),dayStage=useRef(null),previousDay=useRef(null),dayAnimation=useRef({incoming:null,height:null,outgoing:new Set()});
  const days=visibleDays(j.snapshot),outside=outsideDays(j.snapshot);
  const current=days.find(d=>d.id===j.context.dayId)||days[0];
- useEffect(()=>{setDayMenu(false)},[current?.id]);
+ const dayMenu=!!current&&dayMenuId===current.id;
+ useEffect(()=>{setDayMenuId(null)},[current?.id]);
  useLayoutEffect(()=>{
-  const before=previousDay.current;previousDay.current=current?.id;
-  if(!before||before===current?.id)return;
-  const element=dayContent.current;
-  const running=dayAnimation.current?.playState==='running';
-  const visual=running?getComputedStyle(element):null;
-  const from=visual?{opacity:visual.opacity,transform:visual.transform}:null;
-  dayAnimation.current?.cancel();
-  if(!element||reducedMotion())return;
-  const direction=days.findIndex(d=>d.id===current?.id)>=days.findIndex(d=>d.id===before)?1:-1;
-  dayAnimation.current=element.animate([from||{opacity:.65,transform:`translateX(${direction*14}px)`},{opacity:1,transform:'translateX(0)'}],{duration:220,easing:'cubic-bezier(.2,.7,.2,1)'});
- },[current?.id]);
+  const element=dayContent.current,stage=dayStage.current,animations=dayAnimation.current,before=previousDay.current;
+  if(!element||!stage)return;
+  previousDay.current={id:current?.id,content:element.cloneNode(true),height:element.getBoundingClientRect().height};
+  const timing={duration:200,easing:'cubic-bezier(.4,0,.2,1)'};
+  function resize(fromHeight){
+   animations.height?.cancel();
+   stage.dataset.transitioning='';
+   animations.height=stage.animate([{height:`${fromHeight}px`},{height:`${previousDay.current.height}px`}],timing);
+   animations.height.onfinish=()=>{delete stage.dataset.transitioning};
+  }
+  if(!before)return;
+  if(before.id===current?.id){
+   if(animations.height?.playState==='running'&&Math.abs(before.height-previousDay.current.height)>.5)resize(stage.getBoundingClientRect().height);
+   return;
+  }
+  const opacity=animations.incoming?.playState==='running'?getComputedStyle(element).opacity:1;
+  const fromHeight=animations.height?.playState==='running'?stage.getBoundingClientRect().height:before.height;
+  animations.incoming?.cancel();
+  animations.height?.cancel();
+  if(reducedMotion()){
+   for(const outgoing of animations.outgoing){outgoing.animation.cancel();outgoing.element.remove()}
+   animations.outgoing.clear();
+   delete stage.dataset.transitioning;
+   return;
+  }
+  const outgoing=before.content;
+  outgoing.className='day-content-outgoing';
+  outgoing.inert=true;
+  outgoing.setAttribute('aria-hidden','true');
+  stage.append(outgoing);
+  stage.dataset.transitioning='';
+  const fade=outgoing.animate([{opacity},{opacity:0}],timing),entry={element:outgoing,animation:fade};
+  animations.outgoing.add(entry);
+  fade.onfinish=()=>{outgoing.remove();animations.outgoing.delete(entry)};
+  animations.incoming=element.animate([{opacity:0},{opacity:1}],timing);
+  resize(fromHeight);
+ });
  useEffect(()=>()=>dragCleanup.current?.(),[]);
- useEffect(()=>()=>dayAnimation.current?.cancel(),[]);
+ useEffect(()=>()=>{
+  const animations=dayAnimation.current;
+  animations.incoming?.cancel();
+  animations.height?.cancel();
+  for(const outgoing of animations.outgoing){outgoing.animation.cancel();outgoing.element.remove()}
+  animations.outgoing.clear();
+ },[]);
  const list=current?orderedActivities(j.snapshot,current.id):[];
  const routes=j.snapshot.objects.filter(o=>o.kind==='route');
 
@@ -247,13 +280,13 @@ export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
   <div className="page-heading"><div><h1>行程</h1><p className="muted">{j.snapshot.trip.destination}</p></div><button className="secondary" onClick={onDates}><CalendarDays size={17}/>调整日期</button></div>
   <SelectionTrack activeKey={current?.id} className="day-tabs" role="tablist" aria-label="计划日">{days.map(d=><button key={d.id} role="tab" aria-selected={d.id===current?.id} className={d.id===current?.id?'selected':''} onClick={()=>j.setContext({dayId:d.id})}><strong>{dayLabel(d,j.snapshot.trip)}</strong>{d.payload.date&&<small>{d.payload.date.slice(5).replace('-',' / ')}</small>}</button>)}</SelectionTrack>
   {j.snapshot.objects.some(o=>o.kind==='day'&&o.state==='deleted')&&<button className="text-button deleted-days-entry" onClick={onDeleted}>已删除的计划日<ChevronRight size={14}/></button>}
-  <div className="day-content" ref={dayContent}><div className="day-heading">
+  <div className="day-content-stage" ref={dayStage}><div className="day-content" ref={dayContent}><div className="day-heading">
    <h2>{current?dayLabel(current,j.snapshot.trip):'还没有计划日'}{current?.payload.date&&<small>{current.payload.date}</small>}</h2>
-   <div className="button-row"><button className="primary small" disabled={!current} onClick={()=>onEdit(null,{dayId:current.id})}><Plus size={16}/>添加活动</button>{current&&<button className="icon-button compact" aria-label="当天操作" aria-expanded={dayMenu} onClick={()=>setDayMenu(!dayMenu)}><MoreHorizontal size={18}/></button>}</div>
+   <div className="button-row"><button className="primary small" disabled={!current} onClick={()=>onEdit(null,{dayId:current.id})}><Plus size={16}/>添加活动</button>{current&&<button className="icon-button compact" aria-label="当天操作" aria-expanded={dayMenu} onClick={()=>setDayMenuId(dayMenu?null:current.id)}><MoreHorizontal size={18}/></button>}</div>
   </div>
   {current&&dayMenu&&<div className="day-lifecycle"><span>{dayLabel(current,j.snapshot.trip)}{current.payload.date?` · ${current.payload.date}`:""}</span><ObjectActions journey={j} object={current}/></div>}
   <div className="activity-list">{list.length?cards(list,true):<Empty icon={CalendarDays} title="这一天还没有安排" action={<button className="secondary" disabled={!current} onClick={()=>onEdit(null,{dayId:current.id})}><Plus size={16}/>添加第一项安排</button>}>添加活动，或到地图查找想去的地方。</Empty>}</div>
-  {current&&<div className="continuations">{active(j.snapshot,'activity').filter(o=>o.payload.time?.endDayOffset>0).filter(o=>{const d=active(j.snapshot,'day').find(d=>d.id===o.payload.dayId);return d&&d.payload.ordinal<current.payload.ordinal&&d.payload.ordinal+o.payload.time.endDayOffset>=current.payload.ordinal}).map(o=><button className="continuation" key={o.id} onClick={()=>onEdit(o)}><span>从前一天延续</span><strong>{o.payload.title}</strong><small>{timeLabel(o.payload)}</small></button>)}</div>}</div>
+  {current&&<div className="continuations">{active(j.snapshot,'activity').filter(o=>o.payload.time?.endDayOffset>0).filter(o=>{const d=active(j.snapshot,'day').find(d=>d.id===o.payload.dayId);return d&&d.payload.ordinal<current.payload.ordinal&&d.payload.ordinal+o.payload.time.endDayOffset>=current.payload.ordinal}).map(o=><button className="continuation" key={o.id} onClick={()=>onEdit(o)}><span>从前一天延续</span><strong>{o.payload.title}</strong><small>{timeLabel(o.payload)}</small></button>)}</div>}</div></div>
   {outside.length>0&&<details className="outside"><summary>行程外安排</summary>{outside.map(d=><section key={d.id}><h3>{d.payload.date||`原计划第${d.payload.ordinal}天`}</h3>{cards(orderedActivities(j.snapshot,d.id))}</section>)}</details>}
   {route&&<RouteEditor journey={j} {...route} onClose={()=>setRoute(null)}/>}
  </div>;

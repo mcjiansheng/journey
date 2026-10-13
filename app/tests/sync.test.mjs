@@ -71,7 +71,7 @@ function fixture() {
   };
   const subject = new Script(`(function () {
     ${controllerSource}
-    return { login, logout, updateProfile, retry, getState: () => state };
+    return { login, logout, updateProfile, retry, persistLocal, setError, getState: () => state };
   })()`).runInNewContext(sandbox);
   const login = identifier => subject.login({ identifier, password: 'long-test-password' });
   return { subject, login, storage, posted, deferred };
@@ -106,4 +106,21 @@ test('a previous account reapply cannot rewrite or upload the next account pendi
   assert.equal(operation.id, 'b-pending');
   assert.equal(operation.blocked, 'CLOCK_UNCERTAIN');
   assert.equal(operation.clock.uncertain, true);
+});
+
+test('durable local completion preserves blocked sync errors and clears recovered storage errors', async () => {
+  const blocked = fixture();
+  await blocked.login('B');
+  blocked.subject.setError(Object.assign(new Error('The edit clock needs review'), { code: 'CLOCK_UNCERTAIN' }));
+  await blocked.subject.persistLocal();
+  assert.equal(blocked.subject.getState().error.code, 'CLOCK_UNCERTAIN');
+  assert.equal(blocked.subject.getState().status, 'error');
+  assert.equal(blocked.posted.length, 0);
+
+  const recovered = fixture();
+  await recovered.login('A');
+  recovered.subject.setError(Object.assign(new Error('Device storage was full'), { code: 'LOCAL_STORAGE' }));
+  await recovered.subject.persistLocal();
+  assert.equal(recovered.subject.getState().error, null);
+  assert.equal(recovered.subject.getState().status, 'synced');
 });
