@@ -1,0 +1,19 @@
+.activity-place-field{margin:23px 0;gap:10px}
+.activity-place-optional{margin-left:6px;font-weight:400;color:var(--muted);font-size:12px}
+.activity-place-input{position:relative;display:flex;align-items:center;min-width:0}
+.activity-place-input>svg{position:absolute;left:14px;pointer-events:none;color:var(--muted)}
+.activity-place-field .activity-place-input>input{padding-left:42px;padding-right:46px;min-height:46px}
+.activity-place-input>.icon-button{position:absolute;right:2px;min-width:42px;min-height:42px;color:var(--muted)}
+.activity-place-address{display:flex;gap:7px;align-items:flex-start;color:var(--muted);font-size:12px;line-height:1.7;margin:0 2px;overflow-wrap:anywhere}
+.activity-place-address>svg{flex-shrink:0;margin-top:3px}
+.activity-place-actions{gap:18px}
+.activity-place-actions>.text-button{font-size:12px;min-height:44px;padding:4px 2px}
+.activity-place-results,.activity-place-favorites{max-height:230px;overflow-y:auto;overscroll-behavior:contain;scroll-padding:5px;list-style:none;margin:0;padding:5px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.activity-place-results>li,.activity-place-favorites>button{display:flex;align-items:flex-start;gap:10px;min-height:48px;width:100%;padding:11px 10px;text-align:left;border-radius:8px;cursor:pointer}
+.activity-place-results>li[aria-selected=true],.activity-place-results>li:hover,.activity-place-favorites>button:hover{background:var(--accent-soft)}
+.activity-place-results>li>svg,.activity-place-favorites>button>svg{flex-shrink:0;margin-top:2px;color:var(--accent)}
+.activity-place-results span,.activity-place-favorites span{min-width:0;display:flex;flex-direction:column;gap:4px;overflow-wrap:anywhere}
+.activity-place-results strong,.activity-place-favorites strong{font-size:13px;font-weight:500;line-height:1.5}
+.activity-place-results small,.activity-place-favorites small{font-size:12px;line-height:1.6;color:var(--muted)}
+.activity-place-status{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;color:var(--muted);font-size:12px;line-height:1.7;padding:3px 2px}
+@media(max-width:760px){.activity-place-field .activity-place-input>input{font-size:16px}.activity-place-results,.activity-place-favorites{max-height:210px}.activity-place-actions{gap:16px}}
