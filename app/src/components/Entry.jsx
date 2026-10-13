@@ -4,14 +4,15 @@ import {Modal,Field,AsyncButton,IconButton,Empty,errorMessage,useDraft} from './
 import {dateAdd,dateRangeDays} from '../domain.js';
 import {resolveDestinationTimezone} from '../amap.js';
 import {migrateTimezoneChoice,validTimezone,timezoneLabel} from '../destination-timezone.js';
+import TeamModePicker from './TeamModePicker.jsx';
 export function Login({journey:j,onDone}){const[form,setForm]=useState(()=>{try{return JSON.parse(sessionStorage.getItem('journey.loginDraft'))||{identifier:'',password:'',displayName:'',register:false}}catch{return {identifier:'',password:'',displayName:'',register:false}}});const[error,setError]=useState(''),[busy,setBusy]=useState(false);function change(key,value){const n={...form,[key]:value};setForm(n);sessionStorage.setItem('journey.loginDraft',JSON.stringify({...n,password:''}))}return <div className="login-wrap"><div className="brand-mark"><Compass size={32}/></div><p className="eyebrow">同行 JOURNEY</p><h1>把下一程，<br/>一起安排好。</h1><p className="muted">收集想去的地方，安排每天的时间，<br/>和同伴共用一份旅行计划。</p><div className="segmented"><button className={!form.register?'selected':''} onClick={()=>change('register',false)}>登录</button><button className={form.register?'selected':''} onClick={()=>change('register',true)}>创建账号</button></div><form className="login-form" onSubmit={async e=>{e.preventDefault();setError('');setBusy(true);try{await j.login(form);sessionStorage.removeItem('journey.loginDraft');onDone?.()}catch(e){setError(errorMessage(e))}finally{setBusy(false)}}}><Field label="手机号或邮箱"><input autoComplete="username" required value={form.identifier} onChange={e=>change('identifier',e.target.value)} placeholder="输入手机号或邮箱"/></Field>{form.register&&<Field label="你的称呼"><input autoComplete="nickname" required maxLength={80} value={form.displayName} onChange={e=>change('displayName',e.target.value)}/></Field>}<Field label="密码"><input type="password" autoComplete={form.register?'new-password':'current-password'} required minLength={10} maxLength={128} value={form.password} onChange={e=>change('password',e.target.value)} placeholder={form.register?'10 至 128 个字符':'输入密码'}/></Field>{error&&<p role="alert" className="field-error">{error}</p>}<button className="primary" disabled={busy} type="submit">{busy?'正在继续…':form.register?'创建账号并继续':'登录并继续'}<ArrowRight size={17}/></button></form></div>}
 export function CreateTrip({journey:j,onClose}) {
  const localZone=Intl.DateTimeFormat().resolvedOptions().timeZone;
- const [draft,setDraft]=useDraft(j,'createTrip',{name:'',teamMode:'',destination:'',startDate:'',endDate:'',currency:'CNY',timezoneChoice:'destination'});
+ const [draft,setDraft]=useDraft(j,'createTrip',{name:'',teamMode:'admin',destination:'',startDate:'',endDate:'',currency:'CNY',timezoneChoice:'destination'});
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[extraOpen,setExtraOpen]=useState(false);
  const [lookup,setLookup]=useState({destination:'',status:'idle',timezone:null,error:''});
  const lookupSequence=useRef(0);
- const form={...draft,endDate:draft.endDate??(draft.startDate&&Number(draft.dayCount)>0?dateAdd(draft.startDate,Number(draft.dayCount)-1):''),timezoneChoice:migrateTimezoneChoice(draft)};
+ const form={...draft,teamMode:draft.teamMode||'admin',endDate:draft.endDate??(draft.startDate&&Number(draft.dayCount)>0?dateAdd(draft.startDate,Number(draft.dayCount)-1):''),timezoneChoice:migrateTimezoneChoice(draft)};
  const destination=form.destination.trim(),automatic=form.timezoneChoice==='destination';
  const destinationTimezone=lookup.destination===destination&&lookup.status==='ready'?lookup.timezone:null;
  const timezone=automatic ? destinationTimezone : form.timezoneChoice;
@@ -55,7 +56,7 @@ export function CreateTrip({journey:j,onClose}) {
     <Field label="出发日期" help="按目的地当地日期安排"><input type="date" required value={form.startDate} onChange={e=>update('startDate',e.target.value)}/></Field>
     <Field label="结束日期"><input type="date" required min={form.startDate||undefined} max={form.startDate?dateAdd(form.startDate,364):undefined} value={form.endDate} onChange={e=>update('endDate',e.target.value)}/></Field>
    </div>
-   <Field label="团队类型"><select required value={form.teamMode} onChange={e=>update('teamMode',e.target.value)}><option value="" disabled>请选择团队类型</option><option value="admin">管理员团队</option><option value="equal">平等团队</option></select></Field>
+   <TeamModePicker value={form.teamMode} onChange={mode=>update('teamMode',mode)} disabled={busy}/>
    <details className="trip-extra-settings" open={extraOpen} onToggle={event=>setExtraOpen(event.currentTarget.open)}><summary>更多设置</summary>
     <Field label="旅程时区" error={automatic&&lookup.destination===destination&&lookup.status==='error'?lookup.error:undefined}><select value={form.timezoneChoice} onChange={e=>update('timezoneChoice',e.target.value)}><option value="destination">{automaticLabel}</option>{zoneOptions.map(zone=><option value={zone.value} key={zone.value}>{zone.label}</option>)}</select></Field>
     <Field label="记账币种"><select value={form.currency} onChange={e=>update('currency',e.target.value)}>{['CNY','USD','EUR','JPY','GBP','HKD','KRW','SGD','THB'].map(c=><option key={c}>{c}</option>)}</select></Field>
