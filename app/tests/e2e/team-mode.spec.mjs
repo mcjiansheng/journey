@@ -6,8 +6,8 @@ import {launchWebKit} from '../../scripts/browser-runtime.mjs';
 let app,server,base;
 const password='JourneyTeamMode2026!';
 const descriptions={
- '管理员团队':'创建者与管理员可直接删除内容。 成员可表达自己的意见。',
- '平等团队':'成员可通过集体表态删除内容。 创建者也可直接删除。',
+ '管理员团队':'创建者与管理员可直接删除。 成员可表达自己的意见。',
+ '平等团队':'成员通过集体表态删除内容。 创建者也可直接删除。',
 };
 
 test.beforeAll(async()=>{
@@ -51,19 +51,43 @@ async function createTrip(page,mode='admin'){
 }
 
 async function openSettings(page){
- await page.getByRole('navigation',{name:'主导航'}).getByRole('button',{name:'设置',exact:true}).click();
- const picker=page.getByRole('radiogroup',{name:'团队类型'});
+ await page.getByRole('navigation',{name:/^(主导航|手机主导航)$/}).getByRole('button',{name:'设置',exact:true}).click();
+ const row=page.locator('.settings-page .settings-link').filter({hasText:'团队类型'});
+ await expect(row).toBeVisible();
+ await expect(row).toHaveAttribute('aria-haspopup','dialog');
+ await expect(page.locator('.settings-page input[type="radio"]')).toHaveCount(0);
+ const members=page.locator('.settings-page .settings-link').filter({hasText:'成员与邀请'});
+ const [rowBox,membersBox]=await Promise.all([row.boundingBox(),members.boundingBox()]);
+ expect(rowBox).not.toBeNull();expect(membersBox).not.toBeNull();
+ expect(Math.abs(rowBox.height-membersBox.height)).toBeLessThan(1);
+ return row;
+}
+
+async function openTeamModeDialog(page,row){
+ await row.click();
+ const dialog=page.getByRole('dialog',{name:'团队类型'});
+ await expect(dialog).toBeVisible();
+ const picker=dialog.getByRole('radiogroup',{name:'团队类型'});
  await expect(picker).toBeVisible();
- return picker;
+ if(await picker.locator('input:checked').isDisabled())await expect(dialog.getByRole('button',{name:'关闭',exact:true})).toBeFocused();
+ else await expect(picker.locator('input:checked')).toBeFocused();
+ return {dialog,picker};
 }
 
 async function reopenCurrentTripAfterReload(page){
  await page.setViewportSize({width:1440,height:900});
  await page.reload();
  const continueTrip=page.getByRole('button',{name:/继续旅程/});
- if(await continueTrip.isVisible().catch(()=>false))await continueTrip.click();
+ await expect(continueTrip).toBeVisible();
+ await continueTrip.click();
  await expect(page.getByRole('navigation',{name:'主导航'})).toBeVisible();
  return openSettings(page);
+}
+
+async function expectSettingRow(row,selected){
+ await expect(row).toContainText('团队类型');
+ await expect(row).toContainText(selected);
+ await expect(row).toBeEnabled();
 }
 
 async function closeCreateExtras(dialog){
@@ -149,96 +173,139 @@ test('creation selection is accessible, responsive, and persisted with the creat
  expect(trip).toMatchObject({name:'团队类型验收旅程',teamMode:'equal'});
 
  const settings=await openSettings(page);
- await expectPickerContent(settings,'平等团队');
- await verifyLayouts(page,settings);
+ await expectSettingRow(settings,'平等团队');
  await page.setViewportSize({width:1440,height:900});
- await settings.locator('.team-mode-options').scrollIntoViewIfNeeded();
- await capture(page,testInfo,'team-mode-settings-desktop');
+ await settings.scrollIntoViewIfNeeded();
+ await capture(page,testInfo,'team-mode-settings-main-desktop');
  await page.setViewportSize({width:390,height:844});
- await settings.locator('.team-mode-options').scrollIntoViewIfNeeded();
- await capture(page,testInfo,'team-mode-settings-mobile');
+ await settings.scrollIntoViewIfNeeded();
+ await capture(page,testInfo,'team-mode-settings-main-mobile');
+ await page.setViewportSize({width:1440,height:900});
+ const {dialog:settingsDialog,picker:settingsPicker}=await openTeamModeDialog(page,settings);
+ await expectPickerContent(settingsPicker,'平等团队');
+ await verifyLayouts(page,settingsPicker);
+ await page.setViewportSize({width:1440,height:900});
+ await settingsPicker.locator('.team-mode-options').scrollIntoViewIfNeeded();
+ await capture(page,testInfo,'team-mode-picker-desktop');
+ await page.setViewportSize({width:390,height:844});
+ await settingsPicker.locator('.team-mode-options').scrollIntoViewIfNeeded();
+ await capture(page,testInfo,'team-mode-picker-mobile');
+ await page.keyboard.press('Escape');
+ await expect(settingsDialog).toHaveCount(0);
+ await expect(settings).toBeFocused();
  const reloadedSettings=await reopenCurrentTripAfterReload(page);
- await expectPickerContent(reloadedSettings,'平等团队');
+ await expectSettingRow(reloadedSettings,'平等团队');
 });
 
 test('settings mode switch persists on success, blocks duplicate changes while pending, and rolls back on failure',async({page})=>{
  await page.setViewportSize({width:1440,height:900});
  await register(page);
  await createTrip(page,'admin');
- const picker=await openSettings(page);
- await expectPickerContent(picker,'管理员团队');
+ const row=await openSettings(page);
+ await expectSettingRow(row,'管理员团队');
 
  let successfulPatches=0;
  page.on('request',request=>{if(request.method()==='PATCH'&&/\/api\/trips\/[^/]+\/team$/.test(request.url()))successfulPatches++});
+ let {dialog,picker}=await openTeamModeDialog(page,row);
  await picker.getByRole('radio',{name:'平等团队',exact:true}).check();
  await expect.poll(()=>successfulPatches).toBe(1);
  await expectPickerContent(picker,'平等团队');
+ await expect(picker.getByRole('radio',{name:'平等团队',exact:true})).toBeEnabled();
+ await expect(picker.getByRole('status')).toHaveCount(0);
+ await dialog.getByRole('button',{name:'完成',exact:true}).click();
+ await expect(dialog).toHaveCount(0);
+ await expect(row).toBeFocused();
+ await expectSettingRow(row,'平等团队');
  const reloaded=await reopenCurrentTripAfterReload(page);
- await expectPickerContent(reloaded,'平等团队');
+ await expectSettingRow(reloaded,'平等团队');
 
  let releasePending,markPending;
  const pendingResponse=new Promise(resolve=>{releasePending=resolve});
  const requestStarted=new Promise(resolve=>{markPending=resolve});
  let pendingPatches=0;
  await page.route('**/api/trips/*/team',async route=>{
-  pendingPatches++;markPending();await pendingResponse;await route.continue();
- });
- await reloaded.getByRole('radio',{name:'管理员团队',exact:true}).check();
- await requestStarted;
- await expect(reloaded.locator('input[type="radio"]')).toHaveCount(2);
- await expect(reloaded.getByRole('radio',{name:'管理员团队',exact:true})).toBeDisabled();
- await expect(reloaded.getByRole('radio',{name:'平等团队',exact:true})).toBeDisabled();
- await expect(reloaded.getByRole('status')).toContainText('正在切换');
- await reloaded.getByRole('radio',{name:'平等团队',exact:true}).click({force:true});
- await page.waitForTimeout(120);
- expect(pendingPatches).toBe(1);
- releasePending();
- await expect.poll(()=>pendingPatches).toBe(1);
- await expect(reloaded.getByRole('radio',{name:'管理员团队',exact:true})).toBeChecked();
- await expect(reloaded.getByRole('radio',{name:'管理员团队',exact:true})).toBeEnabled();
- await expect(reloaded.getByRole('status')).toHaveCount(0);
- await page.unroute('**/api/trips/*/team');
-
- let failedPatches=0;
- await page.route('**/api/trips/*/team',async route=>{
-  failedPatches++;
+  pendingPatches++;markPending();await pendingResponse;
   await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'TEMPORARY',message:'团队类型暂时无法切换'}})});
  });
- await reloaded.getByRole('radio',{name:'平等团队',exact:true}).check();
- await expect(reloaded.getByRole('alert')).toContainText('团队类型暂时无法切换');
- await expect(reloaded.getByRole('radio',{name:'管理员团队',exact:true})).toBeChecked();
- expect(failedPatches).toBe(1);
+ ({dialog,picker}=await openTeamModeDialog(page,reloaded));
+ await picker.getByRole('radio',{name:'管理员团队',exact:true}).check();
+ await requestStarted;
+ await expect(picker.locator('input[type="radio"]')).toHaveCount(2);
+ await expect(picker.getByRole('radio',{name:'管理员团队',exact:true})).toBeDisabled();
+ await expect(picker.getByRole('radio',{name:'平等团队',exact:true})).toBeDisabled();
+ await expect(dialog.getByRole('button',{name:'完成',exact:true})).toBeDisabled();
+ await expect(picker.getByRole('status')).toContainText('正在切换');
+ await picker.getByRole('radio',{name:'平等团队',exact:true}).click({force:true});
+ await page.waitForTimeout(120);
+ expect(pendingPatches).toBe(1);
+ await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+ await expect(dialog).toHaveCount(0);
+ await expect(reloaded).toBeFocused();
+ ({dialog,picker}=await openTeamModeDialog(page,reloaded));
+ await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+ await expect(reloaded).toBeFocused();
+ releasePending();
+ await expect.poll(()=>pendingPatches).toBe(1);
+ await expect(page.getByRole('alert')).toContainText('团队类型暂时无法切换');
+ const inlineError=reloaded.locator('xpath=following-sibling::*[1]');
+ await expect(inlineError).toHaveAttribute('role','alert');
+ await expect(inlineError).toContainText('团队类型暂时无法切换');
+ await expectSettingRow(reloaded,'平等团队');
+ await expect(reloaded).toBeEnabled();
+ await page.unroute('**/api/trips/*/team');
+
+ ({dialog,picker}=await openTeamModeDialog(page,reloaded));
+ await expectPickerContent(picker,'平等团队');
+ await picker.getByRole('radio',{name:'管理员团队',exact:true}).check();
+ await expect(picker.getByRole('radio',{name:'管理员团队',exact:true})).toBeChecked();
+ await expect(picker.getByRole('radio',{name:'管理员团队',exact:true})).toBeEnabled();
+ await expect(picker.getByRole('status')).toHaveCount(0);
+ await expect(picker.getByRole('alert')).toHaveCount(0);
+ await dialog.getByRole('button',{name:'完成',exact:true}).click();
+ await expect(reloaded).toContainText('管理员团队');
+ await expect(reloaded).toBeEnabled();
 });
 
 test('team mode cards retain light and dark appearance and respond to reduced motion',async({page},testInfo)=>{
  await page.setViewportSize({width:1440,height:900});
  await register(page);
  await createTrip(page,'admin');
- const picker=await openSettings(page);
+ const row=await openSettings(page);
  const light=await page.evaluate(()=>getComputedStyle(document.documentElement).backgroundColor);
  await page.evaluate(()=>{document.documentElement.dataset.theme='dark'});
  const dark=await page.evaluate(()=>getComputedStyle(document.documentElement).backgroundColor);
  expect(dark).not.toBe(light);
+ await row.scrollIntoViewIfNeeded();
+ await capture(page,testInfo,'team-mode-dark-settings-desktop');
+ let {dialog,picker}=await openTeamModeDialog(page,row);
+ await expectPickerContent(picker,'管理员团队');
  await picker.locator('.team-mode-options').scrollIntoViewIfNeeded();
- await capture(page,testInfo,'team-mode-dark-desktop');
+ await capture(page,testInfo,'team-mode-dark-picker-desktop');
  await page.setViewportSize({width:390,height:844});
  await picker.locator('.team-mode-options').scrollIntoViewIfNeeded();
- await capture(page,testInfo,'team-mode-dark-mobile');
+ await capture(page,testInfo,'team-mode-dark-picker-mobile');
+ await dialog.getByRole('button',{name:'完成',exact:true}).click();
+ await expect(dialog).toHaveCount(0);
+ await row.scrollIntoViewIfNeeded();
+ await capture(page,testInfo,'team-mode-dark-settings-mobile');
  await page.setViewportSize({width:1440,height:900});
  await page.evaluate(()=>{document.documentElement.dataset.theme='light'});
- await expectPickerContent(picker,'管理员团队');
+ await expectSettingRow(row,'管理员团队');
 
+ ({dialog,picker}=await openTeamModeDialog(page,row));
  await page.emulateMedia({forcedColors:'active'});
  const selected=picker.getByRole('radio',{name:'管理员团队',exact:true});
- await page.getByRole('button',{name:'已删除的内容',exact:true}).focus();
+ await dialog.getByRole('button',{name:'关闭',exact:true}).focus();
  await page.keyboard.press('Tab');
  await expect(selected).toBeFocused();
  const selectedFace=selected.locator('..').locator('.team-mode-face');
  await expect(selectedFace).toHaveCSS('outline-offset','3px');
- await page.keyboard.press('Tab');
- await expect(selectedFace).toHaveCSS('outline-offset','-3px');
+ await page.keyboard.press('Escape');
+ await expect(dialog).toHaveCount(0);
+ await expect(row).toBeFocused();
  await page.emulateMedia({forcedColors:'none'});
 
+ ({dialog,picker}=await openTeamModeDialog(page,row));
  await page.emulateMedia({reducedMotion:'reduce'});
  expect(await page.evaluate(()=>matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
  const durations=await picker.evaluate(node=>{
@@ -257,7 +324,8 @@ test('mobile WebKit renders both cards and switches the selected team',async({},
   const page=await context.newPage();
   await register(page);
   await createTrip(page,'admin');
-  const picker=await openSettings(page);
+  const row=await openSettings(page);
+  const {picker}=await openTeamModeDialog(page,row);
   await expectPickerContent(picker,'管理员团队');
   await expectCardLayout(picker);
   await picker.getByRole('radio',{name:'平等团队',exact:true}).tap();

@@ -1,10 +1,11 @@
-import React,{useId} from 'react';
-import {Check,Loader2} from 'lucide-react';
+import React,{useId,useState} from 'react';
+import {Check,ChevronRight,Loader2} from 'lucide-react';
+import {Modal} from './ui.jsx';
 import './team-mode.css';
 
 const modes=[
- {value:'admin',label:'管理员团队',description:'创建者与管理员可直接删除内容。',detail:'成员可表达自己的意见。'},
- {value:'equal',label:'平等团队',description:'成员可通过集体表态删除内容。',detail:'创建者也可直接删除。'},
+ {value:'admin',label:'管理员团队',description:'创建者与管理员可直接删除。',detail:'成员可表达自己的意见。'},
+ {value:'equal',label:'平等团队',description:'成员通过集体表态删除内容。',detail:'创建者也可直接删除。'},
 ];
 
 // Original line drawings: a shield coordinating a team, and peers in a shared circle.
@@ -55,4 +56,22 @@ export default function TeamModePicker({value,onChange,disabled=false,pending=fa
   {pending&&<p className="team-mode-status" role="status"><Loader2 size={14} className="spin" aria-hidden="true"/>正在切换…</p>}
   {error&&<p className="field-error" role="alert">{error}</p>}
  </fieldset>;
+}
+
+export function TeamModeSetting(props) {
+ const [open,setOpen]=useState(false);
+ const {value,disabled=false,pending=false,error=''}=props;
+ return <>
+  <button type="button" className="settings-link team-mode-setting" aria-haspopup="dialog" disabled={disabled} onClick={()=>setOpen(true)}>
+   <span>团队类型</span>
+   <span>{pending?'正在切换…':modes.find(mode=>mode.value===value)?.label}<ChevronRight size={17} aria-hidden="true"/></span>
+  </button>
+  {!open&&error&&<p className="field-error" role="alert">{error}</p>}
+  {open&&<Modal title="团队类型" initialFocus="input:checked:not(:disabled)" onClose={()=>setOpen(false)}>
+   <div className="team-mode-editor">
+    <TeamModePicker {...props}/>
+    <div className="modal-actions"><button type="button" className="primary" disabled={pending} onClick={()=>setOpen(false)}>完成</button></div>
+   </div>
+  </Modal>}
+ </>;
 }
