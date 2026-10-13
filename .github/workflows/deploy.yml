@@ -1,0 +1,104 @@
+name: Test and deploy Journey
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+# Keep the entire build/deploy sequence ordered. Never cancel a live deployment.
+concurrency:
+  group: journey-production
+  cancel-in-progress: false
+
+jobs:
+  test-and-package:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      release: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.22.1'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Test deployment safety and rollback
+        run: python3 -m unittest discover -s app/ops/tests -p 'test_*.py' -v
+      - name: Install locked dependencies
+        working-directory: app
+        run: npm ci
+      - name: Test application
+        working-directory: app
+        run: npm test
+      - name: Set immutable release ID
+        id: release
+        run: echo "id=${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+      - name: Build release with production dependencies
+        working-directory: app
+        env:
+          RELEASE_ID: ${{ steps.release.outputs.id }}
+        run: node ops/package-release.mjs "$RELEASE_ID"
+      - name: Save tested release
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: journey-release
+          path: |
+            .local/releases/${{ steps.release.outputs.id }}.tar.gz
+            .local/releases/${{ steps.release.outputs.id }}.tar.gz.sha256
+            .local/releases/${{ steps.release.outputs.id }}.manifest.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    needs: test-and-package
+    if: vars.JOURNEY_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment:
+      name: production
+      url: https://journey.jscloud.wang
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: journey-release
+          path: release
+      - name: Check main still points at this tested commit
+        id: head
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+          if [ "$current" = "$GITHUB_SHA" ]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'current=false' >> "$GITHUB_OUTPUT"
+            echo 'A newer main commit superseded this run; no deployment started.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload, deploy and verify automatic recovery
+        if: steps.head.outputs.current == 'true'
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          RELEASE_ID: ${{ needs.test-and-package.outputs.release }}
+        run: |
+          cd release
+          sha256sum --check "$RELEASE_ID.tar.gz.sha256"
+          cd ..
+          python3 app/ops/deploy-client.py "release/$RELEASE_ID.tar.gz" "$RELEASE_ID" "$GITHUB_SHA"

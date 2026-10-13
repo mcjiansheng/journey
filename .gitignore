@@ -2,6 +2,7 @@
 .workbuddy/
 .DS_Store
 node_modules/
+__pycache__/
 
 # 原型与界面可视化仅保留在本地。
 /prototype*/
