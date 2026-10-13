@@ -49,6 +49,67 @@ test('completion closes during delayed or failed network sync and persists acros
  release();await expect(page.locator('.sync-status')).toContainText('正在同步');await page.unroute('**/api/trips/*/operations');await page.reload();await page.getByRole('button',{name:/继续旅程/}).click();await expect(page.getByRole('heading',{name:'网络中断后保留',exact:true})).toBeVisible();await expect(page.locator('.sync-status.synced')).toBeVisible();
 });
 
+test('completion skips an already queued blur value and preserves a later collaborator change',async({page})=>{
+ await setup(page);await add(page,'失焦竞争活动');await expect(page.locator('.sync-status.synced')).toBeVisible();
+ await edit(page,'失焦竞争活动');await page.getByLabel('活动名称').fill('本机先修改的名称');
+ const patches=[];
+ page.on('request',request=>{
+  if(request.method()==='POST'&&/\/api\/trips\/[^/]+\/operations$/.test(request.url())){
+   const operation=request.postDataJSON();if(operation.patch?.title==='本机先修改的名称')patches.push(operation);
+  }
+ });
+ await page.evaluate(()=>{
+  window.originalPut=IDBObjectStore.prototype.put;window.holdWrite=true;window.heldWriteStarted=false;
+  IDBObjectStore.prototype.put=function(value,key){
+   const request=window.originalPut.call(this,value,key);
+   if(this.name==='kv'&&String(key).startsWith('account:')&&window.holdWrite&&value.queue.some(operation=>operation.patch?.title==='本机先修改的名称')){
+    window.heldWriteStarted=true;const store=this;
+    const keepAlive=()=>{if(window.holdWrite){const ping=store.get(key);ping.onsuccess=keepAlive}};keepAlive();
+   }
+   return request;
+  };
+ });
+ await page.getByLabel('活动名称').press('Tab');await expect.poll(()=>page.evaluate(()=>window.heldWriteStarted)).toBe(true);
+ await complete(page).click();await expect(complete(page)).toBeDisabled();
+ // A remote operation follows the blur edit while its durable local write is held.
+ await page.waitForTimeout(150);
+ const remote=await page.evaluate(async()=>{
+  const session=await fetch('/api/session').then(response=>response.json());
+  const headers={'Content-Type':'application/json','X-CSRF-Token':session.csrfToken};
+  const tripId=(await fetch('/api/trips').then(response=>response.json())).trips[0].id;
+  const snapshot=await fetch(`/api/trips/${tripId}`).then(response=>response.json());
+  const object=snapshot.objects.find(object=>object.kind==='activity'&&object.payload.title==='失焦竞争活动');
+  const lease=await fetch('/api/clock',{method:'POST',headers,body:JSON.stringify({deviceId:crypto.randomUUID()})}).then(response=>response.json());
+  const response=await fetch(`/api/trips/${tripId}/operations`,{method:'POST',headers,body:JSON.stringify({id:crypto.randomUUID(),objectId:object.id,kind:'patch',patch:{title:'同伴后来修改的名称'},clock:{leaseId:lease.leaseId,elapsedMs:0,uncertaintyMs:0}})});
+  return response.status;
+ });
+ expect(remote).toBe(200);await page.waitForTimeout(150);
+ await page.evaluate(()=>{window.holdWrite=false;IDBObjectStore.prototype.put=window.originalPut});
+ await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.sync-status.synced')).toBeVisible();
+ expect(patches).toHaveLength(1);await expect(page.getByRole('heading',{name:'同伴后来修改的名称',exact:true})).toBeVisible();
+});
+
+test('completion saves a newer field value while its earlier blur write is pending',async({page})=>{
+ await setup(page);await add(page,'连续修改活动');await expect(page.locator('.sync-status.synced')).toBeVisible();await edit(page,'连续修改活动');
+ await page.getByLabel('活动名称').fill('失焦时名称');
+ const titles=[];page.on('request',request=>{if(request.method()==='POST'&&/\/api\/trips\/[^/]+\/operations$/.test(request.url())){const title=request.postDataJSON().patch?.title;if(title)titles.push(title)}});
+ await page.evaluate(()=>{
+  window.originalPut=IDBObjectStore.prototype.put;window.holdWrite=true;window.heldWriteStarted=false;
+  IDBObjectStore.prototype.put=function(value,key){
+   const request=window.originalPut.call(this,value,key);
+   if(this.name==='kv'&&String(key).startsWith('account:')&&window.holdWrite&&value.queue.some(operation=>operation.patch?.title==='失焦时名称')){
+    window.heldWriteStarted=true;const store=this;const keepAlive=()=>{if(window.holdWrite){const ping=store.get(key);ping.onsuccess=keepAlive}};keepAlive();
+   }
+   return request;
+  };
+ });
+ await page.getByLabel('活动名称').press('Tab');await expect.poll(()=>page.evaluate(()=>window.heldWriteStarted)).toBe(true);
+ await page.getByLabel('活动名称').fill('完成时新名称');await complete(page).click();await expect(complete(page)).toBeDisabled();
+ await page.evaluate(()=>{window.holdWrite=false;IDBObjectStore.prototype.put=window.originalPut});
+ await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.sync-status.synced')).toBeVisible();
+ expect(titles).toEqual(['失焦时名称','完成时新名称']);await expect(page.getByRole('heading',{name:'完成时新名称',exact:true})).toBeVisible();
+});
+
 for(const existing of [false,true])test(`local storage failure leaves a ${existing?'existing':'new'} activity editable for retry`,async({page})=>{
  await setup(page);if(existing){await add(page,'存储活动');await expect(page.locator('.sync-status.synced')).toBeVisible();await edit(page,'存储活动')}else await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await page.getByLabel('活动名称').fill('存储恢复后活动');
  await page.evaluate(()=>{window.originalPut=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(value,key){if(this.name==='kv'&&String(key).startsWith('account:'))throw new DOMException('Test quota exhausted','QuotaExceededError');return window.originalPut.call(this,value,key)}});
@@ -58,7 +119,7 @@ for(const existing of [false,true])test(`local storage failure leaves a ${existi
 
 test('reopening and completing leaves activity order and collaborator edits intact',async({page})=>{
  await setup(page);await add(page,'第一项');await add(page,'第二项');await expect(page.locator('.sync-status.synced')).toBeVisible();
- await page.getByRole('button',{name:'上移第二项',exact:true}).click();await expect(page.locator('.activity-card h3')).toHaveText(['第二项','第一项']);
+ await page.getByRole('button',{name:'拖动排序：第二项',exact:true}).press('ArrowUp');await expect(page.locator('.activity-card h3')).toHaveText(['第二项','第一项']);
  await edit(page,'第一项');await finish(page);await expect(page.locator('.activity-card h3')).toHaveText(['第二项','第一项']);
  await edit(page,'第一项');const other=await page.context().newPage();await other.goto(base);await expect.poll(async()=>await other.getByRole('button',{name:/继续旅程/}).count()||await other.getByRole('heading',{name:'第一项',exact:true}).count()||await other.getByRole('dialog').count()).toBeGreaterThan(0);if(await other.getByRole('button',{name:/继续旅程/}).count())await other.getByRole('button',{name:/继续旅程/}).click();if(!await other.getByRole('dialog').count())await edit(other,'第一项');
  await other.getByText('备注与链接',{exact:true}).click();await other.getByLabel('备注',{exact:true}).fill('同伴刚修改的备注');await finish(other);await expect(other.locator('.sync-status.synced')).toBeVisible();

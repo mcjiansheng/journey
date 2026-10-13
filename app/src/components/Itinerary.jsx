@@ -186,7 +186,11 @@ export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
   next.splice(targetIndex+(placeAfter?1:0),0,o);
   const index=next.findIndex(item=>item.id===o.id),before=next[index-1],afterItem=next[index+1];
   const beforeOrder=before?Number(before.payload.order??0):null,afterOrder=afterItem?Number(afterItem.payload.order??0):null;
-  if(beforeOrder!==null&&afterOrder!==null&&afterOrder-beforeOrder<0.000001){
+  // Precise times can put the displayed slots in a different order from their
+  // stored ranks. Normalize those slots before inserting a flexible activity.
+  const remaining=next.filter(item=>item.id!==o.id);
+  const ranksInDisplayOrder=remaining.every((item,i)=>!i||Number(remaining[i-1].payload.order??0)<Number(item.payload.order??0));
+  if(!ranksInDisplayOrder||(beforeOrder!==null&&afterOrder!==null&&afterOrder-beforeOrder<0.000001)){
    await Promise.all(next.map((item,itemIndex)=>Number(item.payload.order??0)===itemIndex*1024?null:j.mutate({objectId:item.id,kind:'patch',patch:{order:itemIndex*1024}})));
    return;
   }
@@ -204,13 +208,14 @@ export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
   dragRef.current=value;setDragging(value);
   const move=pointerEvent=>updateDrag(pointerEvent);
   const end=()=>finishDrag();
+  const cancel=()=>finishDrag(true);
   document.addEventListener('pointermove',move,{capture:true});
   document.addEventListener('pointerup',end,{capture:true,once:true});
-  document.addEventListener('pointercancel',end,{capture:true,once:true});
+  document.addEventListener('pointercancel',cancel,{capture:true,once:true});
   dragCleanup.current=()=>{
    document.removeEventListener('pointermove',move,{capture:true});
    document.removeEventListener('pointerup',end,{capture:true});
-   document.removeEventListener('pointercancel',end,{capture:true});
+   document.removeEventListener('pointercancel',cancel,{capture:true});
   };
  }
  function updateDrag(event){
@@ -223,11 +228,11 @@ export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
   const value={...dragRef.current,targetId,after:placeAfter};
   dragRef.current=value;setDragging(value);
  }
- function finishDrag(){
+ function finishDrag(cancelled=false){
   const value=dragRef.current;
   dragCleanup.current?.();dragCleanup.current=null;
   dragRef.current=null;setDragging(null);
-  if(!value||value.id===value.targetId)return;
+  if(cancelled||!value||value.id===value.targetId)return;
   const source=list.find(item=>item.id===value.id);
   if(source)moveTo(source,value.targetId,value.after).catch(()=>{});
  }
@@ -262,7 +267,6 @@ export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
         aria-label={`拖动排序：${o.payload.title}`}
         title="拖动排序；键盘可用上下方向键"
         onPointerDown={event=>beginDrag(event,o)}
-        onPointerCancel={finishDrag}
         onKeyDown={event=>{if(event.key==='ArrowUp'||event.key==='ArrowDown'){event.preventDefault();moveBy(o,event.key==='ArrowUp'?-1:1).catch(()=>{})}}}
        ><GripVertical size={18}/></button>}
       </div>
