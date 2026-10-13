@@ -1,27 +1,297 @@
-import React,{useEffect,useState} from 'react';
-import {CalendarDays,Plus,MapPin,ArrowUp,ArrowDown,Trash2,Navigation,Route,ChevronRight,Check,MoreHorizontal} from 'lucide-react';
+import SelectionTrack from './SelectionTrack.jsx';
+import {reducedMotion} from '../usePageNavigation.js';
+import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
+import {CalendarDays,Plus,MapPin,Trash2,Route,ChevronRight,MoreHorizontal,GripVertical,RotateCcw} from 'lucide-react';
 import {Field,Modal,Empty,AsyncButton,active,id,errorMessage} from './ui.jsx';
-import {visibleDays,outsideDays,orderedActivities,timeLabel,routeSignature,dayLabel,minutesOf,formatMinutes,travelAdvice} from '../domain.js';
+import {visibleDays,outsideDays,orderedActivities,routeSignature,dayLabel,timeLabel,travelAdvice} from '../domain.js';
 import {estimateRoute,searchPlaces} from '../amap.js';
-export function directPermission(j,o){const trip=j.snapshot.trip;const me=j.snapshot.members.find(m=>m.userId===j.user.id);return trip.ownerId===j.user.id||(trip.teamMode==='admin'&&!!me?.isAdmin)}
-export function ObjectActions({journey:j,object:o}){const[error,setError]=useState('');const perform=async operation=>{try{setError('');await j.mutate(operation)}catch(e){setError(errorMessage(e))}};const expression=o.expressions?.find(e=>e.userId===j.user.id)||{};const deleted=o.state==='deleted';return <div className="object-actions">{(deleted?(j.snapshot.trip.ownerId===j.user.id||j.snapshot.members.find(m=>m.userId===j.user.id)?.isAdmin):directPermission(j,o))?<button className={deleted?'text-button':'danger text-button'} onClick={()=>perform({objectId:o.id,kind:deleted?'restore':'delete',generation:o.generation})}>{deleted?'恢复':'删除'}</button>:<button className="text-button" onClick={()=>perform({objectId:o.id,kind:'express',generation:o.generation,expression:{[deleted?'wishRestore':'wishDelete']:!expression[deleted?'wishRestore':'wishDelete']}})}>{deleted?(expression.wishRestore?'撤回恢复意见':'希望恢复'):(expression.wishDelete?'撤回删除意见':'希望删除')}</button>}{!deleted&&o.kind==='activity'&&<button className="text-button" onClick={()=>perform({objectId:o.id,kind:'express',generation:o.generation,expression:{notParticipating:!expression.notParticipating}})}>{expression.notParticipating?'重新参加':'我不参加'}</button>}{deleted&&o.expressions?.some(e=>e.wishRestore)&&<small>{o.expressions.filter(e=>e.wishRestore).length} 位同伴希望恢复</small>}{error&&<small className="field-error" role="alert">{error}</small>}</div>}
+
+export function directPermission(j,o){
+ const trip=j.snapshot.trip;
+ const me=j.snapshot.members.find(m=>m.userId===j.user.id);
+ return trip.ownerId===j.user.id||(trip.teamMode==='admin'&&!!me?.isAdmin);
+}
+
+export function ObjectActions({journey:j,object:o,prominent=false}){
+ const[error,setError]=useState('');
+ const perform=async operation=>{try{setError('');await j.mutate(operation)}catch(e){setError(errorMessage(e))}};
+ const expression=o.expressions?.find(e=>e.userId===j.user.id)||{};
+ const deleted=o.state==='deleted';
+ const direct=deleted?(j.snapshot.trip.ownerId===j.user.id||j.snapshot.members.find(m=>m.userId===j.user.id)?.isAdmin):directPermission(j,o);
+ const opinionKey=deleted?'wishRestore':'wishDelete';
+ const label=direct?(deleted?'恢复':'删除'):(deleted?(expression.wishRestore?'撤回恢复意见':'希望恢复'):(expression.wishDelete?'撤回删除意见':'希望删除'));
+ const Icon=deleted?RotateCcw:Trash2;
+ return <div className={`object-actions${prominent?' prominent-actions':''}`}>
+  <button
+   className={prominent?(deleted?'secondary lifecycle-action':'secondary lifecycle-action danger'):(direct&&!deleted?'danger text-button':'text-button')}
+   onClick={()=>perform(direct?{objectId:o.id,kind:deleted?'restore':'delete',generation:o.generation}:{objectId:o.id,kind:'express',generation:o.generation,expression:{[opinionKey]:!expression[opinionKey]}})}
+  >
+   {prominent&&<Icon size={17}/>}
+   {label}
+  </button>
+  {!deleted&&o.kind==='activity'&&<button className="text-button" onClick={()=>perform({objectId:o.id,kind:'express',generation:o.generation,expression:{notParticipating:!expression.notParticipating}})}>{expression.notParticipating?'重新参加':'我不参加'}</button>}
+  {deleted&&o.expressions?.some(e=>e.wishRestore)&&<small>{o.expressions.filter(e=>e.wishRestore).length} 位同伴希望恢复</small>}
+  {error&&<small className="field-error" role="alert">{error}</small>}
+ </div>;
+}
+
 function RouteEditor({journey:j,from,to,object,onClose}){
  const emptyPlace={name:'',address:'',lng:null,lat:null,provider:null,providerPlaceId:null,category:'',sourceUrl:'',fetchedAt:null,coordSystem:'GCJ-02'};
  const[draft,setDraft]=useState(object?.payload||{fromId:from?.id||null,fromPlace:from?null:emptyPlace,toId:to.id,mode:'walking',minutes:null,manual:false,inputSignature:'',path:[],distance:null});
  const[error,setError]=useState(''),[query,setQuery]=useState(''),[results,setResults]=useState([]);
- const origin=from||{id:'origin',payload:{place:draft.fromPlace}};const currentObject=object?j.snapshot.objects.find(o=>o.id===object.id)||object:null;
- async function save(p){try{if(!from&&!p.fromPlace?.name.trim())throw new Error('请填写出发地点。');if(p.minutes!==null&&(!Number.isFinite(p.minutes)||p.minutes<0))throw new Error('请填写非负路程时长。');await j.mutate({objectId:object?.id||id(),kind:object?'patch':'create',objectType:'route',patch:p});onClose()}catch(e){setError(errorMessage(e))}}
+ const origin=from||{id:'origin',payload:{place:draft.fromPlace}};
+ const currentObject=object?j.snapshot.objects.find(o=>o.id===object.id)||object:null;
+ async function save(p){
+  try{
+   if(!from&&!p.fromPlace?.name.trim())throw new Error('请填写出发地点。');
+   if(p.minutes!==null&&(!Number.isFinite(p.minutes)||p.minutes<0))throw new Error('请填写非负路程时长。');
+   await j.mutate({objectId:object?.id||id(),kind:object?'patch':'create',objectType:'route',patch:p});
+   onClose();
+  }catch(e){setError(errorMessage(e))}
+ }
  function place(key,value){setDraft({...draft,fromPlace:{...emptyPlace,...draft.fromPlace,[key]:value,lng:null,lat:null,provider:null,providerPlaceId:null}})}
- return <Modal title="前往下一站" onClose={onClose}><p className="muted">{from?.payload.title||draft.fromPlace?.name||'出发地'} → {to.payload.title}</p>{!from&&<fieldset><legend>出发地</legend><div className="place-search"><Field label="搜索出发地"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="酒店、车站或其他地点"/></Field><AsyncButton className="secondary small" disabled={!query.trim()} onClick={async()=>{try{setResults(await searchPlaces(query,j.snapshot.trip.destination))}catch(e){setError(errorMessage(e))}}}>查找</AsyncButton></div>{results.length>0&&<div className="place-choices">{results.map((p,i)=><button key={p.providerPlaceId||i} onClick={()=>{setDraft({...draft,fromPlace:p});setResults([])}}><strong>{p.name}</strong><small>{p.address}</small></button>)}</div>}<Field label="出发地点名称"><input value={draft.fromPlace?.name||''} onChange={e=>place('name',e.target.value)}/></Field><Field label="出发地址"><input value={draft.fromPlace?.address||''} onChange={e=>place('address',e.target.value)}/></Field></fieldset>}<Field label="交通方式"><select value={draft.mode} onChange={e=>setDraft({...draft,mode:e.target.value})}>{[['walking','步行'],['driving','驾车'],['bicycling','骑行'],['transit','公共交通']].map(([v,l])=><option value={v} key={v}>{l}</option>)}</select></Field><Field label="预计耗时（分钟）"><input type="number" min="0" value={draft.minutes??''} onChange={e=>setDraft({...draft,minutes:e.target.value===''?null:Number(e.target.value),manual:true})}/></Field>{error&&<p className="field-error" role="alert">{error}</p>}<div className="button-row"><AsyncButton className="secondary" onClick={async()=>{try{setError('');const route=await estimateRoute(origin.payload.place,to.payload.place,draft.mode,j.snapshot.trip.destination);await save({...draft,...route,manual:false,inputSignature:routeSignature(origin,to,draft.mode)})}catch(e){setError(errorMessage(e))}}}>重新估算</AsyncButton><AsyncButton className="primary" onClick={()=>save({...draft,inputSignature:routeSignature(origin,to,draft.mode)})}>完成</AsyncButton></div>{currentObject&&<details className="lifecycle-menu"><summary>{currentObject.state==='deleted'?'路程已删除 · 恢复选项':'路程操作'}</summary><ObjectActions journey={j} object={currentObject}/></details>}</Modal>
+ return <Modal title="前往下一站" onClose={onClose}>
+  <p className="muted">{from?.payload.title||draft.fromPlace?.name||'出发地'} → {to.payload.title}</p>
+  {!from&&<fieldset>
+   <legend>出发地</legend>
+   <div className="place-search">
+    <Field label="搜索出发地"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="酒店、车站或其他地点"/></Field>
+    <AsyncButton className="secondary small" disabled={!query.trim()} onClick={async()=>{try{setResults(await searchPlaces(query,j.snapshot.trip.destination))}catch(e){setError(errorMessage(e))}}}>查找</AsyncButton>
+   </div>
+   {results.length>0&&<div className="place-choices">{results.map((p,i)=><button key={p.providerPlaceId||i} onClick={()=>{setDraft({...draft,fromPlace:p});setResults([])}}><strong>{p.name}</strong><small>{p.address}</small></button>)}</div>}
+   <Field label="出发地点名称"><input value={draft.fromPlace?.name||''} onChange={e=>place('name',e.target.value)}/></Field>
+   <Field label="出发地址"><input value={draft.fromPlace?.address||''} onChange={e=>place('address',e.target.value)}/></Field>
+  </fieldset>}
+  <Field label="交通方式"><select value={draft.mode} onChange={e=>setDraft({...draft,mode:e.target.value})}>{[['walking','步行'],['driving','驾车'],['bicycling','骑行'],['transit','公共交通']].map(([v,l])=><option value={v} key={v}>{l}</option>)}</select></Field>
+  <Field label="预计耗时（分钟）"><input type="number" min="0" value={draft.minutes??''} onChange={e=>setDraft({...draft,minutes:e.target.value===''?null:Number(e.target.value),manual:true})}/></Field>
+  {error&&<p className="field-error" role="alert">{error}</p>}
+  <div className="button-row route-editor-actions">
+   <AsyncButton className="secondary" onClick={async()=>{try{setError('');const route=await estimateRoute(origin.payload.place,to.payload.place,draft.mode,j.snapshot.trip.destination);await save({...draft,...route,manual:false,inputSignature:routeSignature(origin,to,draft.mode)})}catch(e){setError(errorMessage(e))}}}>重新估算</AsyncButton>
+   <AsyncButton className="primary" onClick={()=>save({...draft,inputSignature:routeSignature(origin,to,draft.mode)})}>完成</AsyncButton>
+  </div>
+  {currentObject&&<div className="route-lifecycle">
+   <span>{currentObject.state==='deleted'?'这段路程已删除':'路程管理'}</span>
+   <ObjectActions journey={j} object={currentObject} prominent/>
+  </div>}
+ </Modal>;
 }
+
 export function Reschedule({journey:j,onClose}){
- const trip=j.snapshot.trip,days=active(j.snapshot,'day'),visible=visibleDays(j.snapshot),activities=active(j.snapshot,'activity').filter(a=>days.some(d=>d.id===a.payload.dayId));
+ const trip=j.snapshot.trip,days=active(j.snapshot,'day'),visible=visibleDays(j.snapshot);
+ const activities=active(j.snapshot,'activity').filter(a=>days.some(d=>d.id===a.payload.dayId));
  const[startDate,setStart]=useState(trip.startDate||''),[count,setCount]=useState(trip.dayCount||1),[selected,setSelected]=useState(new Set()),[targets,setTargets]=useState({}),[error,setError]=useState(''),[mode,setMode]=useState('dates'),[source,setSource]=useState(visible[0]?.id||''),[destination,setDestination]=useState(visible[1]?.id||'');
  function originalOrdinal(o){const d=days.find(d=>d.id===o.payload.dayId);return trip.startDate&&d?.payload.date?Math.round((Date.parse(d.payload.date)-Date.parse(trip.startDate))/86400000)+1:d?.payload.ordinal||1}
  function ordinal(o){return targets[o.id]||Math.max(1,Math.min(Number(count)||1,originalOrdinal(o)))}
  function targetDate(o){if(!startDate)return null;const d=new Date(`${startDate}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+ordinal(o)-1);return d.toISOString().slice(0,10)}
  const rows=mode==='swap'?activities.filter(o=>[source,destination].includes(o.payload.dayId)):activities;
  function targetLabel(o){if(mode==='swap'){const d=days.find(d=>d.id===(o.payload.dayId===source?destination:source));return d?`${dayLabel(d,trip)}${d.payload.date?` · ${d.payload.date}`:''}`:'选择目标日'}return targetDate(o)||`第${ordinal(o)}天`}
- return <Modal title="调整日期与安排" onClose={onClose} wide><div className="segmented"><button className={mode==='dates'?'selected':''} onClick={()=>{setMode('dates');setSelected(new Set())}}>调整旅程日期</button><button className={mode==='swap'?'selected':''} onClick={()=>{setMode('swap');setSelected(new Set())}}>交换两天安排</button></div>{mode==='dates'?<div className="form-grid"><Field label="开始日期"><input type="date" value={startDate} onChange={e=>setStart(e.target.value)}/></Field><Field label="计划天数"><input type="number" min="1" max="365" value={count} onChange={e=>setCount(e.target.value)}/></Field></div>:<div className="form-grid"><Field label="第一天"><select value={source} onChange={e=>{setSource(e.target.value);setSelected(new Set())}}>{days.map(d=><option key={d.id} value={d.id}>{dayLabel(d,trip)}{d.payload.date?` · ${d.payload.date}`:''}</option>)}</select></Field><Field label="第二天"><select value={destination} onChange={e=>{setDestination(e.target.value);setSelected(new Set())}}><option value="">选择另一天</option>{days.filter(d=>d.id!==source).map(d=><option key={d.id} value={d.id}>{dayLabel(d,trip)}{d.payload.date?` · ${d.payload.date}`:''}</option>)}</select></Field></div>}<p className="muted">选择本次移动的活动，其他安排保留原日期和时间。</p><div className="reschedule-list">{rows.map(o=>{const d=days.find(d=>d.id===o.payload.dayId);return <div className="check-row" key={o.id}><label className="reschedule-choice"><input type="checkbox" checked={selected.has(o.id)} onChange={e=>{const n=new Set(selected);e.target.checked?n.add(o.id):n.delete(o.id);setSelected(n)}}/><span><strong>{o.payload.title}</strong><small>{d?.payload.date||`第${d?.payload.ordinal||1}天`} → {targetLabel(o)}</small></span></label>{mode==='dates'&&<select aria-label={`${o.payload.title}移动到哪一天`} value={ordinal(o)} onChange={e=>setTargets({...targets,[o.id]:Number(e.target.value)})}>{Array.from({length:Math.min(365,Math.max(1,Number(count)||1))},(_,i)=><option key={i+1} value={i+1}>第{i+1}天</option>)}</select>}</div>})}</div>{error&&<p className="field-error" role="alert">{error}</p>}<AsyncButton className="primary full" onClick={async()=>{try{if(!Number.isInteger(Number(count))||count<1||count>365)throw new Error('天数应为 1 至 365。');if(mode==='swap'&&(!source||!destination||source===destination))throw new Error('请选择两个不同的计划日。');const moves=rows.filter(o=>selected.has(o.id)).map(o=>mode==='swap'?{activityId:o.id,dayId:o.payload.dayId===source?destination:source}:{activityId:o.id,ordinal:ordinal(o),...(startDate?{date:targetDate(o)}:{})});await j.mutate({objectId:trip.id,kind:'reschedule',patch:{startDate:mode==='swap'?trip.startDate:startDate||null,dayCount:mode==='swap'?trip.dayCount:Number(count),moves}});onClose()}catch(e){setError(errorMessage(e))}}}>{mode==='swap'?'交换选中安排':'调整日期'}</AsyncButton></Modal>
+ function selectActivity(activityId,checked=true){setSelected(previous=>{const next=new Set(previous);checked?next.add(activityId):next.delete(activityId);return next})}
+ return <Modal title="调整日期与安排" onClose={onClose} wide>
+  <div className="segmented">
+   <button className={mode==='dates'?'selected':''} onClick={()=>{setMode('dates');setSelected(new Set())}}>调整旅程日期</button>
+   <button className={mode==='swap'?'selected':''} onClick={()=>{setMode('swap');setSelected(new Set())}}>交换两天安排</button>
+  </div>
+  {mode==='dates'?<div className="form-grid">
+   <Field label="开始日期"><input type="date" value={startDate} onChange={e=>setStart(e.target.value)}/></Field>
+   <Field label="计划天数"><input type="number" min="1" max="365" value={count} onChange={e=>setCount(e.target.value)}/></Field>
+  </div>:<div className="form-grid">
+   <Field label="第一天"><select value={source} onChange={e=>{setSource(e.target.value);setSelected(new Set())}}>{days.map(d=><option key={d.id} value={d.id}>{dayLabel(d,trip)}{d.payload.date?` · ${d.payload.date}`:''}</option>)}</select></Field>
+   <Field label="第二天"><select value={destination} onChange={e=>{setDestination(e.target.value);setSelected(new Set())}}><option value="">选择另一天</option>{days.filter(d=>d.id!==source).map(d=><option key={d.id} value={d.id}>{dayLabel(d,trip)}{d.payload.date?` · ${d.payload.date}`:''}</option>)}</select></Field>
+  </div>}
+  <p className="muted">{mode==='dates'?'直接调整目标日期即可自动选中；未选中的安排保留原日期和时间。':'选择本次交换的活动，其他安排保持不变。'}</p>
+  <div className="reschedule-list">{rows.map(o=>{
+   const d=days.find(d=>d.id===o.payload.dayId);
+   return <div className={`check-row reschedule-row${selected.has(o.id)?' selected':''}`} key={o.id}>
+    <label className="reschedule-choice">
+     <input type="checkbox" checked={selected.has(o.id)} onChange={e=>selectActivity(o.id,e.target.checked)}/>
+     <span><strong>{o.payload.title}</strong><small>{d?.payload.date||`第${d?.payload.ordinal||1}天`} → {targetLabel(o)}</small></span>
+    </label>
+    {mode==='dates'&&<select aria-label={`${o.payload.title}移动到哪一天`} value={ordinal(o)} onChange={e=>{setTargets({...targets,[o.id]:Number(e.target.value)});selectActivity(o.id)}}>{Array.from({length:Math.min(365,Math.max(1,Number(count)||1))},(_,i)=><option key={i+1} value={i+1}>第{i+1}天</option>)}</select>}
+   </div>;
+  })}</div>
+  {error&&<p className="field-error" role="alert">{error}</p>}
+  <AsyncButton className="primary full" onClick={async()=>{
+   try{
+    if(!Number.isInteger(Number(count))||count<1||count>365)throw new Error('天数应为 1 至 365。');
+    if(mode==='swap'&&(!source||!destination||source===destination))throw new Error('请选择两个不同的计划日。');
+    const moves=rows.filter(o=>selected.has(o.id)).map(o=>mode==='swap'?{activityId:o.id,dayId:o.payload.dayId===source?destination:source}:{activityId:o.id,ordinal:ordinal(o),...(startDate?{date:targetDate(o)}:{})});
+    await j.mutate({objectId:trip.id,kind:'reschedule',patch:{startDate:mode==='swap'?trip.startDate:startDate||null,dayCount:mode==='swap'?trip.dayCount:Number(count),moves}});
+    onClose();
+   }catch(e){setError(errorMessage(e))}
+  }}>{mode==='swap'?'交换选中安排':'调整日期'}</AsyncButton>
+ </Modal>;
 }
-export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){const[route,setRoute]=useState(null);const[dayMenu,setDayMenu]=useState(false);const days=visibleDays(j.snapshot),outside=outsideDays(j.snapshot);const current=days.find(d=>d.id===j.context.dayId)||days[0];useEffect(()=>{setDayMenu(false)},[current?.id]);const list=current?orderedActivities(j.snapshot,current.id):[];const routes=j.snapshot.objects.filter(o=>o.kind==='route');async function reorder(o,direction){const index=list.findIndex(a=>a.id===o.id),other=list[index+direction];if(!other)return;const before=list[index+direction+(direction<0?-1:1)];const newOrder=direction<0?(Number(other.payload.order)+(before?Number(before.payload.order):Number(other.payload.order)-2))/2:(Number(other.payload.order)+(before?Number(before.payload.order):Number(other.payload.order)+2))/2;await j.mutate({objectId:o.id,kind:'patch',patch:{order:newOrder}})}function cards(items){return items.map((o,index)=>{const prev=items[index-1];const matchingRoutes=routes.filter(r=>r.payload.fromId===(prev?.id||null)&&r.payload.toId===o.id);const leg=matchingRoutes.find(r=>r.state==='active')||matchingRoutes.find(r=>r.state==='deleted');const mode={walking:'步行',driving:'驾车',bicycling:'骑行',transit:'公共交通'}[leg?.payload.mode];const advice=travelAdvice(prev,o,leg?.state==='active'?leg:null);const depart=advice.depart;const late=advice.lateMinutes;const overlap=advice.overlapMinutes;return <React.Fragment key={o.id}>{(prev||index===0)&&<button className="route-row" onClick={()=>setRoute({from:prev,to:o,object:leg})}><Route size={14}/><span>{leg?.state==='deleted'?'路程已删除 · 查看与恢复':leg?.payload.minutes!==null&&leg?.payload.minutes!==undefined?`${mode}约${leg.payload.minutes}分钟`:prev?'设置两站之间的路程':'设置出发地与路程'}{depart!==null?` · 建议${depart}出发`:''}</span><ChevronRight size={14}/></button>}<article className="activity-card"><div className="activity-number">{index+1}</div><div className="activity-content"><button className="activity-main" onClick={()=>onEdit(o)}><span className="activity-time">{timeLabel(o.payload)||'灵活安排'}</span><h3>{o.payload.title}</h3>{o.payload.place?.name&&<span className="activity-place"><MapPin size={14}/>{o.payload.place.name}</span>}{o.payload.buffers?.before!==null&&o.payload.buffers?.before!==undefined&&<small>提前 {o.payload.buffers.before} 分钟到场</small>}</button>{(late||overlap)&&<p className="timing-note">{late?`按当前安排会晚 ${late} 分钟到场`:`与上一项安排重叠 ${overlap} 分钟`}</p>}<div className="activity-toolbar"><button className="text-button" onClick={()=>onEdit(o)}>编辑</button>{o.payload.place&&<button className="text-button" onClick={()=>j.setContext({page:'map',map:{...j.context.map,dayId:o.payload.dayId,selectedActivityId:o.id}})}><MapPin size={14}/>地图</button>}{o.payload.time?.mode!=='precise'&&<><button className="icon-button compact" disabled={index===0} aria-label={`上移${o.payload.title}`} onClick={()=>reorder(o,-1).catch(()=>{})}><ArrowUp size={15}/></button><button className="icon-button compact" disabled={index===items.length-1} aria-label={`下移${o.payload.title}`} onClick={()=>reorder(o,1).catch(()=>{})}><ArrowDown size={15}/></button></>}</div><details className="activity-more"><summary aria-label={`活动更多操作：${o.payload.title}`} title="活动更多操作"><MoreHorizontal size={19}/></summary><div className="activity-more-panel"><ObjectActions journey={j} object={o}/></div></details></div></article></React.Fragment>})}return <div className="page itinerary-page"><div className="page-heading"><div><h1>行程</h1><p className="muted">{j.snapshot.trip.destination}</p></div><button className="secondary" onClick={onDates}><CalendarDays size={17}/>调整日期</button></div><div className="day-tabs" role="tablist" aria-label="计划日">{days.map(d=><button key={d.id} role="tab" aria-selected={d.id===current?.id} className={d.id===current?.id?'selected':''} onClick={()=>j.setContext({dayId:d.id})}><strong>{dayLabel(d,j.snapshot.trip)}</strong>{d.payload.date&&<small>{d.payload.date.slice(5).replace('-',' / ')}</small>}</button>)}</div>{j.snapshot.objects.some(o=>o.kind==='day'&&o.state==='deleted')&&<button className="text-button deleted-days-entry" onClick={onDeleted}>已删除的计划日<ChevronRight size={14}/></button>}<div className="day-heading"><h2>{current?dayLabel(current,j.snapshot.trip):'还没有计划日'}{current?.payload.date&&<small>{current.payload.date}</small>}</h2><div className="button-row"><button className="primary small" disabled={!current} onClick={()=>onEdit(null,{dayId:current.id})}><Plus size={16}/>添加活动</button>{current&&<button className="icon-button compact" aria-label="当天操作" aria-expanded={dayMenu} onClick={()=>setDayMenu(!dayMenu)}><MoreHorizontal size={18}/></button>}</div></div>{current&&dayMenu&&<div className="day-lifecycle"><span>{dayLabel(current,j.snapshot.trip)}{current.payload.date?` · ${current.payload.date}`:""}</span><ObjectActions journey={j} object={current}/></div>}<div className="activity-list">{list.length?cards(list):<Empty icon={CalendarDays} title="这一天还没有安排" action={<button className="secondary" disabled={!current} onClick={()=>onEdit(null,{dayId:current.id})}><Plus size={16}/>添加第一项安排</button>}>添加活动，或到地图查找想去的地方。</Empty>}</div>{current&&<div className="continuations">{active(j.snapshot,'activity').filter(o=>o.payload.time?.endDayOffset>0).filter(o=>{const d=active(j.snapshot,'day').find(d=>d.id===o.payload.dayId);return d&&d.payload.ordinal<current.payload.ordinal&&d.payload.ordinal+o.payload.time.endDayOffset>=current.payload.ordinal}).map(o=><button className="continuation" key={o.id} onClick={()=>onEdit(o)}><span>从前一天延续</span><strong>{o.payload.title}</strong><small>{timeLabel(o.payload)}</small></button>)}</div>}{outside.length>0&&<details className="outside"><summary>行程外安排</summary>{outside.map(d=><section key={d.id}><h3>{d.payload.date||`原计划第${d.payload.ordinal}天`}</h3>{cards(orderedActivities(j.snapshot,d.id))}</section>)}</details>}{route&&<RouteEditor journey={j} {...route} onClose={()=>setRoute(null)}/>}</div>}
+
+export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
+ const[route,setRoute]=useState(null),[dayMenuId,setDayMenuId]=useState(null),[dragging,setDragging]=useState(null);
+ const dragRef=useRef(null),dragCleanup=useRef(null),dayContent=useRef(null),dayStage=useRef(null),previousDay=useRef(null),dayAnimation=useRef({incoming:null,height:null,outgoing:new Set()});
+ const days=visibleDays(j.snapshot),outside=outsideDays(j.snapshot);
+ const current=days.find(d=>d.id===j.context.dayId)||days[0];
+ const dayMenu=!!current&&dayMenuId===current.id;
+ useEffect(()=>{setDayMenuId(null)},[current?.id]);
+ useLayoutEffect(()=>{
+  const element=dayContent.current,stage=dayStage.current,animations=dayAnimation.current,before=previousDay.current;
+  if(!element||!stage)return;
+  previousDay.current={id:current?.id,content:element.cloneNode(true),height:element.getBoundingClientRect().height};
+  const timing={duration:200,easing:'cubic-bezier(.4,0,.2,1)'};
+  function resize(fromHeight){
+   animations.height?.cancel();
+   stage.dataset.transitioning='';
+   animations.height=stage.animate([{height:`${fromHeight}px`},{height:`${previousDay.current.height}px`}],timing);
+   animations.height.onfinish=()=>{delete stage.dataset.transitioning};
+  }
+  if(!before)return;
+  if(before.id===current?.id){
+   if(animations.height?.playState==='running'&&Math.abs(before.height-previousDay.current.height)>.5)resize(stage.getBoundingClientRect().height);
+   return;
+  }
+  const opacity=animations.incoming?.playState==='running'?getComputedStyle(element).opacity:1;
+  const fromHeight=animations.height?.playState==='running'?stage.getBoundingClientRect().height:before.height;
+  animations.incoming?.cancel();
+  animations.height?.cancel();
+  if(reducedMotion()){
+   for(const outgoing of animations.outgoing){outgoing.animation.cancel();outgoing.element.remove()}
+   animations.outgoing.clear();
+   delete stage.dataset.transitioning;
+   return;
+  }
+  const outgoing=before.content;
+  outgoing.className='day-content-outgoing';
+  outgoing.inert=true;
+  outgoing.setAttribute('aria-hidden','true');
+  stage.append(outgoing);
+  stage.dataset.transitioning='';
+  const fade=outgoing.animate([{opacity},{opacity:0}],timing),entry={element:outgoing,animation:fade};
+  animations.outgoing.add(entry);
+  fade.onfinish=()=>{outgoing.remove();animations.outgoing.delete(entry)};
+  animations.incoming=element.animate([{opacity:0},{opacity:1}],timing);
+  resize(fromHeight);
+ });
+ useEffect(()=>()=>dragCleanup.current?.(),[]);
+ useEffect(()=>()=>{
+  const animations=dayAnimation.current;
+  animations.incoming?.cancel();
+  animations.height?.cancel();
+  for(const outgoing of animations.outgoing){outgoing.animation.cancel();outgoing.element.remove()}
+  animations.outgoing.clear();
+ },[]);
+ const list=current?orderedActivities(j.snapshot,current.id):[];
+ const routes=j.snapshot.objects.filter(o=>o.kind==='route');
+
+ async function moveTo(o,targetId,placeAfter=false){
+  if(o.id===targetId)return;
+  const next=list.filter(item=>item.id!==o.id);
+  const targetIndex=next.findIndex(item=>item.id===targetId);
+  if(targetIndex<0)return;
+  next.splice(targetIndex+(placeAfter?1:0),0,o);
+  const index=next.findIndex(item=>item.id===o.id),before=next[index-1],afterItem=next[index+1];
+  const beforeOrder=before?Number(before.payload.order??0):null,afterOrder=afterItem?Number(afterItem.payload.order??0):null;
+  // Precise times can put the displayed slots in a different order from their
+  // stored ranks. Normalize those slots before inserting a flexible activity.
+  const remaining=next.filter(item=>item.id!==o.id);
+  const ranksInDisplayOrder=remaining.every((item,i)=>!i||Number(remaining[i-1].payload.order??0)<Number(item.payload.order??0));
+  if(!ranksInDisplayOrder||(beforeOrder!==null&&afterOrder!==null&&afterOrder-beforeOrder<0.000001)){
+   await Promise.all(next.map((item,itemIndex)=>Number(item.payload.order??0)===itemIndex*1024?null:j.mutate({objectId:item.id,kind:'patch',patch:{order:itemIndex*1024}})));
+   return;
+  }
+  const order=beforeOrder!==null&&afterOrder!==null?(beforeOrder+afterOrder)/2:beforeOrder!==null?beforeOrder+1:afterOrder!==null?afterOrder-1:0;
+  await j.mutate({objectId:o.id,kind:'patch',patch:{order}});
+ }
+ async function moveBy(o,direction){
+  const index=list.findIndex(item=>item.id===o.id),target=list[index+direction];
+  if(target)await moveTo(o,target.id,direction>0);
+ }
+ function beginDrag(event,o){
+  if(event.button!==undefined&&event.button!==0)return;
+  event.preventDefault();
+  const value={id:o.id,targetId:o.id,after:false};
+  dragRef.current=value;setDragging(value);
+  const move=pointerEvent=>updateDrag(pointerEvent);
+  const end=()=>finishDrag();
+  const cancel=()=>finishDrag(true);
+  document.addEventListener('pointermove',move,{capture:true});
+  document.addEventListener('pointerup',end,{capture:true,once:true});
+  document.addEventListener('pointercancel',cancel,{capture:true,once:true});
+  dragCleanup.current=()=>{
+   document.removeEventListener('pointermove',move,{capture:true});
+   document.removeEventListener('pointerup',end,{capture:true});
+   document.removeEventListener('pointercancel',cancel,{capture:true});
+  };
+ }
+ function updateDrag(event){
+  if(!dragRef.current)return;
+  const card=document.elementFromPoint(event.clientX,event.clientY)?.closest?.('[data-activity-id]');
+  if(!card)return;
+  const targetId=card.dataset.activityId;
+  if(!list.some(item=>item.id===targetId))return;
+  const rect=card.getBoundingClientRect(),placeAfter=event.clientY>rect.top+rect.height/2;
+  const value={...dragRef.current,targetId,after:placeAfter};
+  dragRef.current=value;setDragging(value);
+ }
+ function finishDrag(cancelled=false){
+  const value=dragRef.current;
+  dragCleanup.current?.();dragCleanup.current=null;
+  dragRef.current=null;setDragging(null);
+  if(cancelled||!value||value.id===value.targetId)return;
+  const source=list.find(item=>item.id===value.id);
+  if(source)moveTo(source,value.targetId,value.after).catch(()=>{});
+ }
+
+ function cards(items,sortable=false){
+  return items.map((o,index)=>{
+   const prev=items[index-1];
+   const matchingRoutes=routes.filter(r=>r.payload.fromId===(prev?.id||null)&&r.payload.toId===o.id);
+   const leg=matchingRoutes.find(r=>r.state==='active')||matchingRoutes.find(r=>r.state==='deleted');
+   const mode={walking:'步行',driving:'驾车',bicycling:'骑行',transit:'公共交通'}[leg?.payload.mode];
+   const advice=travelAdvice(prev,o,leg?.state==='active'?leg:null);
+   const depart=advice.depart,late=advice.lateMinutes,overlap=advice.overlapMinutes;
+   const flexible=o.payload.time?.mode!=='precise';
+   const dropClass=dragging?.targetId===o.id&&dragging.id!==o.id?(dragging.after?' drop-after':' drop-before'):'';
+   return <React.Fragment key={o.id}>
+    {(prev||index===0)&&<button className="route-row" onClick={()=>setRoute({from:prev,to:o,object:leg})}><Route size={14}/><span>{leg?.state==='deleted'?'路程已删除 · 查看与恢复':leg?.payload.minutes!==null&&leg?.payload.minutes!==undefined?`${mode}约${leg.payload.minutes}分钟`:prev?'设置两站之间的路程':'设置出发地与路程'}{depart!==null?` · 建议${depart}出发`:''}</span><ChevronRight size={14}/></button>}
+    <article data-activity-id={o.id} className={`activity-card${dragging?.id===o.id?' dragging':''}${dropClass}`}>
+     <div className="activity-number">{index+1}</div>
+     <div className="activity-content">
+      <button className="activity-main" onClick={()=>onEdit(o)}>
+       <span className="activity-time">{timeLabel(o.payload)||'灵活安排'}</span>
+       <h3>{o.payload.title}</h3>
+       {o.payload.place?.name&&<span className="activity-place"><MapPin size={14}/>{o.payload.place.name}</span>}
+       {o.payload.buffers?.before!==null&&o.payload.buffers?.before!==undefined&&<small>提前 {o.payload.buffers.before} 分钟到场</small>}
+      </button>
+      {(late||overlap)&&<p className="timing-note">{late?`按当前安排会晚 ${late} 分钟到场`:`与上一项安排重叠 ${overlap} 分钟`}</p>}
+      <div className="activity-toolbar">
+       <button className="text-button" onClick={()=>onEdit(o)}>编辑</button>
+       {o.payload.place&&<button className="text-button" onClick={()=>j.setContext({page:'map',map:{...j.context.map,dayId:o.payload.dayId,selectedActivityId:o.id}})}><MapPin size={14}/>地图</button>}
+       {sortable&&flexible&&<button
+        className="drag-handle"
+        aria-label={`拖动排序：${o.payload.title}`}
+        title="拖动排序；键盘可用上下方向键"
+        onPointerDown={event=>beginDrag(event,o)}
+        onKeyDown={event=>{if(event.key==='ArrowUp'||event.key==='ArrowDown'){event.preventDefault();moveBy(o,event.key==='ArrowUp'?-1:1).catch(()=>{})}}}
+       ><GripVertical size={18}/></button>}
+      </div>
+      <details className="activity-more">
+       <summary aria-label={`活动更多操作：${o.payload.title}`} title="活动更多操作"><MoreHorizontal size={19}/></summary>
+       <div className="activity-more-panel"><ObjectActions journey={j} object={o}/></div>
+      </details>
+     </div>
+    </article>
+   </React.Fragment>;
+  });
+ }
+
+ return <div className="page itinerary-page">
+  <div className="page-heading"><div><h1>行程</h1><p className="muted">{j.snapshot.trip.destination}</p></div><button className="secondary" onClick={onDates}><CalendarDays size={17}/>调整日期</button></div>
+  <SelectionTrack activeKey={current?.id} className="day-tabs" role="tablist" aria-label="计划日">{days.map(d=><button key={d.id} role="tab" aria-selected={d.id===current?.id} className={d.id===current?.id?'selected':''} onClick={()=>j.setContext({dayId:d.id})}><strong>{dayLabel(d,j.snapshot.trip)}</strong>{d.payload.date&&<small>{d.payload.date.slice(5).replace('-',' / ')}</small>}</button>)}</SelectionTrack>
+  {j.snapshot.objects.some(o=>o.kind==='day'&&o.state==='deleted')&&<button className="text-button deleted-days-entry" onClick={onDeleted}>已删除的计划日<ChevronRight size={14}/></button>}
+  <div className="day-content-stage" ref={dayStage}><div className="day-content" ref={dayContent}><div className="day-heading">
+   <h2>{current?dayLabel(current,j.snapshot.trip):'还没有计划日'}{current?.payload.date&&<small>{current.payload.date}</small>}</h2>
+   <div className="button-row"><button className="primary small" disabled={!current} onClick={()=>onEdit(null,{dayId:current.id})}><Plus size={16}/>添加活动</button>{current&&<button className="icon-button compact" aria-label="当天操作" aria-expanded={dayMenu} onClick={()=>setDayMenuId(dayMenu?null:current.id)}><MoreHorizontal size={18}/></button>}</div>
+  </div>
+  {current&&dayMenu&&<div className="day-lifecycle"><span>{dayLabel(current,j.snapshot.trip)}{current.payload.date?` · ${current.payload.date}`:""}</span><ObjectActions journey={j} object={current}/></div>}
+  <div className="activity-list">{list.length?cards(list,true):<Empty icon={CalendarDays} title="这一天还没有安排" action={<button className="secondary" disabled={!current} onClick={()=>onEdit(null,{dayId:current.id})}><Plus size={16}/>添加第一项安排</button>}>添加活动，或到地图查找想去的地方。</Empty>}</div>
+  {current&&<div className="continuations">{active(j.snapshot,'activity').filter(o=>o.payload.time?.endDayOffset>0).filter(o=>{const d=active(j.snapshot,'day').find(d=>d.id===o.payload.dayId);return d&&d.payload.ordinal<current.payload.ordinal&&d.payload.ordinal+o.payload.time.endDayOffset>=current.payload.ordinal}).map(o=><button className="continuation" key={o.id} onClick={()=>onEdit(o)}><span>从前一天延续</span><strong>{o.payload.title}</strong><small>{timeLabel(o.payload)}</small></button>)}</div>}</div></div>
+  {outside.length>0&&<details className="outside"><summary>行程外安排</summary>{outside.map(d=><section key={d.id}><h3>{d.payload.date||`原计划第${d.payload.ordinal}天`}</h3>{cards(orderedActivities(j.snapshot,d.id))}</section>)}</details>}
+  {route&&<RouteEditor journey={j} {...route} onClose={()=>setRoute(null)}/>}
+ </div>;
+}

@@ -1,38 +1,30 @@
-import {useEffect, useRef} from 'react';
-import {flushSync} from 'react-dom';
+import {useLayoutEffect, useRef} from 'react';
 
-// Animate context navigation from both the main nav and activity/map links.
+export function reducedMotion() {
+  const motion = document.documentElement.dataset.motion;
+  return motion === 'true' || (motion !== 'false' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+// Keep navigation synchronous. Only the new content enters; the persistent
+// controls use interruptible CSS transitions rather than scaled page snapshots.
 export function usePageNavigation(journey) {
-  const active = useRef(null);
-  const request = useRef(0);
+  const previous = useRef(null);
+  const tripId = journey.snapshot?.trip?.id;
+  const page = journey.context?.page || 'itinerary';
 
-  function cancel() {
-    request.current++;
-    active.current?.skipTransition();
-    active.current = null;
-  }
+  useLayoutEffect(() => {
+    const before = previous.current;
+    previous.current = {tripId, page};
+    if (!tripId || before?.tripId !== tripId || before.page === page || reducedMotion()) return;
+    const content = document.querySelector('.main-content > .page, .main-content > .journey-map');
+    if (!content) return;
+    // A transform on the map would change the containing block of its fixed canvas.
+    const frames = page === 'map'
+      ? [{opacity: .65}, {opacity: 1}]
+      : [{opacity: .65, transform: 'translateY(6px)'}, {opacity: 1, transform: 'translateY(0)'}];
+    const animation = content.animate(frames, {duration: 200, easing: 'cubic-bezier(.2,.7,.2,1)'});
+    return () => animation.cancel();
+  }, [tripId, page]);
 
-  useEffect(() => cancel, [journey.snapshot?.trip?.id]);
-
-  function setContext(patch) {
-    if (!patch.page) return journey.setContext(patch);
-    const unchanged = patch.page === journey.context?.page;
-    cancel();
-    const motion = document.documentElement.dataset.motion;
-    const reduced = motion === 'true' || (motion !== 'false' && matchMedia('(prefers-reduced-motion: reduce)').matches);
-    if (unchanged || reduced || !document.startViewTransition) return journey.setContext(patch);
-
-    const current = request.current;
-    const transition = document.startViewTransition(() => {
-      // A second click or leaving the trip can supersede a pending snapshot.
-      if (current === request.current) flushSync(() => journey.setContext(patch));
-    });
-    active.current = transition;
-    // Skipping an interrupted animation rejects ready, while navigation still completes.
-    transition.ready.catch(() => {});
-    const clear = () => { if (active.current === transition) active.current = null; };
-    transition.finished.then(clear, clear);
-  }
-
-  return {...journey, setContext, goHome() { cancel(); journey.goHome(); }};
+  return journey;
 }

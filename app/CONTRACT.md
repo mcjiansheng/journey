@@ -15,6 +15,7 @@ JSON 请求/响应；错误 {error:{code,message,details?}}。Cookie HttpOnly �
 - GET /api/trips -> {trips:[Trip],navigation:{lastTripId?,contexts?}}
 - POST /api/trips {id,name,teamMode:'admin'|'equal',timezone,currency,dayCount,startDate,destination} -> Snapshot。新建要求目的地 trim 后非空、合法非空 startDate、显式 dayCount（1–365，按含首尾日期的自然日计算），并显式选择团队模式。客户端根据真实目的地行政区划确定当地 IANA 时区并预填 timezone，用户可手动调整；未能解析时须手动选择；服务端核验提交时区。客户端将必填的起止日期转换为 startDate + dayCount，存储与 API 不新增 endDate。历史无日期旅程继续允许读取、编辑与既有改期操作。
 - GET /api/trips/:id -> Snapshot={trip:Trip,members:[Member],objects:[Object],cursor:number,epoch:number}。
+- GET /api/trips/:id/members -> {members:[Member]}，供成员与邀请界面独立刷新；Snapshot 中继续保留成员摘要，支持顶部头像、权限判断与离线展示。
 - Trip={id,name,ownerId,createdBy,teamMode,timezone,currency,destination,startDate:null|string,dayCount,state,generation,...}；Member={userId,displayName,isAdmin,canInvite,joinOrder}。
 - Object={id,tripId,kind:'day'|'activity'|'favorite'|'expense'|'route',payload,state:'active'|'deleted',generation,clocks?,expressions?}。expressions 数组 {userId,notParticipating,wishDelete,wishRestore}，只含当前成员。
 - day payload={ordinal,date:null|string}；activity={title,dayId,order:number,time:{mode:'flexible'|'precise',period:'',start:null|'HH:mm',end:null|'HH:mm',endDayOffset:0},place:null|Place,buffers:{before:null|number,after:null|number},notes:'',url:''}。
