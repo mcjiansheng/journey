@@ -45,7 +45,7 @@ def main():
             with archive.open('rb') as stream:
                 uploaded = subprocess.run(ssh + [f'deploy {release} {digest} {commit}'],
                                           stdin=stream, capture_output=True, text=True,
-                                          timeout=240, env=child_env)
+                                          timeout=960, env=child_env)
             if uploaded.returncode:
                 print(f'Upload response exit {uploaded.returncode}: {uploaded.stderr.strip()}', flush=True)
         except subprocess.TimeoutExpired:

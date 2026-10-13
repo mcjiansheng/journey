@@ -51,7 +51,7 @@ class DeploymentClientTests(unittest.TestCase):
         self.assertEqual(result, 1)
 
     def test_upload_disconnect_recovers_durable_outcome(self):
-        result, _ = self.run_client([subprocess.TimeoutExpired('ssh', 240), self.response('success')])
+        result, _ = self.run_client([subprocess.TimeoutExpired('ssh', 960), self.response('success')])
         self.assertEqual(result, 0)
 
     def test_transient_status_disconnect_is_retried(self):

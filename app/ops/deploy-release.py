@@ -432,9 +432,9 @@ def main():
     if len(args) == 4 and args[0] == 'receive':
         # Bound even a stalled SSH upload. Activation has a separate systemd lifetime.
         def upload_timeout(signum, frame):
-            raise TimeoutError('Upload exceeded 180 seconds')
+            raise TimeoutError('Upload exceeded 900 seconds')
         signal.signal(signal.SIGALRM, upload_timeout)
-        signal.alarm(180)
+        signal.alarm(900)
         deployment = Deployment(args[1])
         deployment.receive(args[2], args[3], sys.stdin.buffer)
         signal.alarm(0)
