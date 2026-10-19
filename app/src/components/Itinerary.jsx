@@ -262,6 +262,7 @@ export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
       <div className="activity-toolbar">
        <button className="text-button" onClick={()=>onEdit(o)}>编辑</button>
        {o.payload.place&&<button className="text-button" onClick={()=>j.setContext({page:'map',map:{...j.context.map,dayId:o.payload.dayId,selectedActivityId:o.id}})}><MapPin size={14}/>地图</button>}
+       <div className="activity-controls">
        {sortable&&flexible&&<button
         className="drag-handle"
         aria-label={`拖动排序：${o.payload.title}`}
@@ -269,11 +270,12 @@ export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
         onPointerDown={event=>beginDrag(event,o)}
         onKeyDown={event=>{if(event.key==='ArrowUp'||event.key==='ArrowDown'){event.preventDefault();moveBy(o,event.key==='ArrowUp'?-1:1).catch(()=>{})}}}
        ><GripVertical size={18}/></button>}
-      </div>
       <details className="activity-more">
        <summary aria-label={`活动更多操作：${o.payload.title}`} title="活动更多操作"><MoreHorizontal size={19}/></summary>
        <div className="activity-more-panel"><ObjectActions journey={j} object={o}/></div>
       </details>
+       </div>
+      </div>
      </div>
     </article>
    </React.Fragment>;

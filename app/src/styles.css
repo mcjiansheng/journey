@@ -194,6 +194,12 @@ html.has-modal,html.has-modal body{overflow:hidden;overscroll-behavior:none}
 .drag-handle{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;margin-left:auto;border-radius:10px;color:var(--muted);cursor:grab;touch-action:none}
 .drag-handle:hover,.drag-handle:focus-visible{background:var(--accent-soft);color:var(--accent)}
 .drag-handle:active{cursor:grabbing}
+.activity-card .activity-content{padding-right:0}
+.activity-controls{display:flex;align-items:center;gap:4px;margin-left:auto;flex-shrink:0}
+.activity-controls .drag-handle{margin-left:0;width:44px;height:44px;border-radius:12px}
+.activity-controls .activity-more{position:relative;inset:auto;margin:0;padding:0}
+.activity-controls .activity-more>summary{width:44px;height:44px;min-height:44px}
+.activity-controls .activity-more-panel{top:calc(100% + 6px)}
 .activity-card.dragging{opacity:.58;transform:scale(.99)}
 .activity-card.drop-before::before,.activity-card.drop-after::before{content:"";position:absolute;left:12px;right:12px;height:3px;border-radius:3px;background:var(--accent);z-index:3;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent-soft) 75%,transparent)}
 .activity-card.drop-before::before{top:-8px}

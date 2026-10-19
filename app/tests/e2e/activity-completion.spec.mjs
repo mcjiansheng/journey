@@ -33,6 +33,36 @@ test('one pointer click saves newly created and existing activities from focused
  await page.reload();await page.getByRole('button',{name:/继续旅程/}).click();await edit(page,'改名后');await page.getByText('到场与预留时间',{exact:true}).click();await expect(page.getByLabel('提前到场（分钟）')).toHaveValue('15');
 });
 
+for(const width of [1440,390])test(`completion remains right-aligned before blur, after creation and after reopening at ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:900});await setup(page);
+ await page.getByRole('button',{name:'添加活动',exact:true}).first().click();
+ const dialog=page.getByRole('dialog'),title=page.getByLabel('活动名称');
+ const position=async()=>{
+  await expect(dialog.getByRole('button',{name:'放弃未完成输入',exact:true,includeHidden:true})).toHaveCount(0);
+  await expect(dialog.locator('.modal-actions > button')).toHaveCount(1);
+  await expect(complete(page)).toHaveClass('primary');await complete(page).scrollIntoViewIfNeeded();
+  return complete(page).evaluate(button=>{
+   const bounds=button.getBoundingClientRect(),footer=button.parentElement.getBoundingClientRect();
+   return{left:Math.round(bounds.left*100)/100,right:Math.round(bounds.right*100)/100,inset:Math.round((footer.right-bounds.right)*100)/100};
+  });
+ };
+ const before=await position();expect(before.inset).toBe(0);
+ await expect(dialog.locator('.modal-head').getByRole('button',{name:'关闭',exact:true})).toBeVisible();
+ const savedTitle=`按钮位置验收${width}`;
+ await title.fill(savedTitle);await expect(title).toBeFocused();expect(await position()).toEqual(before);
+ await title.press('Tab');await expect(dialog.getByRole('heading',{name:'活动安排',exact:true})).toBeVisible();
+ expect(await position()).toEqual(before);
+ await page.screenshot({path:`../.local/evidence/activity-editor-completion-${width}.png`,scale:'css',animations:'disabled'});
+ // Closing an invalid field retains its input; reopening uses the saved activity card.
+ await title.fill('');await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+ await expect(dialog).toHaveCount(0);await edit(page,savedTitle);await expect(title).toHaveValue('');
+ expect(await position()).toEqual(before);
+ await complete(page).click();await expect(dialog.getByRole('alert')).toHaveText('请填写活动名称。');
+ expect(await position()).toEqual(before);
+ await title.fill(`恢复后完成${width}`);await expect(title).toBeFocused();await finish(page);
+ await expect(page.getByRole('heading',{name:`恢复后完成${width}`,exact:true})).toBeVisible();
+});
+
 test('completion validates the entire draft and retains invalid input',async({page})=>{
  await setup(page);await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('请填写活动名称。');
  await page.getByLabel('活动名称').fill('校验活动');await page.getByRole('button',{name:'具体时间',exact:true}).click();await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('请填写开始时间');

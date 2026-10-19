@@ -66,3 +66,25 @@ test('cancelled pointer drag preserves the saved order',async({page})=>{
  await page.getByRole('button',{name:/继续旅程/}).click();
  await expect(page.locator('.activity-card h3')).toHaveText(['晚间活动','灵活活动','早间活动']);
 });
+
+for(const width of [1440,390])test(`activity controls share one aligned row at ${width}px`,async({page},testInfo)=>{
+ await setup(page);await page.setViewportSize({width,height:900});
+ const card=page.locator('.activity-card').filter({hasText:'灵活活动'});
+ const handle=card.getByRole('button',{name:'拖动排序：灵活活动'});
+ const more=card.locator('.activity-more>summary');
+ const edit=card.getByRole('button',{name:'编辑',exact:true});
+ await card.scrollIntoViewIfNeeded();
+ const [dragBox,moreBox,editBox]=await Promise.all([handle.boundingBox(),more.boundingBox(),edit.boundingBox()]);
+ expect(dragBox.width).toBe(44);expect(moreBox.width).toBe(44);
+ expect(dragBox.height).toBe(44);expect(moreBox.height).toBe(44);
+ expect(Math.abs(dragBox.y-moreBox.y)).toBeLessThan(1);
+ expect(moreBox.x-(dragBox.x+dragBox.width)).toBe(4);
+ expect(Math.abs(editBox.y+editBox.height/2-dragBox.y-dragBox.height/2)).toBeLessThan(1);
+ await more.click();await expect(card.locator('.activity-more-panel')).toBeVisible();
+ const menu=await card.locator('.activity-more-panel').boundingBox();
+ expect(menu.x).toBeGreaterThanOrEqual(0);expect(menu.x+menu.width).toBeLessThanOrEqual(width);
+ expect(menu.y).toBeGreaterThanOrEqual(moreBox.y+moreBox.height);
+ await more.click();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.screenshot({path:testInfo.outputPath(`activity-controls-${width}.png`),scale:'css'});
+});
