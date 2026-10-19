@@ -46,7 +46,7 @@ test('completion closes during delayed or failed network sync and persists acros
  let release;const gate=new Promise(resolve=>{release=resolve});let arrived=false;
  await page.route('**/api/trips/*/operations',async route=>{arrived=true;await gate;await route.abort('failed')});
  await edit(page,'同步活动');await page.getByLabel('活动名称').fill('网络中断后保留');await finish(page);await expect.poll(()=>arrived).toBe(true);await expect(page.getByRole('heading',{name:'网络中断后保留',exact:true})).toBeVisible();
- release();await expect(page.locator('.sync-status')).toContainText('正在同步');await page.unroute('**/api/trips/*/operations');await page.reload();await page.getByRole('button',{name:/继续旅程/}).click();await expect(page.getByRole('heading',{name:'网络中断后保留',exact:true})).toBeVisible();await expect(page.locator('.sync-status.synced')).toBeVisible();
+ release();await expect(page.locator('.sync-status.offline')).toContainText('连接中断');await page.unroute('**/api/trips/*/operations');await page.reload();await page.getByRole('button',{name:/继续旅程/}).click();await expect(page.getByRole('heading',{name:'网络中断后保留',exact:true})).toBeVisible();await expect(page.locator('.sync-status.synced')).toBeVisible();
 });
 
 test('completion skips an already queued blur value and preserves a later collaborator change',async({page})=>{
