@@ -16,7 +16,8 @@ export function usePageNavigation(journey) {
     const before = previous.current;
     previous.current = {tripId, page};
     if (!tripId || before?.tripId !== tripId || before.page === page || reducedMotion()) return;
-    const content = document.querySelector('.main-content > .page, .main-content > .journey-map');
+    const content = document.querySelector(page === 'map'
+      ? '.main-content > .journey-map' : '.main-content > .page');
     if (!content) return;
     // A transform on the map would change the containing block of its fixed canvas.
     const frames = page === 'map'

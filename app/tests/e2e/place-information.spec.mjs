@@ -24,8 +24,10 @@ async function openMap(page){
  const navigation=page.getByRole('navigation',{name:'手机主导航'});
  await navigation.getByRole('button',{name:'地图',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>!!window.AMap?.Map),{timeout:30000}).toBe(true);
- await navigation.getByRole('button',{name:'行程',exact:true}).click();
+ await page.getByRole('button',{name:'返回我的旅程',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
  await page.evaluate(()=>{window.AMap.Map=new Proxy(window.AMap.Map,{construct(Target,args){const instance=Reflect.construct(Target,args);window.__informationMap=instance;window.__informationMapReady=false;instance.on('complete',()=>{window.__informationMapReady=true;});return instance;}})});
+ await page.getByRole('button',{name:/继续旅程/}).click();
  await navigation.getByRole('button',{name:'地图',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>!!window.__informationMap&&window.__informationMapReady),{timeout:30000}).toBe(true);
 }

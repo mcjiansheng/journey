@@ -14,7 +14,7 @@ import './map-markers.css';
 const located=p=>Number.isFinite(p?.lng)&&Number.isFinite(p?.lat);
 const keyOf=p=>p?.providerPlaceId?`amap:${p.providerPlaceId}`:JSON.stringify([p?.name,p?.address,p?.lng,p?.lat]);
 const category=p=>/餐|食|咖啡|茶/.test(p.category)?'餐饮':/住宿|酒店/.test(p.category)?'住宿':/景|公园|博物|文化/.test(p.category)?'景点':/交通|机场|车站/.test(p.category)?'交通':'其他';
-export default function MapView({journey:j,onEditActivity}) {
+export default function MapView({journey:j,onEditActivity,active=true}) {
  const {snapshot,context}=j,trip=snapshot.trip,initial=context.map||{};
  const initialPlace=initial.selectedActivityId?snapshot.objects.find(o=>o.id===initial.selectedActivityId)?.payload.place:initial.selected;
  const [query,setQuery]=useState(initial.query||''),[results,setResults]=useState([]),[suggestions,setSuggestions]=useState([]),[selected,setSelected]=useState(initialPlace||null),[mode,setMode]=useState(initialPlace?'detail':'browse'),[expanded,setExpanded]=useState(false),[error,setError]=useState(''),[mapError,setMapError]=useState(''),[busy,setBusy]=useState(false),[ready,setReady]=useState(0),[mapEpoch,setMapEpoch]=useState(0),[routeDay,setRouteDay]=useState(initial.dayId||initial.routeDay||''),[filter,setFilter]=useState(initial.filter||{category:'全部',arranged:'全部'}),[filterDraft,setFilterDraft]=useState(filter),[manual,setManual]=useState({name:'',address:''}),[keyboardOpen,setKeyboardOpen]=useState(false),[cameraChoice,setCameraChoice]=useState(null),[cameraLoading,setCameraLoading]=useState(false);
@@ -22,9 +22,14 @@ export default function MapView({journey:j,onEditActivity}) {
  const [composing,setComposing]=useState(false),[searchStatus,setSearchStatus]=useState('idle'),[searchAttempt,setSearchAttempt]=useState(0),[placeLoading,setPlaceLoading]=useState(false);
  const [placeInformation,setPlaceInformation]=useState(null);
  const restoredInformation=useRef(false);
+ const activeRef=useRef(active),externalMap=useRef(context.map),completedSearch=useRef(null);
+ const [destination,setDestination]=useState(trip.destination);
+ if(active&&destination!==trip.destination)setDestination(trip.destination);
+ activeRef.current=active;
  const canvas=useRef(null),panel=useRef(null),map=useRef(null),markers=useRef([]),lines=useRef([]),searchSeq=useRef(0),selectionSeq=useRef(0),pointClickTimer=useRef(null),cameraTimer=useRef(null),lastContext=useRef(initial),alive=useRef(true),snapshotRef=useRef(snapshot),selectRef=useRef(null),pickRef=useRef(null),modeRef=useRef(mode);
  modeRef.current=mode;
  snapshotRef.current=snapshot;
+ if(externalMap.current!==context.map){externalMap.current=context.map;lastContext.current=context.map||{};}
  const cameraGeneration=useRef(0),cameraIntent=useRef(0),activityIntent=useRef(initial.selectedActivityId||null),consumedChoice=useRef(null),cameraRequest=useRef(0);
  const favorites=snapshot.objects.filter(x=>x.kind==='favorite'&&x.state==='active');
  const days=visibleDays(snapshot);
@@ -35,38 +40,54 @@ export default function MapView({journey:j,onEditActivity}) {
  // Measure the new natural size, then continue from the currently visible height.
  useLayoutEffect(()=>{
    const element=panel.current;
+   if(!active){panelAnimation.current?.cancel();panelHeight.current=null;return;}
    const before=panelAnimation.current?.playState==='running'?element.getBoundingClientRect().height:panelHeight.current;
    panelAnimation.current?.cancel();
    const after=element.getBoundingClientRect().height;
    panelHeight.current=after;
    if(before!==null&&Math.abs(after-before)>1&&!reducedMotion())
      panelAnimation.current=element.animate([{height:`${before}px`},{height:`${after}px`}],{duration:220,easing:'cubic-bezier(.2,.7,.2,1)'});
- },[mode,expanded,selected,results,suggestions,error,filter,favorites.length]);
+ },[active,mode,expanded,selected,results,suggestions,error,filter,favorites.length]);
  useEffect(()=>()=>panelAnimation.current?.cancel(),[]);
- useLayoutEffect(()=>{if(mode==='filter'||mode==='pick')panel.current.querySelector('.map-panel-title button')?.focus()},[mode]);
+ useLayoutEffect(()=>{if(active&&(mode==='filter'||mode==='pick'))panel.current.querySelector('.map-panel-title button')?.focus()},[active,mode]);
+ useLayoutEffect(()=>{
+   if(active)return;
+   cameraIntent.current++;clearTimeout(cameraTimer.current);clearTimeout(pointClickTimer.current);
+   map.current?.stopMove?.();
+ },[active]);
  const routeActivities=useMemo(()=>routeDay&&snapshot.objects.some(x=>x.id===routeDay&&x.kind==='day'&&x.state==='active')?orderedActivities(snapshot,routeDay):[],[snapshot,routeDay]);
- const saveMap=patch=>{lastContext.current={...lastContext.current,...patch};j.setContext({map:lastContext.current});};
+ const saveMap=patch=>{if(!activeRef.current)return;lastContext.current={...lastContext.current,...patch};j.setContext({map:lastContext.current});};
  selectRef.current=(p,options)=>choose(p,options);
  pickRef.current=point=>pickAt(point);
  useEffect(()=>{const resize=()=>{const v=window.visualViewport,nextHeight=v?.height||innerHeight;document.documentElement.style.setProperty('--visual-height',`${nextHeight}px`);setKeyboardOpen(!!v&&innerHeight-v.height-v.offsetTop>100);};resize();window.visualViewport?.addEventListener('resize',resize);return()=>window.visualViewport?.removeEventListener('resize',resize);},[]);
- useEffect(()=>{saveMap({query,selected,routeDay,filter});},[query,selected,routeDay,filter]);
+ useEffect(()=>{if(active&&!context.map?.selectedActivityId)saveMap({query,selected,routeDay,filter,dayId:null});},[active,query,selected,routeDay,filter,context.map?.selectedActivityId]);
  useEffect(()=>{
-   if(!ready||restoredInformation.current)return;
+   if(!active||!ready||restoredInformation.current)return;
    restoredInformation.current=true;
    if(selected?.providerPlaceId&&modeRef.current==='detail'&&!placeLoading)hydratePlace(selected,selectionSeq.current,false,cameraIntent.current,true);
- },[ready]);
+ },[active,ready]);
+ // Activity links are new navigation intents even when the map already exists.
+ useEffect(()=>{
+   const id=context.map?.selectedActivityId;
+   if(!active||!ready||!map.current||!id)return;
+   const activity=activities.find(o=>o.id===id);
+   saveMap({selectedActivityId:null,dayId:null,...(activity?.payload.place?{routeDay:activity.payload.dayId,selected:activity.payload.place}:{})});
+   if(!activity?.payload.place)return;
+   setRouteDay(activity.payload.dayId);
+   choose(activity.payload.place,{moveCamera:true,preservePlace:true});
+ },[active,ready,context.map?.selectedActivityId]);
  useEffect(()=>{
    alive.current=true;let instance,disposed=false,initialized=false,userMoved=false;
-   const generation=++cameraGeneration.current,entryIntent=cameraIntent.current,controller=new AbortController();
+   const generation=++cameraGeneration.current,entryIntent=cameraIntent.current,entryActivityId=activityIntent.current,controller=new AbortController();
    setMapError('');setCameraLoading(true);
    const currentActivity=activityIntent.current?snapshotRef.current.objects.find(o=>o.id===activityIntent.current&&o.kind==='activity'&&o.state==='active'&&snapshotRef.current.objects.some(d=>d.id===o.payload.dayId&&d.state==='active')):null;
-   const plan=planMapCamera({destination:trip.destination,saved:lastContext.current,activityPlace:currentActivity?.payload.place,userPlace:cameraChoice&&cameraChoice!==consumedChoice.current&&cameraChoice.destination===destinationKey(trip.destination)?cameraChoice.place:null,favorites:snapshotRef.current.objects.filter(o=>o.kind==='favorite'&&o.state==='active')});
-   if(plan.source==='destination'&&!currentActivity&&lastContext.current.cameraDestination!==destinationKey(trip.destination)){setSelected(null);setMode('browse');}
+   const plan=planMapCamera({destination,saved:lastContext.current,activityPlace:currentActivity?.payload.place,userPlace:cameraChoice&&cameraChoice!==consumedChoice.current&&cameraChoice.destination===destinationKey(destination)?cameraChoice.place:null,favorites:snapshotRef.current.objects.filter(o=>o.kind==='favorite'&&o.state==='active')});
+   if(plan.source==='destination'&&!currentActivity&&lastContext.current.cameraDestination!==destinationKey(destination)){setSelected(null);setMode('browse');}
    function current(){return !disposed&&generation===cameraGeneration.current;}
    function persistCamera(source='viewport',extra={}){
      if(!current()||map.current!==instance||!initialized)return;
      const center=instance.getCenter(),point=[center.lng,center.lat];
-     if(validCenter(point))saveMap({...cameraContext({center:point,zoom:instance.getZoom(),destination:destinationKey(trip.destination),source}),...extra});
+     if(validCenter(point))saveMap({...cameraContext({center:point,zoom:instance.getZoom(),destination:destinationKey(destination),source}),...extra});
    }
    (async()=>{
      const AMap=await loadAmap(j.config);
@@ -79,7 +100,8 @@ export default function MapView({journey:j,onEditActivity}) {
        if(!current()||initialized||map.current!==instance)return;
        initialized=true;activityIntent.current=null;consumedChoice.current=cameraChoice;setReady(v=>v+1);setCameraLoading(false);
        if(!userMoved&&entryIntent===cameraIntent.current&&(camera.source==='activity'||camera.source==='place'))shiftCamera(camera.place);
-       persistCamera(camera.source,{selectedActivityId:null});
+       const consumedActivity=entryActivityId&&lastContext.current.selectedActivityId===entryActivityId&&entryIntent===cameraIntent.current;
+       persistCamera(camera.source,consumedActivity?{selectedActivityId:null,dayId:null}:{});
      });
      instance.on('moveend',()=>persistCamera());
      instance.on('zoomend',()=>persistCamera());
@@ -88,12 +110,12 @@ export default function MapView({journey:j,onEditActivity}) {
      // Do not stopMove here: this event also accompanies our own camera transition.
      instance.on('zoomstart',()=>{userMoved=true;cameraIntent.current++;clearTimeout(cameraTimer.current);});
      instance.on('hotspotclick',event=>{
-       if(!current()||!['browse','search','detail','pick','list'].includes(modeRef.current))return;
+       if(!activeRef.current||!current()||!['browse','search','detail','pick','list'].includes(modeRef.current))return;
        clearTimeout(pointClickTimer.current);
        selectRef.current(normalizePlace({...event,location:event.lnglat}),{details:true,moveCamera:false});
      });
      instance.on('click',event=>{
-       if(!current()||modeRef.current!=='pick')return;
+       if(!activeRef.current||!current()||modeRef.current!=='pick')return;
        // A hotspot can also emit a map click. Let its named POI take priority.
        clearTimeout(pointClickTimer.current);
        pointClickTimer.current=setTimeout(()=>{if(current()&&modeRef.current==='pick')pickRef.current(event.lnglat);},0);
@@ -102,9 +124,9 @@ export default function MapView({journey:j,onEditActivity}) {
 
    })().catch(error=>{if(current()){instance?.destroy();if(map.current===instance)map.current=null;setCameraLoading(false);setMapError(error.message);}});
    return()=>{alive.current=false;disposed=true;controller.abort();clearTimeout(cameraTimer.current);clearTimeout(pointClickTimer.current);searchSeq.current++;selectionSeq.current++;instance?.destroy();if(map.current===instance){map.current=null;markers.current=[];lines.current=[];}};
- },[trip.id,trip.destination,mapEpoch,cameraChoice]);
+ },[trip.id,destination,mapEpoch,cameraChoice]);
  useEffect(()=>{
-   if(!map.current||!window.AMap)return;
+   if(!active||!map.current||!window.AMap)return;
    const AMap=window.AMap,m=map.current;m.remove(markers.current);m.remove(lines.current);markers.current=[];lines.current=[];
    const add=(p,options={})=>{if(!located(p))return;const node=createMapMarker(p,options);const marker=new AMap.Marker({position:[p.lng,p.lat],content:node,offset:new AMap.Pixel(-22,options.selected?-44:-22),zIndex:options.selected?30:options.order!==undefined?20:10});marker.on('click',()=>selectRef.current(p,{preservePlace:true,moveCamera:false}));markers.current.push(marker);};
    const isSelected=p=>selected&&keyOf(p)===keyOf(selected);
@@ -119,9 +141,9 @@ export default function MapView({journey:j,onEditActivity}) {
      lines.current.push(new AMap.Polyline({path:route.payload.path,strokeColor:'#18786b',strokeWeight:5,strokeOpacity:.8,showDir:true}));
    }
    m.add([...lines.current,...markers.current]);
- },[ready,snapshot,routeDay,filter,selected]);
+ },[active,ready,snapshot,routeDay,filter,selected]);
  useEffect(()=>{
-   if(!routeDay||!navigator.onLine||!map.current)return;
+   if(!active||!routeDay||!navigator.onLine||!map.current)return;
    let disposed=false;
    (async()=>{for(let i=1;i<routeActivities.length&&!disposed;i++){
      const from=routeActivities[i-1],to=routeActivities[i];
@@ -142,29 +164,34 @@ export default function MapView({journey:j,onEditActivity}) {
        await j.mutate({kind:old?'patch':'create',objectId:old?.id||crypto.randomUUID(),objectType:'route',patch:{fromId:from.id,toId:to.id,mode,...route,manual:false,inputSignature:signature}});
      }catch(e){if(!disposed)setError(e.message);}
    }})();return()=>{disposed=true;};
- },[routeDay,routeActivities.map(x=>x.id+keyOf(x.payload.place)).join('|'),ready]);
+ },[active,routeDay,routeActivities.map(x=>x.id+keyOf(x.payload.place)).join('|'),ready]);
  useEffect(()=>{
    const seq=++searchSeq.current;
+   if(!active)return;
+   const searchKey=JSON.stringify([query,trip.destination,searchAttempt]);
+   if(mode==='search'&&!composing&&completedSearch.current===searchKey)return;
+   completedSearch.current=null;
    setResults([]);setSuggestions([]);setSearchStatus('idle');
    if(mode!=='search'||composing||!query.trim())return;
    setSearchStatus('loading');setError('');
    const timer=setTimeout(async()=>{
      const [search,suggest]=await Promise.allSettled([searchPlaces(query.trim(),trip.destination),suggestPlaces(query.trim(),trip.destination)]);
      if(seq!==searchSeq.current||!alive.current)return;
+     completedSearch.current=searchKey;
      const places=search.status==='fulfilled'?search.value:[],tips=suggest.status==='fulfilled'?suggest.value.filter(t=>t.name):[];
      setResults(places);setSuggestions(tips.filter(t=>t.name&&!places.some(p=>keyOf(p)===keyOf(t)||(!t.providerPlaceId&&p.name===t.name))).slice(0,5));
      setSearchStatus(!places.length&&!tips.length&&(search.status==='rejected'||suggest.status==='rejected')?'error':'success');
    },350);return()=>{clearTimeout(timer);searchSeq.current++;};
- },[query,mode,trip.destination,composing,searchAttempt]);
+ },[active,query,mode,trip.destination,composing,searchAttempt]);
  function shiftCamera(p,allowInitialize=false){
-   if(!located(p))return;
+   if(!activeRef.current||!located(p))return;
    if(!map.current){if(allowInitialize)setCameraChoice({place:p,destination:destinationKey(trip.destination)});return;}
    clearTimeout(cameraTimer.current);const targetMap=map.current,intent=cameraIntent.current,request=++cameraRequest.current;
    cameraTimer.current=setTimeout(async()=>{
      // One camera transition targets the space beside/below the settled panel.
      // Panel updates themselves never change the user's viewport.
      while(panelAnimation.current?.playState==='running')await panelAnimation.current.finished.catch(()=>{});
-     if(map.current!==targetMap||cameraIntent.current!==intent||cameraRequest.current!==request)return;
+     if(!activeRef.current||map.current!==targetMap||cameraIntent.current!==intent||cameraRequest.current!==request)return;
      const r=panel.current?.getBoundingClientRect(),canvasBounds=canvas.current?.getBoundingClientRect();
      if(!r||!canvasBounds)return;
      const zoom=Math.max(15,targetMap.getZoom());
@@ -173,7 +200,8 @@ export default function MapView({journey:j,onEditActivity}) {
        const viewport=window.visualViewport,viewportBottom=(viewport?.offsetTop||0)+(viewport?.height||innerHeight);
        const navigation=document.querySelector('.bottom-nav')?.getBoundingClientRect();
        const bottom=Math.min(viewportBottom,navigation?.height?navigation.top:viewportBottom);
-       offsetY=(r.bottom+bottom)/2-(canvasBounds.top+canvasBounds.height/2);
+       // Center the whole selected pin; its coordinate tip is 20px below its center.
+       offsetY=(r.bottom+bottom)/2-(canvasBounds.top+canvasBounds.height/2)+20;
      }else offsetX=(r.width+80)/2;
      const point=targetMap.lngLatToPixel([p.lng,p.lat],zoom);
      const center=targetMap.pixelToLngLat(new window.AMap.Pixel(point.x-offsetX,point.y-offsetY),zoom);
@@ -241,7 +269,7 @@ export default function MapView({journey:j,onEditActivity}) {
    const current=()=>alive.current&&generation===cameraGeneration.current&&intent===cameraIntent.current;
    navigator.geolocation.getCurrentPosition(async pos=>{if(!current())return;try{const AMap=await loadAmap();if(!current())return;AMap.convertFrom([pos.coords.longitude,pos.coords.latitude],'gps',(status,result)=>{if(!current())return;const p=result.locations?.[0];if(status==='complete'&&p)shiftCamera({name:'当前位置',lng:p.getLng?.()??p.lng,lat:p.getLat?.()??p.lat},true);else setError('定位转换未完成，请重试');});}catch(e){if(current())setError(e.message);}},()=>{if(current())setError('未取得定位权限，请通过搜索选择地点');},{timeout:12000,maximumAge:30000});
  }
- return <section className={`journey-map ${mode==='search'?'map-searching':''} ${keyboardOpen?'map-keyboard-open':''}`} aria-label="地图与共享收藏">
+ return <section className={`journey-map ${active&&mode==='search'?'map-searching':''} ${active&&keyboardOpen?'map-keyboard-open':''}`} aria-label="地图与共享收藏" aria-hidden={!active} inert={!active}>
    <div ref={canvas} className="map-canvas"/>
    <div className="map-upper-controls glass">
      <MapRoutePicker value={routeDay} options={[{value:'',label:'全部收藏'},...days.map(d=>({value:d.id,label:`${dayLabel(d,trip)}路线`,date:d.payload.date}))]} onChange={setRouteDay}/>

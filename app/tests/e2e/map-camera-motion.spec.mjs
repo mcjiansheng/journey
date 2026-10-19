@@ -32,13 +32,15 @@ async function setup(page,{favoriteCount=1}={}){
  // Capture the actual SDK instance while preserving all native map behavior.
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'地图',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>!!window.AMap?.Map),{timeout:30000}).toBe(true);
- await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();
+ await page.getByRole('button',{name:'返回我的旅程',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
  await page.evaluate(()=>{
   const AMap=window.AMap;
   AMap.Map=new Proxy(AMap.Map,{construct(Target,args){const instance=Reflect.construct(Target,args);window.__cameraMap=instance;window.__cameraCalls=[];
    for(const name of ['setZoomAndCenter','panBy']){const original=instance[name];instance[name]=function(...args){window.__cameraCalls.push({name,args});return original.apply(this,args);};}
    return instance;}});
  });
+ await page.getByRole('button',{name:/继续旅程/}).click();
 }
 
 async function openMap(page){
