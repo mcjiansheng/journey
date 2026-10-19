@@ -91,9 +91,9 @@ async function expectSettingRow(row,selected){
 }
 
 async function closeCreateExtras(dialog){
- const summary=dialog.locator('.trip-extra-settings > summary');
- if(await dialog.locator('.trip-extra-settings').evaluate(node=>node.open))await summary.click();
- await expect(dialog.locator('.trip-extra-settings')).not.toHaveAttribute('open','');
+ const toggle=dialog.getByRole('button',{name:'更多设置',exact:true});
+ if(await toggle.getAttribute('aria-expanded')==='true')await toggle.click();
+ await expect(toggle).toHaveAttribute('aria-expanded','false');
 }
 
 async function expectPickerContent(picker,selected){

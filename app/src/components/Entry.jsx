@@ -1,10 +1,11 @@
-import React,{useEffect,useMemo,useRef,useState} from 'react';
-import {Compass,Plus,LogIn,ArrowRight,UserRound,ScanLine,Link,CameraOff,CalendarDays,MapPin} from 'lucide-react';
+import React,{useEffect,useMemo,useRef,useState,useId} from 'react';
+import {Compass,Plus,LogIn,ArrowRight,UserRound,ScanLine,Link,CameraOff,CalendarDays,MapPin,ChevronRight} from 'lucide-react';
 import {Modal,Field,AsyncButton,IconButton,Empty,errorMessage,useDraft} from './ui.jsx';
 import {dateAdd,dateRangeDays} from '../domain.js';
 import {resolveDestinationTimezone} from '../amap.js';
 import {migrateTimezoneChoice,validTimezone,timezoneLabel} from '../destination-timezone.js';
 import TeamModePicker from './TeamModePicker.jsx';
+import './entry.css';
 export {default as Login} from './Login.jsx';
 export function CreateTrip({journey:j,onClose}) {
  const localZone=Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -12,6 +13,7 @@ export function CreateTrip({journey:j,onClose}) {
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[extraOpen,setExtraOpen]=useState(false);
  const [lookup,setLookup]=useState({destination:'',status:'idle',timezone:null,error:''});
  const lookupSequence=useRef(0);
+ const extraId=useId();
  const form={...draft,teamMode:draft.teamMode||'admin',endDate:draft.endDate??(draft.startDate&&Number(draft.dayCount)>0?dateAdd(draft.startDate,Number(draft.dayCount)-1):''),timezoneChoice:migrateTimezoneChoice(draft)};
  const destination=form.destination.trim(),automatic=form.timezoneChoice==='destination';
  const destinationTimezone=lookup.destination===destination&&lookup.status==='ready'?lookup.timezone:null;
@@ -57,10 +59,13 @@ export function CreateTrip({journey:j,onClose}) {
     <Field label="结束日期"><input type="date" required min={form.startDate||undefined} max={form.startDate?dateAdd(form.startDate,364):undefined} value={form.endDate} onChange={e=>update('endDate',e.target.value)}/></Field>
    </div>
    <TeamModePicker value={form.teamMode} onChange={mode=>update('teamMode',mode)} disabled={busy}/>
-   <details className="trip-extra-settings" open={extraOpen} onToggle={event=>setExtraOpen(event.currentTarget.open)}><summary>更多设置</summary>
+   <div className="trip-extra-settings">
+    <button type="button" className="trip-extra-toggle" aria-expanded={extraOpen} aria-controls={extraId} onClick={()=>setExtraOpen(open=>!open)}><ChevronRight size={15} aria-hidden="true"/>更多设置</button>
+    <div id={extraId} className="trip-extra-content" data-open={extraOpen} inert={!extraOpen} aria-hidden={!extraOpen}><div className="trip-extra-inner">
     <Field label="旅程时区" error={automatic&&lookup.destination===destination&&lookup.status==='error'?lookup.error:undefined}><select value={form.timezoneChoice} onChange={e=>update('timezoneChoice',e.target.value)}><option value="destination">{automaticLabel}</option>{zoneOptions.map(zone=><option value={zone.value} key={zone.value}>{zone.label}</option>)}</select></Field>
     <Field label="记账币种"><select value={form.currency} onChange={e=>update('currency',e.target.value)}>{['CNY','USD','EUR','JPY','GBP','HKD','KRW','SGD','THB'].map(c=><option key={c}>{c}</option>)}</select></Field>
-   </details>
+    </div></div>
+   </div>
    {error&&<p className="field-error" role="alert">{error}</p>}
    <button className="primary full" disabled={busy||pending} type="submit">{busy?'正在创建…':pending?'正在确认时区…':'创建旅程'}<ArrowRight size={17}/></button>
   </form>

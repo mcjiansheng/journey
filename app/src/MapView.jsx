@@ -6,7 +6,10 @@ import {destinationKey,validCenter,planMapCamera,resolveMapCamera,cameraContext}
 import MapRoutePicker from './components/MapRoutePicker.jsx';
 import SelectionTrack from './components/SelectionTrack.jsx';
 import {reducedMotion} from './usePageNavigation.js';
+import {createMapMarker} from './map-marker.js';
+import PlaceInformation from './components/PlaceInformation.jsx';
 import './map.css';
+import './map-markers.css';
 
 const located=p=>Number.isFinite(p?.lng)&&Number.isFinite(p?.lat);
 const keyOf=p=>p?.providerPlaceId?`amap:${p.providerPlaceId}`:JSON.stringify([p?.name,p?.address,p?.lng,p?.lat]);
@@ -17,11 +20,12 @@ export default function MapView({journey:j,onEditActivity}) {
  const [query,setQuery]=useState(initial.query||''),[results,setResults]=useState([]),[suggestions,setSuggestions]=useState([]),[selected,setSelected]=useState(initialPlace||null),[mode,setMode]=useState(initialPlace?'detail':'browse'),[expanded,setExpanded]=useState(false),[error,setError]=useState(''),[mapError,setMapError]=useState(''),[busy,setBusy]=useState(false),[ready,setReady]=useState(0),[mapEpoch,setMapEpoch]=useState(0),[routeDay,setRouteDay]=useState(initial.dayId||initial.routeDay||''),[filter,setFilter]=useState(initial.filter||{category:'全部',arranged:'全部'}),[filterDraft,setFilterDraft]=useState(filter),[manual,setManual]=useState({name:'',address:''}),[keyboardOpen,setKeyboardOpen]=useState(false),[cameraChoice,setCameraChoice]=useState(null),[cameraLoading,setCameraLoading]=useState(false);
  const panelAnimation=useRef(null),panelHeight=useRef(null),filterButton=useRef(null);
  const [composing,setComposing]=useState(false),[searchStatus,setSearchStatus]=useState('idle'),[searchAttempt,setSearchAttempt]=useState(0),[placeLoading,setPlaceLoading]=useState(false);
+ const [placeInformation,setPlaceInformation]=useState(null);
+ const restoredInformation=useRef(false);
  const canvas=useRef(null),panel=useRef(null),map=useRef(null),markers=useRef([]),lines=useRef([]),searchSeq=useRef(0),selectionSeq=useRef(0),pointClickTimer=useRef(null),cameraTimer=useRef(null),lastContext=useRef(initial),alive=useRef(true),snapshotRef=useRef(snapshot),selectRef=useRef(null),pickRef=useRef(null),modeRef=useRef(mode);
  modeRef.current=mode;
  snapshotRef.current=snapshot;
- const cameraGeneration=useRef(0),cameraIntent=useRef(0),activityIntent=useRef(initial.selectedActivityId||null),consumedChoice=useRef(null);
- const selectedPlaceRef=useRef(selected);selectedPlaceRef.current=selected;
+ const cameraGeneration=useRef(0),cameraIntent=useRef(0),activityIntent=useRef(initial.selectedActivityId||null),consumedChoice=useRef(null),cameraRequest=useRef(0);
  const favorites=snapshot.objects.filter(x=>x.kind==='favorite'&&x.state==='active');
  const days=visibleDays(snapshot);
  const activeDayIds=new Set(snapshot.objects.filter(x=>x.kind==='day'&&x.state==='active').map(x=>x.id));
@@ -37,7 +41,6 @@ export default function MapView({journey:j,onEditActivity}) {
    panelHeight.current=after;
    if(before!==null&&Math.abs(after-before)>1&&!reducedMotion())
      panelAnimation.current=element.animate([{height:`${before}px`},{height:`${after}px`}],{duration:220,easing:'cubic-bezier(.2,.7,.2,1)'});
-   if(mode==='detail'&&selected&&before!==null&&Math.abs(after-before)>1)shiftCamera(selected);
  },[mode,expanded,selected,results,suggestions,error,filter,favorites.length]);
  useEffect(()=>()=>panelAnimation.current?.cancel(),[]);
  useLayoutEffect(()=>{if(mode==='filter'||mode==='pick')panel.current.querySelector('.map-panel-title button')?.focus()},[mode]);
@@ -45,15 +48,20 @@ export default function MapView({journey:j,onEditActivity}) {
  const saveMap=patch=>{lastContext.current={...lastContext.current,...patch};j.setContext({map:lastContext.current});};
  selectRef.current=(p,options)=>choose(p,options);
  pickRef.current=point=>pickAt(point);
- useEffect(()=>{let width=innerWidth,height=window.visualViewport?.height||innerHeight;const resize=()=>{const v=window.visualViewport,nextHeight=v?.height||innerHeight;document.documentElement.style.setProperty('--visual-height',`${nextHeight}px`);setKeyboardOpen(!!v&&innerHeight-v.height-v.offsetTop>100);if(width!==innerWidth||height!==nextHeight){width=innerWidth;height=nextHeight;shiftCamera(selectedPlaceRef.current);}};resize();window.visualViewport?.addEventListener('resize',resize);return()=>window.visualViewport?.removeEventListener('resize',resize);},[]);
+ useEffect(()=>{const resize=()=>{const v=window.visualViewport,nextHeight=v?.height||innerHeight;document.documentElement.style.setProperty('--visual-height',`${nextHeight}px`);setKeyboardOpen(!!v&&innerHeight-v.height-v.offsetTop>100);};resize();window.visualViewport?.addEventListener('resize',resize);return()=>window.visualViewport?.removeEventListener('resize',resize);},[]);
  useEffect(()=>{saveMap({query,selected,routeDay,filter});},[query,selected,routeDay,filter]);
+ useEffect(()=>{
+   if(!ready||restoredInformation.current)return;
+   restoredInformation.current=true;
+   if(selected?.providerPlaceId&&modeRef.current==='detail'&&!placeLoading)hydratePlace(selected,selectionSeq.current,false,cameraIntent.current,true);
+ },[ready]);
  useEffect(()=>{
    alive.current=true;let instance,disposed=false,initialized=false,userMoved=false;
    const generation=++cameraGeneration.current,entryIntent=cameraIntent.current,controller=new AbortController();
    setMapError('');setCameraLoading(true);
    const currentActivity=activityIntent.current?snapshotRef.current.objects.find(o=>o.id===activityIntent.current&&o.kind==='activity'&&o.state==='active'&&snapshotRef.current.objects.some(d=>d.id===o.payload.dayId&&d.state==='active')):null;
    const plan=planMapCamera({destination:trip.destination,saved:lastContext.current,activityPlace:currentActivity?.payload.place,userPlace:cameraChoice&&cameraChoice!==consumedChoice.current&&cameraChoice.destination===destinationKey(trip.destination)?cameraChoice.place:null,favorites:snapshotRef.current.objects.filter(o=>o.kind==='favorite'&&o.state==='active')});
-   if(plan.source==='destination'&&!currentActivity&&lastContext.current.cameraDestination!==destinationKey(trip.destination)){selectedPlaceRef.current=null;setSelected(null);setMode('browse');}
+   if(plan.source==='destination'&&!currentActivity&&lastContext.current.cameraDestination!==destinationKey(trip.destination)){setSelected(null);setMode('browse');}
    function current(){return !disposed&&generation===cameraGeneration.current;}
    function persistCamera(source='viewport',extra={}){
      if(!current()||map.current!==instance||!initialized)return;
@@ -76,10 +84,13 @@ export default function MapView({journey:j,onEditActivity}) {
      instance.on('moveend',()=>persistCamera());
      instance.on('zoomend',()=>persistCamera());
      instance.on('dragstart',()=>{userMoved=true;cameraIntent.current++;clearTimeout(cameraTimer.current);instance.stopMove?.();});
+     // Also invalidate pending navigation on wheel, pinch or zoom-control input.
+     // Do not stopMove here: this event also accompanies our own camera transition.
+     instance.on('zoomstart',()=>{userMoved=true;cameraIntent.current++;clearTimeout(cameraTimer.current);});
      instance.on('hotspotclick',event=>{
        if(!current()||!['browse','search','detail','pick','list'].includes(modeRef.current))return;
        clearTimeout(pointClickTimer.current);
-       selectRef.current(normalizePlace({...event,location:event.lnglat}),{details:true});
+       selectRef.current(normalizePlace({...event,location:event.lnglat}),{details:true,moveCamera:false});
      });
      instance.on('click',event=>{
        if(!current()||modeRef.current!=='pick')return;
@@ -95,10 +106,11 @@ export default function MapView({journey:j,onEditActivity}) {
  useEffect(()=>{
    if(!map.current||!window.AMap)return;
    const AMap=window.AMap,m=map.current;m.remove(markers.current);m.remove(lines.current);markers.current=[];lines.current=[];
-   const add=(p,label,className,order)=>{if(!located(p))return;const node=document.createElement('button');node.type='button';node.className=`place-marker ${className||''}`;node.textContent=label;node.setAttribute('aria-label',p.name);const marker=new AMap.Marker({position:[p.lng,p.lat],content:node,offset:new AMap.Pixel(-17,-17),zIndex:order||10});marker.on('click',()=>selectRef.current(p));markers.current.push(marker);};
-   visibleFavorites.forEach(o=>add(o.payload,'★',isArranged(o.payload)?'arranged':''));
-   routeActivities.forEach((a,i)=>add(a.payload.place,String(i+1),'route-marker',20));
-   if(selected)add(selected,'•','selected-marker',30);
+   const add=(p,options={})=>{if(!located(p))return;const node=createMapMarker(p,options);const marker=new AMap.Marker({position:[p.lng,p.lat],content:node,offset:new AMap.Pixel(-22,options.selected?-44:-22),zIndex:options.selected?30:options.order!==undefined?20:10});marker.on('click',()=>selectRef.current(p,{preservePlace:true,moveCamera:false}));markers.current.push(marker);};
+   const isSelected=p=>selected&&keyOf(p)===keyOf(selected);
+   visibleFavorites.filter(o=>!isSelected(o.payload)&&!routeActivities.some(a=>keyOf(a.payload.place)===keyOf(o.payload))).forEach(o=>add(o.payload,{saved:true,arranged:isArranged(o.payload)}));
+   routeActivities.forEach((a,i)=>{if(!isSelected(a.payload.place))add(a.payload.place,{order:i+1})});
+   if(selected)add(selected,{selected:true,saved:favorites.some(o=>keyOf(o.payload)===keyOf(selected))});
    for(let i=1;i<routeActivities.length;i++){
      const from=routeActivities[i-1],to=routeActivities[i];
      if(!located(from.payload.place)||!located(to.payload.place))continue;
@@ -147,45 +159,57 @@ export default function MapView({journey:j,onEditActivity}) {
  function shiftCamera(p,allowInitialize=false){
    if(!located(p))return;
    if(!map.current){if(allowInitialize)setCameraChoice({place:p,destination:destinationKey(trip.destination)});return;}
-   clearTimeout(cameraTimer.current);const targetMap=map.current,intent=cameraIntent.current;
+   clearTimeout(cameraTimer.current);const targetMap=map.current,intent=cameraIntent.current,request=++cameraRequest.current;
    cameraTimer.current=setTimeout(async()=>{
-     // Retargeting the panel can cancel one animation and start another. Use its
-     // settled bounds so a growing detail panel cannot cover the selected marker.
+     // One camera transition targets the space beside/below the settled panel.
+     // Panel updates themselves never change the user's viewport.
      while(panelAnimation.current?.playState==='running')await panelAnimation.current.finished.catch(()=>{});
-     if(map.current!==targetMap||cameraIntent.current!==intent)return;
-     targetMap.setZoomAndCenter(Math.max(15,targetMap.getZoom()),[p.lng,p.lat],true);
-     const r=panel.current?.getBoundingClientRect();if(!r)return;
+     if(map.current!==targetMap||cameraIntent.current!==intent||cameraRequest.current!==request)return;
+     const r=panel.current?.getBoundingClientRect(),canvasBounds=canvas.current?.getBoundingClientRect();
+     if(!r||!canvasBounds)return;
+     const zoom=Math.max(15,targetMap.getZoom());
+     let offsetX=0,offsetY=0;
      if(innerWidth<=760){
        const viewport=window.visualViewport,viewportBottom=(viewport?.offsetTop||0)+(viewport?.height||innerHeight);
        const navigation=document.querySelector('.bottom-nav')?.getBoundingClientRect();
        const bottom=Math.min(viewportBottom,navigation?.height?navigation.top:viewportBottom);
-       const canvasBounds=canvas.current.getBoundingClientRect();
-       targetMap.panBy(0,(r.bottom+bottom)/2-(canvasBounds.top+canvasBounds.height/2),0);
-     }else targetMap.panBy((r.width+80)/2,0,0);
+       offsetY=(r.bottom+bottom)/2-(canvasBounds.top+canvasBounds.height/2);
+     }else offsetX=(r.width+80)/2;
+     const point=targetMap.lngLatToPixel([p.lng,p.lat],zoom);
+     const center=targetMap.pixelToLngLat(new window.AMap.Pixel(point.x-offsetX,point.y-offsetY),zoom);
+     targetMap.setZoomAndCenter(zoom,center,reducedMotion(),360);
    },60);
  }
+
  function beginTask(nextMode){
-   selectionSeq.current++;searchSeq.current++;clearTimeout(pointClickTimer.current);
+   selectionSeq.current++;searchSeq.current++;cameraIntent.current++;clearTimeout(cameraTimer.current);clearTimeout(pointClickTimer.current);map.current?.stopMove?.();
    setBusy(false);setPlaceLoading(false);setError('');modeRef.current=nextMode;setMode(nextMode);
  }
- function showPlace(p){
-   setSelected(p);modeRef.current='detail';setMode('detail');setExpanded(false);
-   document.activeElement?.blur?.();shiftCamera(p,true);
+ function showPlace(p,moveCamera){
+   setSelected(p);setPlaceInformation(null);modeRef.current='detail';setMode('detail');setExpanded(false);
+   document.activeElement?.blur?.();if(moveCamera)shiftCamera(p,true);
  }
- async function choose(p,{details=false}={}){
-   beginTask('detail');const sequence=selectionSeq.current;cameraIntent.current++;showPlace(p);
-   if(!p.providerPlaceId||(!details&&located(p)))return;
+ async function choose(p,{moveCamera=true,preservePlace=false}={}){
+   beginTask('detail');const sequence=selectionSeq.current,intent=cameraIntent.current;showPlace(p,moveCamera);
+   if(p.providerPlaceId)await hydratePlace(p,sequence,moveCamera&&!located(p),intent,preservePlace);
+ }
+ async function hydratePlace(p,sequence,moveCamera,intent,preservePlace=false){
    setPlaceLoading(true);
    try{
      const detail=await placeDetail(p.providerPlaceId);
      if(sequence!==selectionSeq.current||!alive.current)return;
-     if(detail){setSelected(detail);shiftCamera(detail,true);}
+     if(detail){
+       const {information,...place}=detail;
+       setSelected(preservePlace&&located(p)?p:place);
+       setPlaceInformation(information);
+       if(moveCamera&&cameraIntent.current===intent)shiftCamera(place,true);
+     }
    }catch(e){if(sequence===selectionSeq.current&&alive.current)setError(e.message);}
    finally{if(sequence===selectionSeq.current&&alive.current)setPlaceLoading(false);}
  }
  async function pickAt(point){
    const p=normalizePlace({name:'选定位置',location:point});if(!located(p))return;
-   beginTask('detail');const sequence=selectionSeq.current;cameraIntent.current++;showPlace(p);setPlaceLoading(true);
+   beginTask('detail');const sequence=selectionSeq.current;showPlace(p,false);setPlaceLoading(true);
    try{
      const detail=await reverseGeocode(p.lng,p.lat);
      if(sequence===selectionSeq.current&&alive.current)setSelected({...detail,name:detail.name||p.name});
@@ -232,8 +256,8 @@ export default function MapView({journey:j,onEditActivity}) {
       mode==='pick'?<div className="map-panel-title"><h2>点击地图选择位置</h2><button onClick={closeTask}>取消</button></div>:
       <><div className="map-search-row"><Search size={20}/><input aria-label="搜索地点" placeholder="搜索地点或地址" value={query} onFocus={()=>{if(mode!=='search')beginTask('search');setExpanded(true)}} onChange={e=>updateQuery(e.target.value)} onCompositionStart={()=>{searchSeq.current++;setComposing(true);setResults([]);setSuggestions([]);setSearchStatus('idle')}} onCompositionEnd={e=>{setComposing(false);updateQuery(e.currentTarget.value)}} onKeyDown={e=>{if(e.key==='Enter'&&!e.nativeEvent.isComposing&&!composing){e.preventDefault();setSearchAttempt(n=>n+1)}}}/>{mode==='search'?<button onClick={closeTask}>取消</button>:<button className="map-icon" aria-label="查看收藏列表" aria-expanded={mode==='list'} onClick={()=>{if(mode==='list')closeTask();else{beginTask('list');setExpanded(true)}}}><List size={20}/></button>}</div>
       {mode==='search'?<div className="map-panel-scroll"><div className="map-small-actions"><button onClick={()=>{beginTask('pick');setExpanded(false);document.activeElement?.blur?.()}} disabled={!map.current}><MapPin size={16}/>地图选点</button><button onClick={()=>{setSelected(null);setManual({name:query,address:''});beginTask('manual')}}>手动填写</button></div>{searchStatus==='loading'&&<p role="status">正在查找…</p>}{searchStatus==='error'&&<div className="map-search-error"><p role="alert">地点搜索暂时不可用，请重试</p><button onClick={()=>setSearchAttempt(n=>n+1)}><RefreshCw size={16}/>重试</button></div>}{searchStatus==='success'&&results.length===0&&suggestions.length===0&&<p className="map-empty" role="status">没有找到相关地点</p>}{suggestions.map((p,i)=><button key={keyOf(p)+i} className="map-result" onClick={()=>{const match=results.find(r=>r.name===p.name);p.providerPlaceId||located(p)?choose(p):match?choose(match):updateQuery(p.name)}}><Search size={17}/><span><strong>{p.name}</strong>{p.address&&<small>{p.address}</small>}</span></button>)}{results.map((p,i)=><button key={keyOf(p)+i} className="map-result" onClick={()=>choose(p)}><MapPin size={18}/><span><strong>{p.name}</strong>{p.address&&<small>{p.address}</small>}</span></button>)}</div>:
-       mode==='detail'&&selected?<div className="map-panel-scroll"><div className="map-panel-title"><h2>{selected.name}</h2><button className="map-icon" aria-label="关闭地点" onClick={()=>{setSelected(null);beginTask('browse')}}><X size={18}/></button></div>{selected.address&&<p className="place-address">{selected.address}</p>}{placeLoading&&<p role="status">正在载入地点…</p>}<div className="map-actions"><button className="primary" disabled={placeLoading} onClick={startActivity}><Plus size={18}/>加入行程</button><button disabled={busy||placeLoading||selectedFavorite?.state==='active'} onClick={favorite}><Star size={18}/>{selectedFavorite?.state==='active'?'已收藏':'收藏'}</button></div>{arranged.length>0&&<div className="place-visits">{arranged.map(a=><button key={a.id} onClick={()=>onEditActivity(a)}>{snapshot.objects.find(d=>d.id===a.payload.dayId)?.payload.date||dayLabel(snapshot.objects.find(d=>d.id===a.payload.dayId)||{payload:{ordinal:1}},trip)} · {a.payload.title}</button>)}</div>}<button className="map-details-toggle" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}>{expanded?'收起操作':'更多操作'}{expanded?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button>{expanded&&<><button className="map-text-action" onClick={()=>{setManual({name:selected.name,address:selected.address,category:selected.category});beginTask('manual')}}>编辑地点资料</button>{located(selected)&&<a className="map-text-action" target="_blank" rel="noreferrer" href={`https://uri.amap.com/navigation?to=${selected.lng},${selected.lat},${encodeURIComponent(selected.name)}&mode=car&coordinate=gaode&callnative=1`}><Navigation size={16}/>导航到这里</a>}{selectedFavorite?.state==='active'&&<button className="map-text-action" onClick={removeFavorite}>{canDelete?'取消团队收藏':'希望删除此收藏'}</button>}</>}</div>:
-       (mode==='list'||expanded)?<div className="map-panel-scroll"><div className="map-panel-title"><h2>共享收藏</h2><button onClick={()=>{setSelected(null);setManual({name:'',address:''});beginTask('manual')}}><Plus size={18}/>添加</button></div>{visibleFavorites.length===0?<p className="map-empty">{favorites.length?'没有符合筛选的收藏':'还没有收藏地点'}</p>:visibleFavorites.map(o=><button className="map-result" key={o.id} onClick={()=>choose(o.payload)}><Star size={18}/><span><strong>{o.payload.name}</strong>{o.payload.address&&<small>{o.payload.address}</small>}<small>{category(o.payload)}{isArranged(o.payload)?' · 已安排':''}</small></span></button>)}</div>:null}</>}
+       mode==='detail'&&selected?<div className="map-panel-scroll"><div className="map-panel-title"><h2>{selected.name}</h2><button className="map-icon" aria-label="关闭地点" onClick={()=>{setSelected(null);beginTask('browse')}}><X size={18}/></button></div>{selected.address&&<p className="place-address">{selected.address}</p>}<PlaceInformation place={{...selected,information:placeInformation}} expanded={expanded}/>{placeLoading&&<p role="status">正在载入地点…</p>}<div className="map-actions"><button className="primary" disabled={placeLoading&&!located(selected)} onClick={startActivity}><Plus size={18}/>加入行程</button><button disabled={busy||(placeLoading&&!located(selected))||selectedFavorite?.state==='active'} onClick={favorite}><Star size={18}/>{selectedFavorite?.state==='active'?'已收藏':'收藏'}</button></div>{arranged.length>0&&<div className="place-visits">{arranged.map(a=><button key={a.id} onClick={()=>onEditActivity(a)}>{snapshot.objects.find(d=>d.id===a.payload.dayId)?.payload.date||dayLabel(snapshot.objects.find(d=>d.id===a.payload.dayId)||{payload:{ordinal:1}},trip)} · {a.payload.title}</button>)}</div>}<button className="map-details-toggle" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)}>{expanded?'收起操作':'更多操作'}{expanded?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button>{expanded&&<><button className="map-text-action" onClick={()=>{setManual({name:selected.name,address:selected.address,category:selected.category});beginTask('manual')}}>编辑地点资料</button>{located(selected)&&<a className="map-text-action" target="_blank" rel="noreferrer" href={`https://uri.amap.com/navigation?to=${selected.lng},${selected.lat},${encodeURIComponent(selected.name)}&mode=car&coordinate=gaode&callnative=1`}><Navigation size={16}/>导航到这里</a>}{selectedFavorite?.state==='active'&&<button className="map-text-action" onClick={removeFavorite}>{canDelete?'取消团队收藏':'希望删除此收藏'}</button>}</>}</div>:
+       (mode==='list'||expanded)?<div className="map-panel-scroll"><div className="map-panel-title"><h2>共享收藏</h2><button onClick={()=>{setSelected(null);setManual({name:'',address:''});beginTask('manual')}}><Plus size={18}/>添加</button></div>{visibleFavorites.length===0?<p className="map-empty">{favorites.length?'没有符合筛选的收藏':'还没有收藏地点'}</p>:visibleFavorites.map(o=><button className="map-result" key={o.id} onClick={()=>choose(o.payload,{preservePlace:true})}><Star size={18}/><span><strong>{o.payload.name}</strong>{o.payload.address&&<small>{o.payload.address}</small>}<small>{category(o.payload)}{isArranged(o.payload)?' · 已安排':''}</small></span></button>)}</div>:null}</>}
      {error&&<p className="map-error" role="alert">{error}</p>}
    </div>
  </section>;

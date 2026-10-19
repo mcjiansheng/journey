@@ -1,6 +1,7 @@
 import AMapLoader from '@amap/amap-jsapi-loader';
 import { api } from './sync';
 import {timezoneFromGeocodes} from './destination-timezone.js';
+import {normalizePlaceInformation} from './place-information.js';
 
 let promise;
 export async function loadAmap(config) {
@@ -52,8 +53,9 @@ export async function suggestPlaces(query,city='') {
  return result?.tips?.map(normalizePlace)||[];
 }
 export async function placeDetail(id) {
- const AMap=await loadAmap();const result=await call(new AMap.PlaceSearch({extensions:'base'}),'getDetails',[id]);
- return result?.poiList?.pois?.[0]?normalizePlace(result.poiList.pois[0]):null;
+ const AMap=await loadAmap();const result=await call(new AMap.PlaceSearch({extensions:'all'}),'getDetails',[id]);
+ const poi=result?.poiList?.pois?.[0];
+ return poi?{...normalizePlace(poi),information:normalizePlaceInformation(poi)}:null;
 }
 async function geocodeResponse(address,city='',{signal}={}) {
  if(signal?.aborted)throw signal.reason||new DOMException('地图查询已取消','AbortError');

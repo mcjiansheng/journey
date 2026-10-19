@@ -3,14 +3,14 @@ import {fileURLToPath} from 'node:url';
 import {createApp,shutdownServer} from '../../server/index.mjs';
 
 let app,server,base;
-test.beforeAll(async()=>{
+test.beforeEach(async()=>{
  app=createApp({distPath:fileURLToPath(new URL('../../dist/',import.meta.url)),databasePath:':memory:',securityPath:':memory:'});
  server=await new Promise(resolve=>{const listener=app.listen(0,'127.0.0.1',()=>resolve(listener))});
  const api=`http://127.0.0.1:${server.address().port}`;
  base=api;
  app.locals.config.appOrigin=base;
 });
-test.afterAll(async()=>{if(server)await shutdownServer(server,app)});
+test.afterEach(async()=>{if(server)await shutdownServer(server,app)});
 
 async function setup(page,{favoriteCount=1}={}){
  await page.goto(base);
