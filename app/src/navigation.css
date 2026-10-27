@@ -146,15 +146,18 @@
  }
  .app-shell .header-right {grid-template-columns:auto 112px auto}
  .map-trip-title {
-  display:grid;grid-template-columns:0fr;opacity:0;visibility:hidden;
-  transition:grid-template-columns 300ms var(--navigation-ease),opacity 140ms ease,visibility 0s linear 300ms;
+  display:grid;grid-template-columns:0fr;justify-content:end;visibility:hidden;
+  transition:grid-template-columns 300ms var(--navigation-ease),visibility 0s linear 300ms;
  }
- .map-trip-title>span {min-width:0;overflow:hidden}
+ /* Keep the complete label anchored beside sync while its background grows. */
+ .map-trip-title>span {min-width:0;display:flex;justify-content:flex-end}
  .map-trip-title>span>span {
-  display:block;max-width:180px;padding:0 12px;overflow:hidden;text-overflow:ellipsis;
+  display:block;flex:0 0 auto;width:max-content;max-width:180px;padding:0 12px;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap;font-size:16px;font-weight:600;line-height:44px;
+  opacity:0;transition:opacity 100ms ease;
  }
- .map-shell .map-trip-title {grid-template-columns:1fr;opacity:1;visibility:visible;transition-delay:0s}
+ .map-shell .map-trip-title {grid-template-columns:1fr;visibility:visible;transition-delay:0s}
+ .map-shell .map-trip-title>span>span {opacity:1;transition-delay:200ms}
 }
 @media(min-width:761px) and (max-width:1000px){
  :root {--map-controls-top:84px}

@@ -24,8 +24,8 @@ async function register(page){
  await page.getByLabel('确认密码',{exact:true}).fill(password);await page.getByRole('button',{name:'创建账号并继续'}).click();
  await expect(page.getByRole('button',{name:'创建旅程',exact:true})).toBeVisible();
 }
-async function createTrip(page){
- await page.getByRole('button',{name:'创建旅程',exact:true}).click();await page.getByLabel('旅程名称').fill('地图控件验收旅程');
+async function createTrip(page,name='地图控件验收旅程'){
+ await page.getByRole('button',{name:'创建旅程',exact:true}).click();await page.getByLabel('旅程名称').fill(name);
  await page.getByLabel('目的地',{exact:true}).fill('南京');await page.getByLabel('出发日期',{exact:true}).fill('2026-11-01');
  await page.getByRole('button',{name:'更多设置',exact:true}).click();await page.getByLabel('旅程时区',{exact:true}).selectOption('Asia/Shanghai');await page.getByLabel('结束日期',{exact:true}).fill('2026-11-03');
  await page.getByRole('radio',{name:'平等团队',exact:true}).check();await page.getByRole('dialog').getByRole('button',{name:'创建旅程'}).click();
@@ -59,15 +59,15 @@ test('map controls align, fit the viewport, and return home',async({page})=>{
  await expect(page.getByRole('button',{name:/继续旅程/})).toContainText('地图控件验收旅程');
 });
 
-for(const engine of ['Chrome','WebKit'])test(`${engine}: map title grows from the sync capsule and the search panel moves into the top row`,async({page})=>{
+for(const engine of ['Chrome','WebKit'])for(const tripTitle of ['南京','地图控件验收旅程'])test(`${engine}: map title grows from the sync capsule with the complete label ${tripTitle}`,async({page})=>{
  const browser=engine==='WebKit'?await launchWebKit():null;
  if(browser)page=await browser.newPage();
  try{
- await page.setViewportSize({width:1440,height:900});await register(page);await createTrip(page);
+ await page.setViewportSize({width:1440,height:900});await register(page);await createTrip(page,tripTitle);
  const sample=await page.evaluate(async()=>{
   const measure=()=>{
    const rect=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return{x:r.x,right:r.right,y:r.y,width:r.width}};
-   return{capsule:rect('.header-right'),title:rect('.map-trip-title'),sync:rect('.sync-status'),leftTitle:rect('.trip-title'),leftOpacity:Number(getComputedStyle(document.querySelector('.trip-title')).opacity)};
+   return{capsule:rect('.header-right'),title:rect('.map-trip-title'),label:rect('.map-trip-title>span>span'),labelOpacity:Number(getComputedStyle(document.querySelector('.map-trip-title>span>span')).opacity),sync:rect('.sync-status'),leftTitle:rect('.trip-title'),leftOpacity:Number(getComputedStyle(document.querySelector('.trip-title')).opacity)};
   };
   const before=measure(),frames=[];document.querySelector('nav[aria-label="主导航"] button[aria-label="地图"]').click();
   const start=performance.now();while(performance.now()-start<450){await new Promise(requestAnimationFrame);frames.push(measure())}
@@ -76,13 +76,18 @@ for(const engine of ['Chrome','WebKit'])test(`${engine}: map title grows from th
  expect(sample.before.title.width).toBe(0);expect(sample.after.title.width).toBeGreaterThan(40);
  expect(sample.frames.some(f=>f.title.width>2&&f.title.width<sample.after.title.width-2)).toBe(true);
  expect(sample.frames.some(f=>f.leftOpacity>0&&f.leftOpacity<1)).toBe(true);
+ expect(sample.frames.some(f=>f.labelOpacity>0&&f.labelOpacity<1)).toBe(true);
+ expect(sample.after.labelOpacity).toBe(1);
  for(const frame of sample.frames){
   expect(frame.capsule.right).toBeCloseTo(sample.before.capsule.right,0);
   expect(frame.sync.x).toBeCloseTo(sample.before.sync.x,0);
   expect(frame.leftTitle.x).toBeCloseTo(sample.before.leftTitle.x,0);
   expect(frame.title.right).toBeCloseTo(sample.after.title.right,0);
+  expect(frame.label.width).toBeCloseTo(sample.after.label.width,0);
+  expect(frame.label.x).toBeCloseTo(sample.after.label.x,0);
+  if(frame.labelOpacity>.01)expect(frame.label.x+12).toBeGreaterThanOrEqual(frame.capsule.x);
  }
- await expect(page.locator('.trip-title')).toBeHidden();await expect(page.locator('.map-trip-title')).toContainText('地图控件验收旅程');
+ await expect(page.locator('.trip-title')).toBeHidden();await expect(page.locator('.map-trip-title')).toContainText(tripTitle);
  const panel=await page.locator('.map-panel').boundingBox();expect(panel.y).toBe(20);expect(panel.x).toBe(108);
  await screenshot(page,'title-capsule-desktop');
  // Long names and a full avatar stack fit both sidebar preferences.
@@ -105,6 +110,7 @@ for(const engine of ['Chrome','WebKit'])test(`${engine}: map title grows from th
  await page.getByRole('navigation',{name:'主导航',exact:true}).getByRole('button',{name:'行程',exact:true}).click();
  await page.getByRole('navigation',{name:'主导航',exact:true}).getByRole('button',{name:'地图',exact:true}).click();
  expect(await page.locator('.map-trip-title').evaluate(el=>getComputedStyle(el).transitionDuration.split(',').every(value=>parseFloat(value)===0))).toBe(true);
+ expect(await page.locator('.map-trip-title>span>span').evaluate(el=>({opacity:getComputedStyle(el).opacity,duration:getComputedStyle(el).transitionDuration}))).toEqual({opacity:'1',duration:'0s'});
  }finally{await browser?.close()}
 });
 
