@@ -96,7 +96,7 @@ for(const engine of ['Chrome','WebKit'])for(const tripTitle of ['南京','地图
   const avatar=document.querySelector('.header-right .avatar-stack .avatar');
   avatar.parentElement.append(avatar.cloneNode(true),avatar.cloneNode(true));
  });
- for(const collapse of [true,false])for(const width of [1440,1101,1024,800]){
+ for(const collapse of [true,false])for(const width of [1440,1101,1024,1023,1015,1001,1000,800]){
   await page.evaluate(collapse=>{document.documentElement.dataset.mapSidebarCollapse=String(collapse)},collapse);
   await page.setViewportSize({width,height:900});await checkNoOverflow(page);
   const boxes=await page.evaluate(()=>{

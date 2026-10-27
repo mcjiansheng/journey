@@ -159,7 +159,7 @@
  .map-shell .map-trip-title {grid-template-columns:1fr;visibility:visible;transition-delay:0s}
  .map-shell .map-trip-title>span>span {opacity:1;transition-delay:200ms}
 }
-@media(min-width:761px) and (max-width:1000px){
+@media(min-width:761px) and (max-width:1023px){
  :root {--map-controls-top:84px}
 }
 @media(max-width:760px){
