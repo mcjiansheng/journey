@@ -24,8 +24,8 @@ async function register(page){
  await page.getByLabel('确认密码',{exact:true}).fill(password);await page.getByRole('button',{name:'创建账号并继续'}).click();
  await expect(page.getByRole('button',{name:'创建旅程',exact:true})).toBeVisible();
 }
-async function createTrip(page){
- await page.getByRole('button',{name:'创建旅程',exact:true}).click();await page.getByLabel('旅程名称').fill('地图控件验收旅程');
+async function createTrip(page,name='地图控件验收旅程'){
+ await page.getByRole('button',{name:'创建旅程',exact:true}).click();await page.getByLabel('旅程名称').fill(name);
  await page.getByLabel('目的地',{exact:true}).fill('南京');await page.getByLabel('出发日期',{exact:true}).fill('2026-11-01');
  await page.getByRole('button',{name:'更多设置',exact:true}).click();await page.getByLabel('旅程时区',{exact:true}).selectOption('Asia/Shanghai');await page.getByLabel('结束日期',{exact:true}).fill('2026-11-03');
  await page.getByRole('radio',{name:'平等团队',exact:true}).check();await page.getByRole('dialog').getByRole('button',{name:'创建旅程'}).click();
@@ -44,7 +44,7 @@ async function checkNoOverflow(page){
 
 test('map controls align, fit the viewport, and return home',async({page})=>{
  await page.setViewportSize({width:1440,height:900});await register(page);await createTrip(page);await openMap(page);
- await expect(page.locator('.trip-title')).toContainText('地图控件验收旅程');
+ await expect(page.locator('.map-trip-title')).toContainText('地图控件验收旅程');
  await expect(page.getByRole('button',{name:'我的旅程',exact:true})).toBeVisible();await expect(page.locator('.map-load-error')).toContainText('地图暂时无法载入');
  const geometry=await page.evaluate(()=>{
   const rect=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height}};
@@ -57,6 +57,61 @@ test('map controls align, fit the viewport, and return home',async({page})=>{
  await screenshot(page,'desktop');
  await page.getByRole('button',{name:'我的旅程',exact:true}).click();await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:/继续旅程/})).toContainText('地图控件验收旅程');
+});
+
+for(const engine of ['Chrome','WebKit'])for(const tripTitle of ['南京','地图控件验收旅程'])test(`${engine}: map title grows from the sync capsule with the complete label ${tripTitle}`,async({page})=>{
+ const browser=engine==='WebKit'?await launchWebKit():null;
+ if(browser)page=await browser.newPage();
+ try{
+ await page.setViewportSize({width:1440,height:900});await register(page);await createTrip(page,tripTitle);
+ const sample=await page.evaluate(async()=>{
+  const measure=()=>{
+   const rect=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return{x:r.x,right:r.right,y:r.y,width:r.width}};
+   return{capsule:rect('.header-right'),title:rect('.map-trip-title'),label:rect('.map-trip-title>span>span'),labelOpacity:Number(getComputedStyle(document.querySelector('.map-trip-title>span>span')).opacity),sync:rect('.sync-status'),leftTitle:rect('.trip-title'),leftOpacity:Number(getComputedStyle(document.querySelector('.trip-title')).opacity)};
+  };
+  const before=measure(),frames=[];document.querySelector('nav[aria-label="主导航"] button[aria-label="地图"]').click();
+  const start=performance.now();while(performance.now()-start<450){await new Promise(requestAnimationFrame);frames.push(measure())}
+  return{before,frames,after:measure()};
+ });
+ expect(sample.before.title.width).toBe(0);expect(sample.after.title.width).toBeGreaterThan(40);
+ expect(sample.frames.some(f=>f.title.width>2&&f.title.width<sample.after.title.width-2)).toBe(true);
+ expect(sample.frames.some(f=>f.leftOpacity>0&&f.leftOpacity<1)).toBe(true);
+ expect(sample.frames.some(f=>f.labelOpacity>0&&f.labelOpacity<1)).toBe(true);
+ expect(sample.after.labelOpacity).toBe(1);
+ for(const frame of sample.frames){
+  expect(frame.capsule.right).toBeCloseTo(sample.before.capsule.right,0);
+  expect(frame.sync.x).toBeCloseTo(sample.before.sync.x,0);
+  expect(frame.leftTitle.x).toBeCloseTo(sample.before.leftTitle.x,0);
+  expect(frame.title.right).toBeCloseTo(sample.after.title.right,0);
+  expect(frame.label.width).toBeCloseTo(sample.after.label.width,0);
+  expect(frame.label.x).toBeCloseTo(sample.after.label.x,0);
+  if(frame.labelOpacity>.01)expect(frame.label.x+12).toBeGreaterThanOrEqual(frame.capsule.x);
+ }
+ await expect(page.locator('.trip-title')).toBeHidden();await expect(page.locator('.map-trip-title')).toContainText(tripTitle);
+ const panel=await page.locator('.map-panel').boundingBox();expect(panel.y).toBe(20);expect(panel.x).toBe(108);
+ await screenshot(page,'title-capsule-desktop');
+ // Long names and a full avatar stack fit both sidebar preferences.
+ await page.evaluate(()=>{
+  document.querySelector('.map-trip-title>span>span').textContent='南京及周边城市二十天多人协作旅行计划，包含所有景点与餐厅';
+  const avatar=document.querySelector('.header-right .avatar-stack .avatar');
+  avatar.parentElement.append(avatar.cloneNode(true),avatar.cloneNode(true));
+ });
+ for(const collapse of [true,false])for(const width of [1440,1101,1024,1023,1015,1001,1000,800]){
+  await page.evaluate(collapse=>{document.documentElement.dataset.mapSidebarCollapse=String(collapse)},collapse);
+  await page.setViewportSize({width,height:900});await checkNoOverflow(page);
+  const boxes=await page.evaluate(()=>{
+   const rect=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return{left:r.left,right:r.right,top:r.top,bottom:r.bottom}};
+   return{panel:rect('.map-panel'),capsule:rect('.header-right')};
+  });
+  expect(boxes.capsule.right).toBeLessThanOrEqual(width);
+  expect(boxes.panel.right<=boxes.capsule.left||boxes.panel.top>=boxes.capsule.bottom).toBe(true);
+ }
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.getByRole('navigation',{name:'主导航',exact:true}).getByRole('button',{name:'行程',exact:true}).click();
+ await page.getByRole('navigation',{name:'主导航',exact:true}).getByRole('button',{name:'地图',exact:true}).click();
+ expect(await page.locator('.map-trip-title').evaluate(el=>getComputedStyle(el).transitionDuration.split(',').every(value=>parseFloat(value)===0))).toBe(true);
+ expect(await page.locator('.map-trip-title>span>span').evaluate(el=>({opacity:getComputedStyle(el).opacity,duration:getComputedStyle(el).transitionDuration}))).toEqual({opacity:'1',duration:'0s'});
+ }finally{await browser?.close()}
 });
 
 test('date list supports pointer and keyboard selection, escape, and outside close',async({page})=>{
@@ -219,7 +274,10 @@ for(const width of [1440,1024,390,320])test(`sync and return controls retain the
   if(width>760)expect(frame.homeGap).toBeCloseTo(16,0);
   else for(const axis of ['x','y','width','height'])expect(Math.abs(frame.home[axis]-samples.before.home[axis]),`home.${axis}`).toBeLessThan(1);
   expect(frame.sameNode).toBe(true);expect(frame.text).toBe('已同步');expect(frame.centerError).toBeLessThan(1);
-  for(const part of ['bubble','label','icon'])for(const axis of ['x','y','width','height'])expect(Math.abs(frame[part][axis]-samples.before[part][axis]),`${part}.${axis}`).toBeLessThan(1);
+  for(const part of ['label','icon'])for(const axis of ['x','y','width','height'])expect(Math.abs(frame[part][axis]-samples.before[part][axis]),`${part}.${axis}`).toBeLessThan(1);
+  expect(frame.bubble.x+frame.bubble.width).toBeCloseTo(samples.before.bubble.x+samples.before.bubble.width,0);
+  for(const axis of ['y','height'])expect(frame.bubble[axis]).toBeCloseTo(samples.before.bubble[axis],0);
+  if(width<=760)expect(frame.bubble.width).toBeCloseTo(samples.before.bubble.width,0);
  }
  await openMap(page,{mobile:width<=760});await screenshot(page,`return-position-${width}`);
  await page.getByRole('button',{name:width<=760?'返回我的旅程':'我的旅程',exact:true}).click();await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();

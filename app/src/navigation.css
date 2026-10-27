@@ -20,7 +20,7 @@
 :root .day-tabs.selection-track>button {background:transparent;box-shadow:none}
 .day-content {min-width:0}
 
-/* Keep the same navigation and account anchors across content pages. */
+/* Resize the sidebar surface without scaling its icons or text. */
 @media(min-width:761px) {
   .app-shell:not(.map-shell)>.sidebar,.app-shell.map-shell>.sidebar {
     position:absolute;z-index:5;left:14px;top:50%;bottom:auto;transform:translateY(-50%);
@@ -53,7 +53,18 @@
     transition:opacity 120ms ease 240ms,visibility 0s linear 240ms;white-space:nowrap;
   }
   .app-shell .sidebar-foot {position:absolute;bottom:20px;left:25px;right:25px;padding:0}
-
+  :root:not([data-map-sidebar-collapse=false]) .map-shell>.sidebar {width:72px;height:342px;padding:11px;border-radius:22px}
+  :root:not([data-map-sidebar-collapse=false]) .map-shell .workspace {margin-left:0}
+  :root:not([data-map-sidebar-collapse=false]) .map-shell .sidebar-navigation {left:10px;right:10px;top:11px}
+  :root:not([data-map-sidebar-collapse=false]) .map-shell .sidebar .back-home,
+  :root:not([data-map-sidebar-collapse=false]) .map-shell .sidebar nav.selection-track>button {gap:0}
+  :root:not([data-map-sidebar-collapse=false]) .map-shell .sidebar .back-home>span,
+  :root:not([data-map-sidebar-collapse=false]) .map-shell .sidebar nav button>span {opacity:0}
+  :root:not([data-map-sidebar-collapse=false]) .map-shell .sidebar>.brand,
+  :root:not([data-map-sidebar-collapse=false]) .map-shell .sidebar-foot {
+    display:flex;opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity 100ms ease,visibility 0s;
+  }
 
   .app-shell .trip-header {height:84px;min-height:84px;padding:0 42px;gap:16px}
   .app-shell .trip-title {min-height:44px;padding:0 6px;max-width:50%;flex:0 1 auto;gap:8px}
@@ -64,12 +75,18 @@
   :root .app-shell>.sidebar {width:180px;margin:0;padding-left:17px;padding-right:17px}
 }
 @media(min-width:761px) and (max-height:550px) {
-  .app-shell .sidebar>.brand {visibility:hidden;pointer-events:none}
-  .app-shell .sidebar-navigation {top:max(16px,calc(100dvh - 424px))}
-  .app-shell .sidebar nav.selection-track>button,
-  .app-shell .sidebar .back-home {height:44px;min-height:44px}
-  .app-shell .sidebar .back-home {margin-bottom:8px}
-  .app-shell .sidebar nav button:last-child {margin-top:12px}
+  .app-shell:not(.map-shell) .sidebar>.brand,
+  :root[data-map-sidebar-collapse=false] .map-shell .sidebar>.brand {visibility:hidden;pointer-events:none}
+  .app-shell:not(.map-shell) .sidebar-navigation,
+  :root[data-map-sidebar-collapse=false] .map-shell .sidebar-navigation {top:max(16px,calc(100dvh - 424px))}
+  .app-shell:not(.map-shell) .sidebar nav.selection-track>button,
+  .app-shell:not(.map-shell) .sidebar .back-home,
+  :root[data-map-sidebar-collapse=false] .map-shell .sidebar nav.selection-track>button,
+  :root[data-map-sidebar-collapse=false] .map-shell .sidebar .back-home {height:44px;min-height:44px}
+  .app-shell:not(.map-shell) .sidebar .back-home,
+  :root[data-map-sidebar-collapse=false] .map-shell .sidebar .back-home {margin-bottom:8px}
+  .app-shell:not(.map-shell) .sidebar nav button:last-child,
+  :root[data-map-sidebar-collapse=false] .map-shell .sidebar nav button:last-child {margin-top:12px}
 }
 @media(max-width:760px) {
   .bottom-nav.selection-track {position:fixed}
@@ -83,7 +100,7 @@
   :root:not([data-transparency=false]) .map-shell .header-right {background:var(--surface);backdrop-filter:none;-webkit-backdrop-filter:none}
 }
 
-/* The account controls keep identical screen and internal anchors on every page. */
+/* The right edge stays fixed while the map title expands beside sync. */
 :root {--map-controls-left:calc(var(--sidebar-space) + 24px);--map-controls-width:350px;--map-controls-top:84px}
 .app-shell .trip-header {position:relative}
 .app-shell .header-right {
@@ -104,6 +121,7 @@
   backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
 }
 .header-home {display:none}
+.map-trip-title {display:none}
 @media(max-width:760px) {
   :root {--map-controls-left:14px;--map-controls-width:calc(100vw - 28px);--map-controls-top:calc(72px + env(safe-area-inset-top))}
   .app-shell .header-right {grid-template-columns:36px auto auto;padding:0 4px}
@@ -119,7 +137,30 @@
 }
 
 @media(min-width:761px){
- .map-shell .trip-title{background:var(--glass);border-radius:12px;padding:0 6px;pointer-events:auto}
+ :root {--map-controls-top:20px}
+ :root:not([data-map-sidebar-collapse=false]) .map-shell {--map-controls-left:108px}
+ .app-shell .trip-title {transition:opacity 140ms ease,visibility 0s}
+ .map-shell .trip-title {
+  position:absolute;left:42px;top:20px;opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity 140ms ease,visibility 0s linear 140ms;
+ }
+ .app-shell .header-right {grid-template-columns:auto 112px auto}
+ .map-trip-title {
+  display:grid;grid-template-columns:0fr;justify-content:end;visibility:hidden;
+  transition:grid-template-columns 300ms var(--navigation-ease),visibility 0s linear 300ms;
+ }
+ /* Keep the complete label anchored beside sync while its background grows. */
+ .map-trip-title>span {min-width:0;display:flex;justify-content:flex-end}
+ .map-trip-title>span>span {
+  display:block;flex:0 0 auto;width:max-content;max-width:180px;padding:0 12px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;font-size:16px;font-weight:600;line-height:44px;
+  opacity:0;transition:opacity 100ms ease;
+ }
+ .map-shell .map-trip-title {grid-template-columns:1fr;visibility:visible;transition-delay:0s}
+ .map-shell .map-trip-title>span>span {opacity:1;transition-delay:200ms}
+}
+@media(min-width:761px) and (max-width:1023px){
+ :root {--map-controls-top:84px}
 }
 @media(max-width:760px){
  .app-shell .header-right:has(.sync-status:not(.synced)){grid-template-columns:auto auto auto}

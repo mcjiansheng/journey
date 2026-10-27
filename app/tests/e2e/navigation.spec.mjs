@@ -92,21 +92,21 @@ test('navigation indicator moves across pages and rapid reversals return home cl
  await expect(page.getByRole('button',{name:/继续旅程/})).toContainText('导航动效验收');await screenshot(page,'home');
 });
 
-test('map keeps full sidebar, trip title, and navigation icons stable',async({page})=>{
+test('map collapses its sidebar while navigation icons stay stable',async({page})=>{
  await page.setViewportSize({width:1440,height:900});await register(page);await createTrip(page);
  await screenshot(page,'itinerary-desktop');
  const title=page.locator('.trip-title>span');const before=await page.evaluate(()=>{
   const r=document.querySelector('.trip-title>span').getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height};
  });
  const opening=await sampleSidebarMotion(page,'地图');expectSidebarFramesStable(opening,before);
- await expect(page.locator('.app-shell')).toHaveClass(/map-shell/);await expect.poll(()=>page.locator('.sidebar').evaluate(el=>el.getBoundingClientRect().width)).toBe(200);
+ await expect(page.locator('.app-shell')).toHaveClass(/map-shell/);await expect.poll(()=>page.locator('.sidebar').evaluate(el=>el.getBoundingClientRect().width)).toBe(72);
  await screenshot(page,'map-desktop');
  const compact={width:opening.after.width,top:opening.after.top,height:opening.after.height,center:opening.after.center,title:{x:opening.after.titleX,y:opening.after.titleY},icons:opening.after.icons};
- expect(compact.width).toBe(200);expect(Math.abs(compact.center-450)).toBeLessThan(3);
+ expect(compact.width).toBe(72);expect(Math.abs(compact.center-450)).toBeLessThan(3);
  expect(compact.icons.every(icon=>Math.abs(icon.width-20)<1&&Math.abs(icon.height-20)<1)).toBe(true);
- expect(Math.abs(compact.title.x-before.x)).toBeLessThan(14);await expect(title).toBeVisible();
+ expect(Math.abs(compact.title.x-before.x)).toBeLessThan(14);await expect(title).toBeHidden();await expect(page.locator('.map-trip-title')).toBeVisible();
  const closing=await sampleSidebarMotion(page,'行程');expectSidebarFramesStable(closing,before);
- expect(closing.frames.every(frame=>Math.abs(frame.width-compact.width)<1)).toBe(true);
+ expect(closing.frames.some(frame=>frame.width>compact.width+5&&frame.width<closing.after.width-5)).toBe(true);
  await expect(page.locator('.app-shell')).not.toHaveClass(/map-shell/);await screenshot(page,'map-return');
  writeFileSync(resolve(process.cwd(),'../.local/evidence/navigation-frames.json'),JSON.stringify({opening,closing},null,2));
  const transparency=await page.evaluate(()=>{
