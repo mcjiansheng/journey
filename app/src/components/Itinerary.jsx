@@ -1,10 +1,30 @@
 import SelectionTrack from './SelectionTrack.jsx';
 import {reducedMotion} from '../usePageNavigation.js';
 import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
-import {CalendarDays,Plus,MapPin,Trash2,Route,ChevronRight,MoreHorizontal,GripVertical,RotateCcw} from 'lucide-react';
+import {CalendarDays,Plus,MapPin,Trash2,Route,ChevronLeft,ChevronRight,MoreHorizontal,GripVertical,RotateCcw,Navigation} from 'lucide-react';
 import {Field,Modal,Empty,AsyncButton,active,id,errorMessage} from './ui.jsx';
 import {visibleDays,outsideDays,orderedActivities,routeSignature,dayLabel,timeLabel,travelAdvice} from '../domain.js';
 import {estimateRoute,searchPlaces} from '../amap.js';
+import './itinerary.css';
+
+const routeEstimates=new Map();
+const located=place=>[place?.lng,place?.lat].every(Number.isFinite);
+const routeKey=(trip,from,to)=>`${trip.id}:${routeSignature(from,to,'walking')}`;
+function useRouteEstimates(j,list,routes){
+ const[estimates,setEstimates]=useState({});
+ useEffect(()=>{
+  let live=true;
+  for(let i=1;i<list.length;i++){
+   const from=list[i-1],to=list[i];
+   if(!located(from.payload.place)||!located(to.payload.place)||routes.some(r=>r.payload.fromId===from.id&&r.payload.toId===to.id))continue;
+   const key=routeKey(j.snapshot.trip,from,to);
+   if(!routeEstimates.has(key))routeEstimates.set(key,estimateRoute(from.payload.place,to.payload.place,'walking',j.snapshot.trip.destination).catch(()=>{routeEstimates.delete(key);return null}));
+   routeEstimates.get(key).then(value=>{if(live&&value)setEstimates(previous=>previous[key]?previous:{...previous,[key]:value})});
+  }
+  return()=>{live=false};
+ },[j.snapshot.trip.id,j.snapshot.trip.destination,j.status==='offline',j.status==='synced',JSON.stringify(list.map(o=>[o.id,o.payload.place])),JSON.stringify(routes.map(r=>[r.id,r.state,r.payload.fromId,r.payload.toId]))]);
+ return estimates;
+}
 
 export function directPermission(j,o){
  const trip=j.snapshot.trip;
@@ -12,9 +32,13 @@ export function directPermission(j,o){
  return trip.ownerId===j.user.id||(trip.teamMode==='admin'&&!!me?.isAdmin);
 }
 
-export function ObjectActions({journey:j,object:o,prominent=false}){
- const[error,setError]=useState('');
- const perform=async operation=>{try{setError('');await j.mutate(operation)}catch(e){setError(errorMessage(e))}};
+export function ObjectActions({journey:j,object:o,prominent=false,onDeleted}){
+ const[error,setError]=useState(''),[pending,setPending]=useState(false);
+ const pendingOperation=useRef(false);
+ const perform=async operation=>{if(pendingOperation.current)return;pendingOperation.current=true;setPending(true);const scope=j.captureScope();try{setError('');await j.mutate(operation,scope);if(operation.kind==='delete'){
+  j.notify?.({message:'已删除',actionLabel:'撤销',onAction:()=>j.mutate({objectId:o.id,kind:'restore',generation:operation.generation+1},scope)});
+  onDeleted?.();
+ }}catch(e){setError(errorMessage(e))}finally{pendingOperation.current=false;setPending(false)}};
  const expression=o.expressions?.find(e=>e.userId===j.user.id)||{};
  const deleted=o.state==='deleted';
  const direct=deleted?(j.snapshot.trip.ownerId===j.user.id||j.snapshot.members.find(m=>m.userId===j.user.id)?.isAdmin):directPermission(j,o);
@@ -24,20 +48,21 @@ export function ObjectActions({journey:j,object:o,prominent=false}){
  return <div className={`object-actions${prominent?' prominent-actions':''}`}>
   <button
    className={prominent?(deleted?'secondary lifecycle-action':'secondary lifecycle-action danger'):(direct&&!deleted?'danger text-button':'text-button')}
+   disabled={pending}
    onClick={()=>perform(direct?{objectId:o.id,kind:deleted?'restore':'delete',generation:o.generation}:{objectId:o.id,kind:'express',generation:o.generation,expression:{[opinionKey]:!expression[opinionKey]}})}
   >
    {prominent&&<Icon size={17}/>}
    {label}
   </button>
-  {!deleted&&o.kind==='activity'&&<button className="text-button" onClick={()=>perform({objectId:o.id,kind:'express',generation:o.generation,expression:{notParticipating:!expression.notParticipating}})}>{expression.notParticipating?'重新参加':'我不参加'}</button>}
+  {!deleted&&o.kind==='activity'&&<button className="text-button" disabled={pending} onClick={()=>perform({objectId:o.id,kind:'express',generation:o.generation,expression:{notParticipating:!expression.notParticipating}})}>{expression.notParticipating?'重新参加':'我不参加'}</button>}
   {deleted&&o.expressions?.some(e=>e.wishRestore)&&<small>{o.expressions.filter(e=>e.wishRestore).length} 位同伴希望恢复</small>}
   {error&&<small className="field-error" role="alert">{error}</small>}
  </div>;
 }
 
-function RouteEditor({journey:j,from,to,object,onClose}){
+function RouteEditor({journey:j,from,to,object,estimate,onClose}){
  const emptyPlace={name:'',address:'',lng:null,lat:null,provider:null,providerPlaceId:null,category:'',sourceUrl:'',fetchedAt:null,coordSystem:'GCJ-02'};
- const[draft,setDraft]=useState(object?.payload||{fromId:from?.id||null,fromPlace:from?null:emptyPlace,toId:to.id,mode:'walking',minutes:null,manual:false,inputSignature:'',path:[],distance:null});
+ const[draft,setDraft]=useState(object?.payload||{fromId:from?.id||null,fromPlace:from?null:emptyPlace,toId:to.id,mode:'walking',minutes:null,manual:false,inputSignature:'',path:[],distance:null,...estimate});
  const[error,setError]=useState(''),[query,setQuery]=useState(''),[results,setResults]=useState([]);
  const origin=from||{id:'origin',payload:{place:draft.fromPlace}};
  const currentObject=object?j.snapshot.objects.find(o=>o.id===object.id)||object:null;
@@ -123,12 +148,15 @@ export function Reschedule({journey:j,onClose}){
 }
 
 export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
- const[route,setRoute]=useState(null),[dayMenuId,setDayMenuId]=useState(null),[dragging,setDragging]=useState(null);
+ const[route,setRoute]=useState(null),[dayMenuId,setDayMenuId]=useState(null),[dragging,setDragging]=useState(null),[sorting,setSorting]=useState(false),[now,setNow]=useState(()=>Date.now());
+ const swipeStart=useRef(null),reorderSerial=useRef(Promise.resolve()),latestJourney=useRef(j);
+ latestJourney.current=j;
  const dragRef=useRef(null),dragCleanup=useRef(null),dayContent=useRef(null),dayStage=useRef(null),previousDay=useRef(null),dayAnimation=useRef({incoming:null,height:null,outgoing:new Set()});
  const days=visibleDays(j.snapshot),outside=outsideDays(j.snapshot);
  const current=days.find(d=>d.id===j.context.dayId)||days[0];
  const dayMenu=!!current&&dayMenuId===current.id;
- useEffect(()=>{setDayMenuId(null)},[current?.id]);
+ useEffect(()=>{setDayMenuId(null);setSorting(false)},[current?.id]);
+ useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()),60000);return()=>clearInterval(timer)},[]);
  useLayoutEffect(()=>{
   const element=dayContent.current,stage=dayStage.current,animations=dayAnimation.current,before=previousDay.current;
   if(!element||!stage)return;
@@ -177,8 +205,15 @@ export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
  },[]);
  const list=current?orderedActivities(j.snapshot,current.id):[];
  const routes=j.snapshot.objects.filter(o=>o.kind==='route');
+ const estimates=useRouteEstimates(j,list,routes);
+ const dateParts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:j.snapshot.trip.timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(now)).map(p=>[p.type,p.value]));
+ const today=`${dateParts.year}-${dateParts.month}-${dateParts.day}`,clock=`${dateParts.hour}:${dateParts.minute}`;
+ const todayDay=days.find(d=>d.payload.date===today);
+ const nextActivity=current?.payload.date===today?list.find(o=>o.payload.time?.mode==='precise'&&(o.payload.time.endDayOffset>0||(o.payload.time.end||o.payload.time.start)>=clock)):null;
+ function changeDay(direction){const index=days.findIndex(d=>d.id===current?.id);if(days[index+direction])j.setContext({dayId:days[index+direction].id})}
+ function showNext(){document.querySelector(`[data-activity-id="${CSS.escape(nextActivity.id)}"]`)?.scrollIntoView({block:'center',behavior:reducedMotion()?'instant':'smooth'})}
 
- async function moveTo(o,targetId,placeAfter=false){
+ async function applyMove(list,o,targetId,placeAfter,scope){
   if(o.id===targetId)return;
   const next=list.filter(item=>item.id!==o.id);
   const targetIndex=next.findIndex(item=>item.id===targetId);
@@ -191,16 +226,27 @@ export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
   const remaining=next.filter(item=>item.id!==o.id);
   const ranksInDisplayOrder=remaining.every((item,i)=>!i||Number(remaining[i-1].payload.order??0)<Number(item.payload.order??0));
   if(!ranksInDisplayOrder||(beforeOrder!==null&&afterOrder!==null&&afterOrder-beforeOrder<0.000001)){
-   await Promise.all(next.map((item,itemIndex)=>Number(item.payload.order??0)===itemIndex*1024?null:j.mutate({objectId:item.id,kind:'patch',patch:{order:itemIndex*1024}})));
+   await Promise.all(next.map((item,itemIndex)=>Number(item.payload.order??0)===itemIndex*1024?null:j.mutate({objectId:item.id,kind:'patch',patch:{order:itemIndex*1024}},scope)));
    return;
   }
   const order=beforeOrder!==null&&afterOrder!==null?(beforeOrder+afterOrder)/2:beforeOrder!==null?beforeOrder+1:afterOrder!==null?afterOrder-1:0;
-  await j.mutate({objectId:o.id,kind:'patch',patch:{order}});
+  await j.mutate({objectId:o.id,kind:'patch',patch:{order}},scope);
  }
- async function moveBy(o,direction){
-  const index=list.findIndex(item=>item.id===o.id),target=list[index+direction];
-  if(target)await moveTo(o,target.id,direction>0);
+ function queueMove(o,{targetId,direction,placeAfter=false}){
+  const scope=j.captureScope(),dayId=o.payload.dayId;
+  const task=reorderSerial.current.then(async()=>{
+   const latest=latestJourney.current;
+   if(latest.snapshot.trip.id!==scope.tripId||latest.user.id!==scope.accountId)return;
+   const rows=orderedActivities(latest.snapshot,dayId),source=rows.find(item=>item.id===o.id);
+   if(!source)return;
+   const target=direction?rows[rows.findIndex(item=>item.id===o.id)+direction]?.id:targetId;
+   if(target)await applyMove(rows,source,target,direction?direction>0:placeAfter,scope);
+  });
+  reorderSerial.current=task.catch(()=>{});
+  return task;
  }
+ function moveTo(o,targetId,placeAfter=false){return queueMove(o,{targetId,placeAfter})}
+ function moveBy(o,direction){return queueMove(o,{direction})}
  function beginDrag(event,o){
   if(event.button!==undefined&&event.button!==0)return;
   event.preventDefault();
@@ -242,26 +288,30 @@ export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
    const prev=items[index-1];
    const matchingRoutes=routes.filter(r=>r.payload.fromId===(prev?.id||null)&&r.payload.toId===o.id);
    const leg=matchingRoutes.find(r=>r.state==='active')||matchingRoutes.find(r=>r.state==='deleted');
-   const mode={walking:'步行',driving:'驾车',bicycling:'骑行',transit:'公共交通'}[leg?.payload.mode];
-   const advice=travelAdvice(prev,o,leg?.state==='active'?leg:null);
+   const estimate=prev&&!leg?estimates[routeKey(j.snapshot.trip,prev,o)]:null;
+   const routePayload=leg?.state==='active'?leg.payload:estimate;
+   const mode={walking:'步行',driving:'驾车',bicycling:'骑行',transit:'公共交通'}[leg?.payload.mode||'walking'];
+   const advice=travelAdvice(prev,o,routePayload);
    const depart=advice.depart,late=advice.lateMinutes,overlap=advice.overlapMinutes;
    const flexible=o.payload.time?.mode!=='precise';
+   const hasRoute=leg?.state==='deleted'||Number.isFinite(routePayload?.minutes);
+   const showRoute=!!prev||!!leg||o.payload.time?.mode==='precise'&&!!o.payload.time.start;
+   const notParticipating=o.expressions?.filter(e=>e.notParticipating).length||0,wishDelete=o.expressions?.filter(e=>e.wishDelete).length||0;
    const dropClass=dragging?.targetId===o.id&&dragging.id!==o.id?(dragging.after?' drop-after':' drop-before'):'';
    return <React.Fragment key={o.id}>
-    {(prev||index===0)&&<button className="route-row" onClick={()=>setRoute({from:prev,to:o,object:leg})}><Route size={14}/><span>{leg?.state==='deleted'?'路程已删除 · 查看与恢复':leg?.payload.minutes!==null&&leg?.payload.minutes!==undefined?`${mode}约${leg.payload.minutes}分钟`:prev?'设置两站之间的路程':'设置出发地与路程'}{depart!==null?` · 建议${depart}出发`:''}</span><ChevronRight size={14}/></button>}
-    <article data-activity-id={o.id} className={`activity-card${dragging?.id===o.id?' dragging':''}${dropClass}`}>
+    {showRoute&&<div className={`route-slot${hasRoute?' has-route':''}`}><button className={`route-row${hasRoute?'':' route-add'}`} aria-label={hasRoute?undefined:prev?'添加两站之间的路程':'设置出发地与路程'} title={hasRoute?undefined:prev?'添加路程':'设置出发地与路程'} onClick={()=>setRoute({from:prev,to:o,object:leg,estimate})}>{hasRoute?<Route size={14}/>:<Plus size={14}/>}<span>{leg?.state==='deleted'?'路程已删除 · 查看与恢复':hasRoute?`${mode}约 ${routePayload.minutes} 分钟`:prev?'路程':'出发地'}{depart!==null?` · 建议 ${depart} 出发`:''}</span>{hasRoute&&<ChevronRight size={14}/>}</button></div>}
+    <article data-activity-id={o.id} className={`activity-card${nextActivity?.id===o.id?' next-activity':''}${dragging?.id===o.id?' dragging':''}${dropClass}`}>
      <div className="activity-number">{index+1}</div>
      <div className="activity-content">
       <button className="activity-main" onClick={()=>onEdit(o)}>
-       <span className="activity-time">{timeLabel(o.payload)||'灵活安排'}</span>
+       {timeLabel(o.payload)&&<span className="activity-time">{timeLabel(o.payload)}{nextActivity?.id===o.id&&<span className="next-label">下一项</span>}</span>}
        <h3>{o.payload.title}</h3>
-       {o.payload.place?.name&&<span className="activity-place"><MapPin size={14}/>{o.payload.place.name}</span>}
        {o.payload.buffers?.before!==null&&o.payload.buffers?.before!==undefined&&<small>提前 {o.payload.buffers.before} 分钟到场</small>}
       </button>
+      {o.payload.place?.name&&<div className="activity-place-row"><button className="activity-place" aria-label="地图" title={`在地图查看：${o.payload.place.name}`} onClick={()=>j.setContext({page:'map',map:{...j.context.map,dayId:o.payload.dayId,selectedActivityId:o.id}})}><MapPin size={14}/><span>{o.payload.place.name}</span></button>{located(o.payload.place)&&<a className="activity-navigation" aria-label={`导航到${o.payload.place.name}`} title="导航到这里" target="_blank" rel="noreferrer" href={`https://uri.amap.com/navigation?to=${o.payload.place.lng},${o.payload.place.lat},${encodeURIComponent(o.payload.place.name)}&mode=car&coordinate=gaode&callnative=1`}><Navigation size={15}/></a>}</div>}
       {(late||overlap)&&<p className="timing-note">{late?`按当前安排会晚 ${late} 分钟到场`:`与上一项安排重叠 ${overlap} 分钟`}</p>}
       <div className="activity-toolbar">
-       <button className="text-button" onClick={()=>onEdit(o)}>编辑</button>
-       {o.payload.place&&<button className="text-button" onClick={()=>j.setContext({page:'map',map:{...j.context.map,dayId:o.payload.dayId,selectedActivityId:o.id}})}><MapPin size={14}/>地图</button>}
+       {(notParticipating>0||wishDelete>0)&&<div className="activity-opinions">{notParticipating>0&&<span>{notParticipating} 人不参加</span>}{wishDelete>0&&<span>{wishDelete}/{j.snapshot.members.length} 希望删除</span>}</div>}
        <div className="activity-controls">
        {sortable&&flexible&&<button
         className="drag-handle"
@@ -282,13 +332,19 @@ export default function Itinerary({journey:j,onEdit,onDates,onDeleted}){
   });
  }
 
- return <div className="page itinerary-page">
-  <div className="page-heading"><div><h1>行程</h1><p className="muted">{j.snapshot.trip.destination}</p></div><button className="secondary" onClick={onDates}><CalendarDays size={17}/>调整日期</button></div>
+ return <div className={`page itinerary-page${sorting?' is-sorting':''}`}>
+  <div className="page-heading"><h1 className="sr-only">行程</h1><button className="secondary" onClick={onDates}><CalendarDays size={17}/>调整日期</button></div>
   <SelectionTrack activeKey={current?.id} className="day-tabs" role="tablist" aria-label="计划日">{days.map(d=><button key={d.id} role="tab" aria-selected={d.id===current?.id} className={d.id===current?.id?'selected':''} onClick={()=>j.setContext({dayId:d.id})}><strong>{dayLabel(d,j.snapshot.trip)}</strong>{d.payload.date&&<small>{d.payload.date.slice(5).replace('-',' / ')}</small>}</button>)}</SelectionTrack>
+  {current&&<div className="mobile-day-bar" onTouchStart={e=>{swipeStart.current=[e.touches[0].clientX,e.touches[0].clientY]}} onTouchEnd={e=>{const start=swipeStart.current;swipeStart.current=null;if(start){const dx=e.changedTouches[0].clientX-start[0],dy=e.changedTouches[0].clientY-start[1];if(Math.abs(dx)>55&&Math.abs(dx)>Math.abs(dy)*1.5)changeDay(dx<0?1:-1)}}}>
+   <button className="icon-button" aria-label="前一天" disabled={current.id===days[0]?.id} onClick={()=>changeDay(-1)}><ChevronLeft size={18}/></button>
+   <select aria-label="当前计划日" value={current.id} onChange={e=>j.setContext({dayId:e.target.value})}>{days.map(d=><option value={d.id} key={d.id}>{dayLabel(d,j.snapshot.trip)}{d.payload.date?` ${d.payload.date.slice(5).replace('-','/')}`:''}{d.payload.date===today?' · 今天':''}</option>)}</select>
+   <button className="icon-button" aria-label="后一天" disabled={current.id===days.at(-1)?.id} onClick={()=>changeDay(1)}><ChevronRight size={18}/></button>
+   <button className="icon-button" aria-label="添加活动" onClick={()=>onEdit(null,{dayId:current.id})}><Plus size={19}/></button>
+  </div>}
   {j.snapshot.objects.some(o=>o.kind==='day'&&o.state==='deleted')&&<button className="text-button deleted-days-entry" onClick={onDeleted}>已删除的计划日<ChevronRight size={14}/></button>}
   <div className="day-content-stage" ref={dayStage}><div className="day-content" ref={dayContent}><div className="day-heading">
    <h2>{current?dayLabel(current,j.snapshot.trip):'还没有计划日'}{current?.payload.date&&<small>{current.payload.date}</small>}</h2>
-   <div className="button-row"><button className="primary small" disabled={!current} onClick={()=>onEdit(null,{dayId:current.id})}><Plus size={16}/>添加活动</button>{current&&<button className="icon-button compact" aria-label="当天操作" aria-expanded={dayMenu} onClick={()=>setDayMenuId(dayMenu?null:current.id)}><MoreHorizontal size={18}/></button>}</div>
+   <div className="button-row">{todayDay&&todayDay.id!==current?.id&&<button className="text-button" onClick={()=>j.setContext({dayId:todayDay.id})}>今天</button>}{nextActivity&&<button className="text-button" onClick={showNext}>下一项</button>}{list.filter(o=>o.payload.time?.mode!=='precise').length>0&&<button className="text-button sort-toggle" aria-pressed={sorting} onClick={()=>setSorting(!sorting)}>{sorting?'完成排序':'排序'}</button>}<button className="primary small day-add" disabled={!current} onClick={()=>onEdit(null,{dayId:current.id})}><Plus size={16}/>添加活动</button>{current&&<button className="icon-button compact" aria-label="当天操作" aria-expanded={dayMenu} onClick={()=>setDayMenuId(dayMenu?null:current.id)}><MoreHorizontal size={18}/></button>}</div>
   </div>
   {current&&dayMenu&&<div className="day-lifecycle"><span>{dayLabel(current,j.snapshot.trip)}{current.payload.date?` · ${current.payload.date}`:""}</span><ObjectActions journey={j} object={current}/></div>}
   <div className="activity-list">{list.length?cards(list,true):<Empty icon={CalendarDays} title="这一天还没有安排" action={<button className="secondary" disabled={!current} onClick={()=>onEdit(null,{dayId:current.id})}><Plus size={16}/>添加第一项安排</button>}>添加活动，或到地图查找想去的地方。</Empty>}</div>

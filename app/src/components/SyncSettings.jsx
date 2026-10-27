@@ -13,7 +13,7 @@ function recoveryReason(group){
  return '部分修改尚未上传，可以重试或查看待处理内容。';
 }
 
-export default function SyncSettings({journey:j}){
+export default function SyncSettings({journey:j,title='保存与同步'}){
  const [error,setError]=useState(''),[confirmation,setConfirmation]=useState(null);
  const mounted=useRef(false);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false}},[]);
@@ -39,7 +39,7 @@ export default function SyncSettings({journey:j}){
    }else setConfirmation({...pending,error:errorMessage(e)});
   }
  }
- return <Section title="保存与同步">
+ return <Section title={title}>
   <div className="setting-row">
    <div><strong>{syncStatusText[j.status]||'正在确认同步'}</strong><p>{j.pendingCount?`${j.pendingCount} 项修改等待上传`:j.status==='synced'?'当前修改已同步。':'本机草稿会继续保留。'}</p></div>
    <AsyncButton className="secondary small" disabled={j.recoveryBusy} onClick={()=>run(()=>j.retry())}><RefreshCw size={15}/>重试连接</AsyncButton>

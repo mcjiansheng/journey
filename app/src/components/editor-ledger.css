@@ -1,0 +1,37 @@
+.editor-save-status{margin:0 0 18px;color:var(--muted);font-size:12px;line-height:1.6;min-height:20px}
+.modal-head h2{min-width:0;overflow-wrap:anywhere}
+.editor-done{flex-shrink:0;min-width:64px}
+.editor-object-actions{margin-top:24px;padding-top:16px;border-top:1px solid var(--line)}
+.field:has(>.amount-with-currency){position:relative}
+.field>.amount-with-currency{padding-left:66px}
+.amount-prefix{position:absolute;left:14px;bottom:14px;pointer-events:none;color:var(--muted);font-size:13px;font-weight:600}
+.ledger-currency-totals{display:grid;gap:12px;margin:12px 0}
+.ledger-currency-totals>div{display:flex;align-items:baseline;gap:18px}
+.ledger-currency-totals>div>span{min-width:38px;color:var(--muted);font-size:13px;font-weight:600}
+.ledger-currency-totals strong{display:block;margin:0;overflow-wrap:anywhere}
+.ledger-date-filter{margin:22px 0 0;max-width:220px}
+.ledger-date-filter .field{margin-bottom:0}
+.expense-row{position:relative;align-items:flex-start}
+.expense-info{min-width:0}
+.expense-title{max-width:100%;overflow-wrap:anywhere}
+.expense-date{display:block;color:var(--muted);margin-top:5px}
+.expense-trailing{display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin-left:auto;flex-shrink:0;max-width:42%}
+.expense-trailing .expense-amount{margin:0;overflow-wrap:anywhere;max-width:100%}
+.expense-pay{padding-right:0}
+.expense-more{position:relative;margin:0;flex-shrink:0;z-index:2}
+.expense-more>summary{display:flex;align-items:center;justify-content:center;width:40px;height:40px;min-height:40px;list-style:none;border-radius:10px;color:var(--muted);margin:0!important}
+.expense-more>summary::-webkit-details-marker{display:none}
+.expense-more>summary:hover,.expense-more[open]>summary{background:var(--accent-soft);color:var(--accent)}
+.expense-more-panel{position:absolute;right:0;top:43px;min-width:150px;padding:7px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 36px #22382d22}
+.expense-more-panel .object-actions{flex-direction:column;align-items:stretch}
+.expense-more-panel .object-actions>.text-button{justify-content:flex-start;min-height:44px;padding:9px 12px;font-size:13px;border-radius:8px}
+.expense-more-panel .text-button:hover{background:var(--accent-soft)}
+@media(max-width:760px){.expense-row{gap:9px}.expense-more>summary{width:36px;height:44px}.expense-more-panel{top:45px}.expense-trailing{max-width:37%;padding-top:4px}.expense-icon{display:none}.expense-date{font-size:11px}.ledger-currency-totals>div{gap:12px}.editor-done{min-height:40px}}
+/* Autosave can add or clear validation text during blur. Keep pointer targets in
+   place while the editor body changes height. */
+.modal.editor-modal[open]{top:32px;bottom:auto;margin:0 auto}
+@media(max-width:760px){.modal.editor-modal[open]{top:calc(var(--visual-top,0px) + 8px);bottom:auto}}
+.ledger-page .page-heading{justify-content:flex-end;margin-bottom:20px}
+.editor-save-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 18px}
+.editor-save-row .editor-save-status{margin:0;min-width:0}
+.editor-later{flex-shrink:0;white-space:nowrap}

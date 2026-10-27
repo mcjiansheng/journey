@@ -213,7 +213,9 @@ function maybeNotify() {
 async function openTrip(id) {
   if(!account)throw new Error('请先登录');
   const epoch=authEpoch,owner=account;
-  selected=id;account.lastTripId=id;account.contexts[id]||=freshContext();emit({error:null});renderAccount();await persist();
+  selected=id;account.lastTripId=id;account.contexts[id]||=freshContext();
+  if(account.contexts[id].page==='settings')account.contexts[id]={...account.contexts[id],page:'itinerary'};
+  emit({error:null});renderAccount();await persist();
   requireCurrent(epoch,owner);if(selected!==id)return;
   void api('/api/navigation',{method:'PUT',body:{lastTripId:id,tripId:id,context:account.contexts[id]}}).catch(()=>{});
   try{await refresh();requireCurrent(epoch,owner);if(selected!==id)return;subscribeTrip(id);void flush();}catch(e){if(e.code==='NETWORK'&&epoch===authEpoch&&owner===account&&account.snapshots[id]){emit({error:null,status:'offline'});}else throw e;}

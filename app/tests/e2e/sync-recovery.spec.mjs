@@ -63,7 +63,7 @@ test('cached startup and failed uploads stay offline while the browser itself is
  expect(await page.evaluate(()=>navigator.onLine)).toBe(true);
  await page.getByRole('button',{name:/继续旅程/}).click();await expect(page.locator('.sync-status.offline')).toHaveText('连接中断');
  await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await page.getByLabel('活动名称').fill('断线时的输入');await page.getByRole('dialog').getByRole('button',{name:'完成',exact:true}).click();
- await expect(page.getByRole('heading',{name:'断线时的输入',exact:true})).toBeVisible();await expect(page.locator('.sync-status.synced,.sync-status.syncing')).toHaveCount(0);
+ await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.getByRole('heading',{name:'断线时的输入',exact:true})).toBeVisible();await expect(page.locator('.sync-status.synced,.sync-status.syncing')).toHaveCount(0);
  await page.unroute('**/api/**');
 });
 

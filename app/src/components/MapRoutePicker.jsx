@@ -44,7 +44,7 @@ export default function MapRoutePicker({value, options, onChange}) {
       onKeyDown={event => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); show(); }
       }}>
-      <span id={`${id}-value`} key={value} className="map-route-label">{options[selected].label}</span>
+      <span id={`${id}-value`} key={value} className="map-route-label"><span className="map-route-full-label">{options[selected].label}</span><span className="map-route-compact-label">{options[selected].compactLabel||options[selected].label}</span></span>
       <ChevronDown size={17}/>
     </button>
     <div className={`map-route-menu glass ${open ? 'is-open' : ''}`} aria-hidden={!open} inert={!open}>

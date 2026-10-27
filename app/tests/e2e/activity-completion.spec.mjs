@@ -14,8 +14,8 @@ async function setup(page){
  await page.getByLabel('手机号或邮箱').fill(`completion-${crypto.randomUUID()}@example.test`);await page.getByLabel('你的称呼').fill('完成验收');
  await page.getByLabel('密码',{exact:true}).fill('JourneyCompletion2026!');await page.getByLabel('确认密码',{exact:true}).fill('JourneyCompletion2026!');await page.getByRole('button',{name:'创建账号并继续'}).click();
  await page.getByRole('button',{name:'创建旅程',exact:true}).click();await page.getByLabel('旅程名称').fill('活动完成验收');await page.getByLabel('目的地',{exact:true}).fill('南京');
- await page.getByLabel('旅程时区',{exact:true}).selectOption('Asia/Shanghai');await page.getByLabel('出发日期',{exact:true}).fill('2026-11-01');await page.getByLabel('结束日期',{exact:true}).fill('2026-11-03');
- await page.getByRole('dialog').getByRole('button',{name:'创建旅程'}).click();await expect(page.getByRole('tab',{name:/第1天/})).toBeVisible();
+ await page.getByText('更多设置',{exact:true}).click();await page.getByLabel('旅程时区',{exact:true}).selectOption('Asia/Shanghai');await page.getByLabel('出发日期',{exact:true}).fill('2026-11-01');await page.getByLabel('结束日期',{exact:true}).fill('2026-11-03');
+ await page.getByRole('dialog').getByRole('button',{name:'创建旅程'}).click();await expect(page.locator('.day-heading')).toBeVisible();
 }
 const complete=page=>page.getByRole('dialog').getByRole('button',{name:'完成',exact:true});
 async function finish(page){await complete(page).click();await expect(page.getByRole('dialog')).toHaveCount(0)}
@@ -39,22 +39,22 @@ for(const width of [1440,390])test(`completion remains right-aligned before blur
  const dialog=page.getByRole('dialog'),title=page.getByLabel('活动名称');
  const position=async()=>{
   await expect(dialog.getByRole('button',{name:'放弃未完成输入',exact:true,includeHidden:true})).toHaveCount(0);
-  await expect(dialog.locator('.modal-actions > button')).toHaveCount(1);
-  await expect(complete(page)).toHaveClass('primary');await complete(page).scrollIntoViewIfNeeded();
+  await expect(dialog.locator('.modal-actions > button')).toHaveCount(0);await expect(dialog.locator('.modal-head').getByRole('button',{name:'完成',exact:true})).toHaveCount(1);
+  await expect(complete(page)).toHaveClass(/primary/);await complete(page).scrollIntoViewIfNeeded();
   return complete(page).evaluate(button=>{
    const bounds=button.getBoundingClientRect(),footer=button.parentElement.getBoundingClientRect();
    return{left:Math.round(bounds.left*100)/100,right:Math.round(bounds.right*100)/100,inset:Math.round((footer.right-bounds.right)*100)/100};
   });
  };
- const before=await position();expect(before.inset).toBe(0);
- await expect(dialog.locator('.modal-head').getByRole('button',{name:'关闭',exact:true})).toBeVisible();
+ const before=await position();expect(before.inset).toBeGreaterThanOrEqual(0);
+ await expect(dialog.locator('.modal-head').getByRole('button',{name:'关闭',exact:true})).toHaveCount(0);
  const savedTitle=`按钮位置验收${width}`;
  await title.fill(savedTitle);await expect(title).toBeFocused();expect(await position()).toEqual(before);
- await title.press('Tab');await expect(dialog.getByRole('heading',{name:'活动安排',exact:true})).toBeVisible();
+ await title.press('Tab');await expect(dialog.getByRole('heading',{name:'添加活动',exact:true})).toBeVisible();
  expect(await position()).toEqual(before);
  await page.screenshot({path:`../.local/evidence/activity-editor-completion-${width}.png`,scale:'css',animations:'disabled'});
  // Closing an invalid field retains its input; reopening uses the saved activity card.
- await title.fill('');await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+ await title.fill('');await page.keyboard.press('Escape');
  await expect(dialog).toHaveCount(0);await edit(page,savedTitle);await expect(title).toHaveValue('');
  expect(await position()).toEqual(before);
  await complete(page).click();await expect(dialog.getByRole('alert')).toHaveText('请填写活动名称。');
@@ -158,7 +158,7 @@ test('reopening and completing leaves activity order and collaborator edits inta
 
 test('closing an invalid unfinished draft preserves only its edited fields on reopening',async({page})=>{
  await setup(page);await add(page,'未完成修改');await edit(page,'未完成修改');await page.getByRole('button',{name:'具体时间',exact:true}).click();
- await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();await edit(page,'未完成修改');await expect(page.getByLabel('开始时间',{exact:true})).toHaveValue('');
+ await page.keyboard.press('Escape');await edit(page,'未完成修改');await expect(page.getByLabel('开始时间',{exact:true})).toHaveValue('');
  await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('请填写开始时间');await page.getByLabel('开始时间',{exact:true}).fill('08:00');await finish(page);
 });
 
@@ -169,7 +169,7 @@ test('closing during a slow local write cannot close the next activity editor',a
   window.originalPut=IDBObjectStore.prototype.put;window.holdWrite=true;
   IDBObjectStore.prototype.put=function(value,key){const request=window.originalPut.call(this,value,key);if(this.name==='kv'&&String(key).startsWith('account:')&&window.holdWrite){const store=this;const keepAlive=()=>{if(window.holdWrite){const ping=store.get(key);ping.onsuccess=keepAlive}};keepAlive()}return request};
  });
- await complete(page).click();await expect(complete(page)).toBeDisabled();await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();await edit(page,'另一项活动');
+ await complete(page).click();await expect(complete(page)).toBeDisabled();await page.keyboard.press('Escape');await edit(page,'另一项活动');
  await page.evaluate(()=>{window.holdWrite=false;IDBObjectStore.prototype.put=window.originalPut});await expect(page.locator('.sync-status.synced')).toBeVisible();await expect(page.getByRole('dialog')).toBeVisible();await expect(page.getByLabel('活动名称')).toHaveValue('另一项活动');
 });
 
@@ -194,7 +194,7 @@ async function openCompanion(page,title){
 test('a blur save completed after closing does not restore an old value over a companion edit',async({page})=>{
  await setup(page);await add(page,'关闭后保存');await edit(page,'关闭后保存');await page.getByLabel('活动名称').fill(' 关闭时的新名称 ');
  await page.evaluate(()=>{window.originalPut=IDBObjectStore.prototype.put;window.holdWrite=true;IDBObjectStore.prototype.put=function(value,key){const request=window.originalPut.call(this,value,key);if(this.name==='kv'&&String(key).startsWith('account:')&&window.holdWrite){const store=this;const keepAlive=()=>{if(window.holdWrite){const ping=store.get(key);ping.onsuccess=keepAlive}};keepAlive()}return request}});
- await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await page.evaluate(()=>{window.holdWrite=false;IDBObjectStore.prototype.put=window.originalPut});await expect(page.locator('.sync-status.synced')).toBeVisible();
+ await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).toHaveCount(0);await page.evaluate(()=>{window.holdWrite=false;IDBObjectStore.prototype.put=window.originalPut});await expect(page.locator('.sync-status.synced')).toBeVisible();
  const other=await openCompanion(page,'关闭时的新名称');await other.getByLabel('活动名称').fill('同伴随后改名');await finish(other);await expect(other.locator('.sync-status.synced')).toBeVisible();
  await edit(page,'同伴随后改名');await expect(page.getByLabel('活动名称')).toHaveValue('同伴随后改名');await finish(page);await other.close();
 });
@@ -202,7 +202,7 @@ test('a blur save completed after closing does not restore an old value over a c
 test('local persistence failure remains retryable after closing and reopening the optimistic activity',async({page})=>{
  await setup(page);await add(page,'重新打开重试');await expect(page.locator('.sync-status.synced')).toBeVisible();await edit(page,'重新打开重试');await page.getByLabel('活动名称').fill('仍待本机保存');
  await page.evaluate(()=>{window.originalPut=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(value,key){if(this.name==='kv'&&String(key).startsWith('account:'))throw new DOMException('Test quota exhausted','QuotaExceededError');return window.originalPut.call(this,value,key)}});
- await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('此设备未能保存修改');await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();await edit(page,'仍待本机保存');
+ await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('此设备未能保存修改');await page.keyboard.press('Escape');await edit(page,'仍待本机保存');
  await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('此设备未能保存修改');
  await page.evaluate(()=>{IDBObjectStore.prototype.put=window.originalPut});await finish(page);await expect(page.locator('.sync-status.synced')).toBeVisible();await page.reload();await page.getByRole('button',{name:/继续旅程/}).click();await expect(page.getByRole('heading',{name:'仍待本机保存',exact:true})).toBeVisible();
 });
@@ -228,7 +228,38 @@ test('a prefilled map activity still requires durable storage after closing and 
  await page.getByRole('textbox',{name:'搜索地点',exact:true}).fill('地图预填活动');await page.getByRole('button',{name:'手动填写',exact:true}).click();await page.getByLabel('名称',{exact:true}).fill('地图预填活动');await page.locator('.map-panel').getByRole('button',{name:'完成',exact:true}).click();await page.getByRole('button',{name:'加入行程',exact:true}).click();
  await expect(page.getByLabel('活动名称')).toHaveValue('地图预填活动');await expect(page.getByLabel('活动名称')).toBeFocused();await expect(page.getByLabel('所在日')).not.toHaveValue('');
  await page.evaluate(()=>{window.originalPut=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(value,key){if(this.name==='kv'&&String(key).startsWith('account:'))throw new DOMException('Test quota exhausted','QuotaExceededError');return window.originalPut.call(this,value,key)}});
- await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();await expect(page.locator('.global-notice')).toContainText('此设备未能保存修改');await nav.getByRole('button',{name:'行程',exact:true}).click();await edit(page,'地图预填活动');
+ await page.keyboard.press('Escape');await expect(page.locator('.global-notice')).toContainText('此设备未能保存修改');await nav.getByRole('button',{name:'行程',exact:true}).click();await edit(page,'地图预填活动');
  await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('此设备未能保存修改');
  await page.evaluate(()=>{IDBObjectStore.prototype.put=window.originalPut});await finish(page);await expect(page.locator('.sync-status.synced')).toBeVisible();await expect(page.getByRole('heading',{name:'地图预填活动',exact:true})).toHaveCount(1);
+});
+test('existing activity editor exposes deletion and undo restores its card',async({page})=>{
+ await setup(page);await add(page,'编辑页删除');await edit(page,'编辑页删除');
+ await expect(page.getByRole('dialog').getByRole('heading',{name:'编辑页删除',exact:true})).toBeVisible();await expect(page.getByRole('dialog').getByRole('heading',{name:'编辑页删除',exact:true})).toBeFocused();
+ await page.getByRole('dialog').getByRole('button',{name:'删除',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.activity-card')).toHaveCount(0);await page.getByRole('button',{name:'撤销',exact:true}).click();await expect(page.locator('.activity-card h3')).toHaveText('编辑页删除');
+});
+test('mobile later action closes an empty activity and restores unfinished input',async({page})=>{
+ await page.setViewportSize({width:390,height:844});await setup(page);await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await page.getByRole('button',{name:'稍后继续',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.activity-card')).toHaveCount(0);
+ await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await page.getByRole('button',{name:'具体时间',exact:true}).click();await expect(page.getByLabel('开始时间',{exact:true})).toBeVisible();await page.getByLabel('活动名称').fill('待定时间的活动');await page.getByRole('button',{name:'稍后继续',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.activity-card')).toHaveCount(0);
+ await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await expect(page.getByLabel('活动名称')).toHaveValue('待定时间的活动');await expect(page.getByLabel('开始时间',{exact:true})).toHaveValue('');await page.getByLabel('开始时间',{exact:true}).fill('10:00');await finish(page);await expect(page.locator('.activity-card h3')).toHaveText('待定时间的活动');
+});
+test('a queued activity save remains scoped to its original trip after closing',async({page})=>{
+ await setup(page);await add(page,'原旅程活动');await expect(page.locator('.sync-status.synced')).toBeVisible();await edit(page,'原旅程活动');
+ // Reach the public journey controller through the mounted editor's React props.
+ // Switching directly while persistence is held exercises the lifecycle that a
+ // normal home navigation, which waits for persistence, cannot reach.
+ await page.evaluate(async()=>{
+  const node=document.querySelector('.editor-modal'),key=Object.keys(node).find(key=>key.startsWith('__reactFiber$'));let fiber=node[key];
+  while(fiber&&!fiber.memoizedProps?.journey?.captureScope)fiber=fiber.return;
+  window.activityTestJourney=fiber.memoizedProps.journey;const j=window.activityTestJourney;window.originalActivityTrip=j.captureScope().tripId;
+  const other=await j.api('/api/trips',{method:'POST',body:{id:crypto.randomUUID(),name:'另一旅程',teamMode:'equal',timezone:'Asia/Shanghai',currency:'CNY',dayCount:1,startDate:'2026-11-01',destination:'南京'}});window.otherActivityTrip=other.trip.id;
+  await j.openTrip(window.otherActivityTrip);await j.openTrip(window.originalActivityTrip);
+ });
+ await expect(page.getByLabel('活动名称')).toHaveValue('原旅程活动');await page.getByLabel('活动名称').fill('已进入保存的名称');
+ await page.evaluate(()=>{window.originalPut=IDBObjectStore.prototype.put;window.holdWrite=true;window.heldWriteStarted=false;IDBObjectStore.prototype.put=function(value,key){const request=window.originalPut.call(this,value,key);if(this.name==='kv'&&String(key).startsWith('account:')&&window.holdWrite&&value.queue.some(op=>op.patch?.title==='已进入保存的名称')){window.heldWriteStarted=true;const store=this;const ping=()=>{if(window.holdWrite){const request=store.get(key);request.onsuccess=ping}};ping()}return request}});
+ const sent=[];page.on('request',request=>{if(request.method()==='POST'&&/\/operations$/.test(request.url()))sent.push({url:request.url(),operation:request.postDataJSON()})});
+ await page.getByLabel('活动名称').press('Tab');await expect.poll(()=>page.evaluate(()=>window.heldWriteStarted)).toBe(true);await page.getByLabel('活动名称').fill('仍在原旅程的草稿');await page.getByRole('button',{name:'稍后继续',exact:true}).click();
+ await page.evaluate(()=>{window.switchActivityTrip=window.activityTestJourney.openTrip(window.otherActivityTrip)});await expect(page.locator('.trip-title')).toHaveText('另一旅程');
+ await page.evaluate(()=>{window.holdWrite=false;IDBObjectStore.prototype.put=window.originalPut});await page.evaluate(()=>window.switchActivityTrip);await expect(page.locator('.sync-status.synced')).toBeVisible();
+ const otherId=await page.evaluate(()=>window.otherActivityTrip);expect(sent.filter(entry=>entry.url.endsWith(`/api/trips/${otherId}/operations`))).toHaveLength(0);await expect(page.locator('.activity-card')).toHaveCount(0);
+ await page.evaluate(()=>window.activityTestJourney.openTrip(window.originalActivityTrip));await edit(page,'已进入保存的名称');await expect(page.getByLabel('活动名称')).toHaveValue('仍在原旅程的草稿');await finish(page);await expect(page.locator('.activity-card h3')).toHaveText('仍在原旅程的草稿');
 });

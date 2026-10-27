@@ -25,7 +25,7 @@ async function setup(page,{mixed=true}={}){
  await page.getByRole('dialog').getByRole('button',{name:'创建旅程',exact:true}).click();
  for(const [title,time] of [['晚间活动','18:00'],['灵活活动',null],['早间活动','09:00']]){
   await page.getByRole('button',{name:'添加活动',exact:true}).click();await page.getByLabel('活动名称').fill(title);
-  if(mixed&&time){await page.getByRole('button',{name:'具体时间',exact:true}).click();await page.getByLabel('开始时间',{exact:true}).fill(time)}
+  if(mixed&&time){await page.getByRole('button',{name:'具体时间',exact:true}).click();await page.getByLabel('开始时间',{exact:true}).fill(time)}else if(mixed){await page.getByLabel('时段',{exact:true}).selectOption('下午')}
   await page.getByRole('dialog').getByRole('button',{name:'完成',exact:true}).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.sync-status.synced')).toBeVisible();
  }
@@ -67,19 +67,20 @@ test('cancelled pointer drag preserves the saved order',async({page})=>{
  await expect(page.locator('.activity-card h3')).toHaveText(['晚间活动','灵活活动','早间活动']);
 });
 
-for(const width of [1440,390])test(`activity controls share one aligned row at ${width}px`,async({page},testInfo)=>{
+for(const width of [1440,390])test(`compact activity controls and mobile sorting at ${width}px`,async({page},testInfo)=>{
  await setup(page);await page.setViewportSize({width,height:900});
  const card=page.locator('.activity-card').filter({hasText:'灵活活动'});
  const handle=card.getByRole('button',{name:'拖动排序：灵活活动'});
  const more=card.locator('.activity-more>summary');
- const edit=card.getByRole('button',{name:'编辑',exact:true});
  await card.scrollIntoViewIfNeeded();
- const [dragBox,moreBox,editBox]=await Promise.all([handle.boundingBox(),more.boundingBox(),edit.boundingBox()]);
+ await expect(card.getByRole('button',{name:'编辑',exact:true})).toHaveCount(0);
+ if(width===390){await expect(handle).toBeHidden();await page.getByRole('button',{name:'排序',exact:true}).click()}
+ const [dragBox,moreBox]=await Promise.all([handle.boundingBox(),more.boundingBox()]);
  expect(dragBox.width).toBe(44);expect(moreBox.width).toBe(44);
  expect(dragBox.height).toBe(44);expect(moreBox.height).toBe(44);
  expect(Math.abs(dragBox.y-moreBox.y)).toBeLessThan(1);
  expect(moreBox.x-(dragBox.x+dragBox.width)).toBe(4);
- expect(Math.abs(editBox.y+editBox.height/2-dragBox.y-dragBox.height/2)).toBeLessThan(1);
+ expect((await card.boundingBox()).height).toBeLessThan(130);
  await more.click();await expect(card.locator('.activity-more-panel')).toBeVisible();
  const menu=await card.locator('.activity-more-panel').boundingBox();
  expect(menu.x).toBeGreaterThanOrEqual(0);expect(menu.x+menu.width).toBeLessThanOrEqual(width);
