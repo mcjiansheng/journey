@@ -26,10 +26,10 @@ async function register(page){
 async function createTrip(page,name='导航动效验收'){
  await page.getByRole('button',{name:'创建旅程',exact:true}).click();await page.getByLabel('旅程名称').fill(name);
  await page.getByLabel('目的地',{exact:true}).fill('南京');await page.getByLabel('出发日期',{exact:true}).fill('2026-11-01');
- await page.getByLabel('旅程时区',{exact:true}).selectOption('Asia/Shanghai');
+ await page.getByText('更多设置',{exact:true}).click();await page.getByLabel('旅程时区',{exact:true}).selectOption('Asia/Shanghai');
  await page.getByLabel('结束日期',{exact:true}).fill('2026-11-03');await page.getByRole('radio',{name:'平等团队',exact:true}).check();
  await page.getByRole('dialog').getByRole('button',{name:'创建旅程'}).click();
- await expect(page.getByRole('tab',{name:/第1天/})).toBeVisible();
+ await expect(page.locator('.itinerary-page')).toBeVisible();
 }
 async function addActivity(page,name,{touch=false}={}){
  await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await page.getByLabel('活动名称').fill(name);
@@ -84,29 +84,29 @@ test('navigation indicator moves across pages and rapid reversals return home cl
  const result=await page.evaluate(async()=>{
   const buttons=[...document.querySelectorAll('nav[aria-label="主导航"] button')];
   const click=label=>buttons.find(button=>button.getAttribute('aria-label')===label).click();
-  click('地图');await new Promise(r=>setTimeout(r,75));click('行程');await new Promise(r=>setTimeout(r,75));click('设置');await new Promise(r=>setTimeout(r,75));click('费用');await new Promise(r=>setTimeout(r,75));click('行程');
+  click('地图');await new Promise(r=>setTimeout(r,75));click('行程');await new Promise(r=>setTimeout(r,75));click('管理');await new Promise(r=>setTimeout(r,75));click('费用');await new Promise(r=>setTimeout(r,75));click('行程');
   await new Promise(resolve=>setTimeout(resolve,520));return document.querySelector('nav[aria-label="主导航"] button[aria-current="page"]')?.getAttribute('aria-label');
  });
- expect(result).toBe('行程');await expect(page.getByRole('heading',{name:'行程',exact:true})).toBeVisible();
+ expect(result).toBe('行程');await expect(page.locator('.itinerary-page')).toBeVisible();
  await page.getByRole('button',{name:'我的旅程',exact:true}).click();await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:/继续旅程/})).toContainText('导航动效验收');await screenshot(page,'home');
 });
 
-test('map mode centers the compact sidebar, hides its trip title, and keeps navigation icons stable',async({page})=>{
+test('map keeps full sidebar, trip title, and navigation icons stable',async({page})=>{
  await page.setViewportSize({width:1440,height:900});await register(page);await createTrip(page);
  await screenshot(page,'itinerary-desktop');
  const title=page.locator('.trip-title>span');const before=await page.evaluate(()=>{
   const r=document.querySelector('.trip-title>span').getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height};
  });
  const opening=await sampleSidebarMotion(page,'地图');expectSidebarFramesStable(opening,before);
- await expect(page.locator('.app-shell')).toHaveClass(/map-shell/);await expect.poll(()=>page.locator('.sidebar').evaluate(el=>el.getBoundingClientRect().width)).toBeLessThan(100);
+ await expect(page.locator('.app-shell')).toHaveClass(/map-shell/);await expect.poll(()=>page.locator('.sidebar').evaluate(el=>el.getBoundingClientRect().width)).toBe(200);
  await screenshot(page,'map-desktop');
  const compact={width:opening.after.width,top:opening.after.top,height:opening.after.height,center:opening.after.center,title:{x:opening.after.titleX,y:opening.after.titleY},icons:opening.after.icons};
- expect(compact.width).toBeLessThan(100);expect(Math.abs(compact.center-450)).toBeLessThan(3);
+ expect(compact.width).toBe(200);expect(Math.abs(compact.center-450)).toBeLessThan(3);
  expect(compact.icons.every(icon=>Math.abs(icon.width-20)<1&&Math.abs(icon.height-20)<1)).toBe(true);
- expect(compact.title.x).toBeNull();expect(compact.title.y).toBeNull();await expect(title).toHaveCount(0);
+ expect(Math.abs(compact.title.x-before.x)).toBeLessThan(14);await expect(title).toBeVisible();
  const closing=await sampleSidebarMotion(page,'行程');expectSidebarFramesStable(closing,before);
- expect(closing.frames.some(frame=>frame.width>compact.width+5&&frame.width<Math.max(...closing.frames.map(x=>x.width))-5)).toBe(true);
+ expect(closing.frames.every(frame=>Math.abs(frame.width-compact.width)<1)).toBe(true);
  await expect(page.locator('.app-shell')).not.toHaveClass(/map-shell/);await screenshot(page,'map-return');
  writeFileSync(resolve(process.cwd(),'../.local/evidence/navigation-frames.json'),JSON.stringify({opening,closing},null,2));
  const transparency=await page.evaluate(()=>{
@@ -118,7 +118,7 @@ test('map mode centers the compact sidebar, hides its trip title, and keeps navi
  for(const track of transparency){expect(track.buttonBackground,track.selector).toBe('rgba(0, 0, 0, 0)');expect(track.indicatorVisible,track.selector).toBe(true)}
  await page.setViewportSize({width:800,height:500});
  await expect.poll(()=>page.evaluate(()=>{
-  const sidebar=document.querySelector('.sidebar'),settings=sidebar.querySelector('nav button[aria-label="设置"]').getBoundingClientRect(),profile=sidebar.querySelector('.profile-button').getBoundingClientRect();
+  const sidebar=document.querySelector('.sidebar'),settings=sidebar.querySelector('nav button[aria-label="管理"]').getBoundingClientRect(),profile=sidebar.querySelector('.profile-button').getBoundingClientRect();
   return settings.bottom<=profile.top;
  })).toBe(true);
 });
@@ -205,7 +205,7 @@ test('mobile widths, reduced motion, and WebKit keep navigation reachable',async
   const style=getComputedStyle(node);return style.transitionDuration.split(',').every(value=>Number.parseFloat(value)===0)&&style.animationDuration.split(',').every(value=>Number.parseFloat(value)===0);
  }))).toBe(true);
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();
- await page.getByRole('tab',{name:/第2天/}).click();
+ await page.getByLabel('当前计划日').selectOption({index:1});
  await expect(page.locator('.day-content h2')).toContainText('第2天');await expect(page.locator('.day-content-outgoing')).toHaveCount(0);
  expect(await page.locator('.day-content-stage').evaluate(stage=>({animations:stage.getAnimations({subtree:true}).length,opacity:getComputedStyle(stage.querySelector('.day-content')).opacity}))).toEqual({animations:0,opacity:'1'});
  const browser=await launchWebKit();
@@ -215,9 +215,9 @@ test('mobile widths, reduced motion, and WebKit keep navigation reachable',async
   await webPage.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'地图',exact:true}).tap();
   await expect(webPage.locator('.map-shell')).toBeVisible();await webPage.screenshot({path:'../.local/evidence/navigation-webkit-map.png',fullPage:true,animations:'disabled',scale:'css'});
   await webPage.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).tap();
-  await expect(webPage.getByRole('heading',{name:'行程',exact:true})).toBeVisible();await noOverflow(webPage);
-  await addActivity(webPage,'WebKit第一天活动',{touch:true});await webPage.getByRole('tab',{name:/第2天/}).tap();await addActivity(webPage,'WebKit第二天活动',{touch:true});
-  await webPage.getByRole('tab',{name:/第1天/}).tap();await expect(webPage.getByRole('heading',{name:'WebKit第一天活动',exact:true})).toBeVisible();
+  await expect(webPage.locator('.itinerary-page')).toBeVisible();await noOverflow(webPage);
+  await addActivity(webPage,'WebKit第一天活动',{touch:true});await webPage.getByLabel('当前计划日').selectOption({index:1});await addActivity(webPage,'WebKit第二天活动',{touch:true});
+  await webPage.getByLabel('当前计划日').selectOption({index:0});await expect(webPage.getByRole('heading',{name:'WebKit第一天活动',exact:true})).toBeVisible();
   await expect(webPage.locator('.day-content-outgoing')).toHaveCount(0);await noOverflow(webPage);await context.close();
  }finally{await browser.close()}
 });

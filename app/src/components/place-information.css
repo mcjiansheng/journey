@@ -1,0 +1,14 @@
+.place-information{font-size:13px;line-height:1.55;overflow-wrap:anywhere}
+.place-information-summary{display:flex;align-items:center;gap:12px;margin-top:12px}
+.place-information-photo{width:88px;height:72px;flex:0 0 88px;object-fit:cover;border-radius:12px;background:var(--surface)}
+.place-information-facts{min-width:0;display:grid;gap:7px}
+.place-information p{margin:0}
+.place-information-type{color:var(--text);font-weight:550}
+.place-information-hours,.place-information-contact{display:flex;gap:6px;align-items:flex-start;color:var(--muted)}
+.place-information-hours svg,.place-information-contact svg{flex-shrink:0;margin-top:3px}
+.place-information-details{display:grid;gap:10px;padding-top:12px}
+.place-information-introduction{color:var(--muted);white-space:pre-line}
+.place-information-link{display:inline-flex;gap:6px;align-items:center;justify-self:start;min-height:36px}
+.place-information a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+.place-information a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+.place-information-source{font-size:12px}

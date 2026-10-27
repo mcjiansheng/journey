@@ -7,6 +7,26 @@ export function orderedActivities(snapshot, dayId) {
   let i=0;
   return rows.map(o => o.payload.time?.mode === 'precise' && o.payload.time.start ? precise[i++] : o);
 }
+const periodStarts={清晨:300,上午:360,中午:720,下午:780,晚上:1080,深夜:1320,morning:360,afternoon:780,evening:1080};
+// Only use this when a time or day changes. Stored ranks remain authoritative
+// during ordinary edits, including ranks chosen by dragging.
+export function activityOrderPlan(snapshot,payload,objectId) {
+  // Preserve the visible positions of other activities when the edited precise
+  // activity leaves its old slot. Their stored ranks can be in another order.
+  const rows=orderedActivities(snapshot,payload.dayId).filter(o=>o.id!==objectId);
+  const minute=t=>t?.mode==='precise'?minutesOf(t.start):periodStarts[t?.period]??null;
+  const target=minute(payload.time);
+  const index=target===null?rows.length:rows.findIndex(o=>{const value=minute(o.payload.time);return value!==null&&value>target});
+  const at=index<0?rows.length:index;
+  let ranks=rows.map(o=>o.payload.order??0);
+  let before=ranks[at-1],after=ranks[at];
+  const midpoint=before!==undefined&&after!==undefined?(before+after)/2:null;
+  const normalize=ranks.some((rank,i)=>i>0&&rank<=ranks[i-1])||(midpoint!==null&&(midpoint===before||midpoint===after));
+  const updates=normalize?rows.flatMap((o,i)=>(o.payload.order??0)===i*1024?[]:[{objectId:o.id,order:i*1024}]):[];
+  if(normalize){ranks=rows.map((_,i)=>i*1024);before=ranks[at-1];after=ranks[at];}
+  const order=before!==undefined&&after!==undefined?(before+after)/2:before!==undefined?before+1024:after!==undefined?after-1024:0;
+  return {order,updates};
+}
 export function dateAdd(value, days) {
   if (!value) return null;
   const d = new Date(`${value}T12:00:00Z`); d.setUTCDate(d.getUTCDate()+days);

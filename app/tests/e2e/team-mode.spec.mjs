@@ -51,7 +51,7 @@ async function createTrip(page,mode='admin'){
 }
 
 async function openSettings(page){
- await page.getByRole('navigation',{name:/^(主导航|手机主导航)$/}).getByRole('button',{name:'设置',exact:true}).click();
+ await page.getByRole('navigation',{name:/^(主导航|手机主导航)$/}).getByRole('button',{name:'管理',exact:true}).click();
  const row=page.locator('.settings-page .settings-link').filter({hasText:'团队类型'});
  await expect(row).toBeVisible();
  await expect(row).toHaveAttribute('aria-haspopup','dialog');
@@ -69,7 +69,7 @@ async function openTeamModeDialog(page,row){
  await expect(dialog).toBeVisible();
  const picker=dialog.getByRole('radiogroup',{name:'团队类型'});
  await expect(picker).toBeVisible();
- if(await picker.locator('input:checked').isDisabled())await expect(dialog.getByRole('button',{name:'关闭',exact:true})).toBeFocused();
+ if(await picker.locator('input:checked').isDisabled())await expect(dialog.getByRole('heading',{name:'团队类型',exact:true})).toBeFocused();
  else await expect(picker.locator('input:checked')).toBeFocused();
  return {dialog,picker};
 }
@@ -91,9 +91,9 @@ async function expectSettingRow(row,selected){
 }
 
 async function closeCreateExtras(dialog){
- const summary=dialog.locator('.trip-extra-settings > summary');
- if(await dialog.locator('.trip-extra-settings').evaluate(node=>node.open))await summary.click();
- await expect(dialog.locator('.trip-extra-settings')).not.toHaveAttribute('open','');
+ const toggle=dialog.getByRole('button',{name:'更多设置',exact:true});
+ if(await toggle.getAttribute('aria-expanded')==='true')await toggle.click();
+ await expect(toggle).toHaveAttribute('aria-expanded','false');
 }
 
 async function expectPickerContent(picker,selected){

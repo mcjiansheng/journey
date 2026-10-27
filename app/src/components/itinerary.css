@@ -1,0 +1,55 @@
+.itinerary-page .page-heading{justify-content:flex-end;margin-bottom:18px}
+.itinerary-page .activity-card:has(.activity-more[open]){z-index:3}
+.itinerary-page .activity-card{padding:19px 20px;gap:14px;min-height:88px}
+.itinerary-page .activity-main{padding-right:92px;gap:4px}
+.itinerary-page .activity-main h3{font-size:18px;line-height:1.5}
+.itinerary-page .activity-number{width:28px;height:28px;margin-top:2px}
+.itinerary-page .activity-toolbar{margin:0;min-height:0}
+.itinerary-page .activity-controls{position:absolute;right:10px;top:10px}
+.itinerary-page .activity-place-row{display:flex;align-items:center;gap:4px;margin-top:3px;padding-right:44px}
+.itinerary-page .activity-place{min-height:32px;margin:0;padding:0;max-width:100%;text-align:left}
+.itinerary-page .activity-place>svg{flex-shrink:0}
+.itinerary-page .activity-place>span{overflow-wrap:anywhere}
+.itinerary-page .activity-navigation{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:36px;height:36px;border-radius:10px;color:var(--accent)}
+.itinerary-page .activity-navigation:hover{background:var(--accent-soft)}
+.activity-opinions{display:flex;gap:12px;flex-wrap:wrap;margin-top:7px;color:var(--muted);font-size:11px}
+.next-label{margin-left:8px;border-radius:5px;background:var(--accent-soft);padding:2px 5px;font-size:10px}
+.itinerary-page .next-activity{border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
+.itinerary-page .route-slot{position:relative;display:flex;align-items:center;min-height:24px;margin-left:37px}
+.itinerary-page .route-row{margin:0;padding:4px 12px;min-height:32px;font-size:11px}
+.itinerary-page .route-add{min-height:24px;padding:1px 10px;gap:4px;font-size:10px;opacity:0;transition:opacity .15s}
+.itinerary-page .route-slot:hover .route-add,.itinerary-page .route-add:focus-visible{opacity:1}
+.itinerary-page .activity-list:has(>.activity-card:nth-of-type(2))::before{left:34px;top:50px;bottom:50px}
+.itinerary-page .mobile-day-bar,.itinerary-page .sort-toggle{display:none}
+@media(hover:none){.itinerary-page .route-add{opacity:.65}}
+@media(max-width:760px){
+ .itinerary-page .day-tabs{display:none}
+ .itinerary-page .mobile-day-bar{display:flex;position:sticky;top:0;z-index:5;align-items:center;gap:2px;margin:0 -4px 20px;padding:3px 4px;border:1px solid var(--line);border-radius:16px;background:var(--glass);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:0 3px 15px #203b3308}
+ .mobile-day-bar select{min-width:0;flex:1;border:0;background:transparent;font-size:13px;color:var(--text);height:44px;padding:0 5px;font-weight:600}
+ .mobile-day-bar .icon-button{min-width:40px;min-height:44px}
+ .itinerary-page .day-heading{gap:5px;margin-bottom:14px}
+ .itinerary-page .day-heading h2{font-size:17px;flex-wrap:wrap;gap:4px 8px}
+ .itinerary-page .day-heading h2 small{font-size:10px}
+ .itinerary-page .day-heading>.button-row{gap:3px;flex-wrap:nowrap}
+ .itinerary-page .day-add{display:none}
+ .itinerary-page .sort-toggle{display:inline-flex;white-space:nowrap}
+ .itinerary-page .activity-card{padding:15px 13px;gap:10px;border-radius:17px}
+ .itinerary-page .activity-main{padding-right:40px;gap:3px}
+ .itinerary-page .activity-main h3{font-size:16px;line-height:1.5}
+ .itinerary-page .activity-time{font-size:11px}
+ .itinerary-page .activity-number{width:25px;height:25px;font-size:11px}
+ .itinerary-page .activity-place-row{padding-right:0;margin-top:2px;gap:2px}
+ .itinerary-page .activity-place{font-size:12px;line-height:1.5;min-height:34px}
+ .itinerary-page .activity-navigation{width:40px;height:40px}
+ .itinerary-page .activity-controls{top:7px;right:5px}
+ .itinerary-page .drag-handle{display:none}
+ .itinerary-page.is-sorting .drag-handle{display:inline-flex}
+ .itinerary-page.is-sorting .activity-main{padding-right:88px}
+ .itinerary-page .route-slot{margin-left:28px;min-height:22px}
+ .itinerary-page .route-add{opacity:.7;min-height:28px;padding:2px 8px}
+ .itinerary-page .route-add span{font-size:10px}
+ .itinerary-page .route-row{font-size:10px;min-height:28px;padding:4px 8px}
+ .itinerary-page .activity-list:has(>.activity-card:nth-of-type(2))::before{left:26px;top:45px;bottom:45px}
+ .itinerary-page .timing-note{font-size:11px}
+ .activity-opinions{font-size:10px;gap:8px}
+}

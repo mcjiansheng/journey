@@ -31,10 +31,15 @@ JSON 请求/响应；错误 {error:{code,message,details?}}。Cookie HttpOnly �
 
 ## 前端集成（实现于 src/sync.js）
 
-export useJourney() hook -> {ready,user,config,trips,snapshot,context,status,error,pendingCount,sessionExpired,api,login,logout,openTrip,goHome,refresh,createTrip,joinTrip,mutate,setContext,setDraft,clearError,retry,updateProfile,refreshTrips}。
+export useJourney() hook -> {ready,user,config,trips,snapshot,context,status,error,pendingCount,pendingOperations,pendingRecoveryGroups,recoveryBusy,tripsLoadState,sessionExpired,api,login,logout,openTrip,goHome,refresh,createTrip,joinTrip,mutate,captureScope,setContext,setDraft,updateDrafts,persistLocal,clearError,retry,retryPending,reapplyPending,discardPending,updateProfile,refreshTrips}。
 api(path,{method,body}) 返回解析 JSON；path=/api/... 自动加 base；throws Error 带 code/status/details。
 login({identifier,password,displayName?,register:boolean})；openTrip(id)；createTrip(form)；joinTrip(code)。mutate({objectId,kind,objectType,patch,generation,expression}) 立即乐观更新并等待本机持久化，自动上传，返回 Promise；不会为权限管理建立离线队列。
-setContext(patch)（同步更新 React、异步持久化/上传）、setDraft(key,value) context.drafts；goHome 保留本旅程 context 和成员身份。context 默认 {page:'itinerary',dayId:null,drafts:{},map:{},scroll:{}}。status='syncing'|'synced'|'offline'|'error'。hook 单例控制器，多组件共用。
+setContext(patch)（同步更新 React、异步持久化/上传）、setDraft(key,value) context.drafts；goHome 保留本旅程 context 和成员身份。context 默认 {page:'itinerary',dayId:null,drafts:{},map:{},scroll:{}}。status='checking'|'syncing'|'synced'|'offline'|'blocked'|'error'，连接状态由权威读取与同步结果确认，不能只依据 navigator.onLine 或队列为空。tripsLoadState={status:'idle'|'loading'|'ready'|'error',error,hasLoaded}，首页区分加载失败、缓存列表与确认空列表。hook 单例控制器，多组件共用。
+
+- captureScope() 返回账号、旅程与会话代次；mutate(input,scope) 在实际入队前核验作用域，setContext(patch,scope)、updateDrafts(updater,scope)、persistLocal(scope) 可供编辑器清理所属旅程的已保存输入，避免旧异步结果影响后来打开的旅程。
+- 每段旅程按原队列顺序上传，阻塞项之后的修改暂停，其他旅程继续。网络失败或回执无法解析时，按原操作标识与内容重试以确认结果。对象级 403/404 需另读旅程确认访问权限。
+- pendingRecoveryGroups 每组为 {id,tripId,tripName,opIds,operations:[{id,summary}],reason,canReapply,canDiscard}。retryPending(id) 原样重试首个待处理项；reapplyPending(preview) 仅允许时间无法确认的修改及其同旅程后缀，经确认后用新时间与有序操作标识重提交，保持对象标识及生命周期代次；discardPending(preview) 明确放弃所列后缀并保留未完成草稿；存在未知回执时禁止放弃或重新应用，用户须先明确选择重试以继续提交并确认结果。恢复先等待在途请求结束，确认范围变化抛 RECOVERY_CHANGED（details.preview 为新预览），本机存储成功后才发布新队列。
+- 费用编辑按 title/payment/notes/activityId 四组跟踪真实输入，payment 包含金额文本；干净组随共享快照更新，完成等待本机持久化，失败保留输入。旧完整草稿与共享内容不同时需显式恢复。费用名称可空；已支付须有非负有效金额（含零），预计金额可空。
 
 实现于 src/MapView.jsx default component({journey,onEditActivity})，onEditActivity(activityObjectOrNull,initialPatch?)。UI owner 引入即可；地图全视口布局自行 style 在 map.css。
 

@@ -37,11 +37,13 @@ async function setup(page,{favoriteCount=1}={}){
  // Capture the real SDK instance so its pixel conversion and pan direction can be checked.
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'地图',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>!!window.AMap?.Map),{timeout:30000}).toBe(true);
- await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();
+ await page.getByRole('button',{name:'返回我的旅程',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
  await page.evaluate(()=>{
   const AMap=window.AMap;
   AMap.Map=new Proxy(AMap.Map,{construct(Target,args){const instance=Reflect.construct(Target,args);window.__selectionMap=instance;return instance;}});
  });
+ await page.getByRole('button',{name:/继续旅程/}).click();
 }
 
 async function visibleMapFooter(page){
@@ -85,10 +87,13 @@ for(const width of [390,320])test(`real map selection and activity entry leave t
  await page.getByRole('button',{name:'查看收藏列表',exact:true}).click();
  await page.locator('.map-result').filter({hasText:'玄武湖选点验收'}).click();
  await visibleSelectedMarker(page);
+ const viewport=()=>page.evaluate(()=>{const map=window.__selectionMap,center=map.getCenter();return[center.lng,center.lat,map.getZoom()].map(n=>Number(n.toFixed(6)));});
+ const beforeExpansion=await viewport();
  await page.getByRole('button',{name:'更多操作',exact:false}).click();
- await visibleSelectedMarker(page);
+ await expect.poll(()=>page.locator('.map-panel').evaluate(el=>el.getAnimations().every(animation=>animation.playState!=='running'))).toBe(true);
+ expect(await viewport()).toEqual(beforeExpansion);await visibleMapFooter(page);
  await page.setViewportSize({width,height:640});
- await visibleSelectedMarker(page);
+ expect(await viewport()).toEqual(beforeExpansion);await visibleMapFooter(page);
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();
  await page.locator('.activity-card').getByRole('button',{name:'地图',exact:true}).click();
  await visibleSelectedMarker(page);

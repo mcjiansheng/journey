@@ -1,0 +1,9 @@
+.sync-recovery-group{margin:16px 0;padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow-wrap:anywhere}
+.sync-recovery-group h3{margin-bottom:8px}
+.sync-recovery-group .button-row{margin-top:12px}
+.sync-operation-list{max-height:36vh;overflow:auto;padding-left:24px;font-size:13px;line-height:1.8;overflow-wrap:anywhere}
+.sync-operation-list li+li{margin-top:8px}
+.sync-status.blocked{color:var(--danger)}
+.home-load-state{margin:20px 0;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.home-load-state .button-row{margin-top:8px}
+.home-load-state p{overflow-wrap:anywhere}

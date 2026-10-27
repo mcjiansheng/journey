@@ -1,0 +1,13 @@
+/* The map coordinate sits at the pin tip; saved places use a smaller star. */
+.place-marker{position:relative;display:block;width:44px;height:44px;padding:0;border:0;border-radius:12px;background:transparent;color:#246b58;cursor:pointer;overflow:visible}
+.place-marker .marker-graphic{position:absolute;display:flex;align-items:center;justify-content:center;left:9px;top:9px;width:26px;height:26px;border:1.5px solid #fffefa;border-radius:50%;background:#fffefa;box-shadow:0 1px 5px #183c3040}
+.place-marker .marker-graphic svg{display:block;width:19px;height:19px}
+.place-marker.arranged .marker-graphic{background:#e5eee5;border-color:#fffefa}
+.place-marker.route-marker .marker-graphic{background:#294c68;color:#fffefa;font-size:12px;font-weight:650}
+.place-marker.selected-marker{height:48px}
+.place-marker.selected-marker .marker-graphic{left:6px;top:3px;width:32px;height:42px;border:0;border-radius:0;background:transparent;box-shadow:none;filter:drop-shadow(0 2px 2px #183c3040)}
+.place-marker.selected-marker .marker-graphic svg{width:32px;height:42px}
+.marker-label{position:absolute;left:40px;top:9px;max-width:170px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);box-shadow:0 2px 8px #183c301a;color:var(--text);font-size:12px;font-weight:600;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.place-marker:focus-visible{outline:3px solid #4b967d;outline-offset:2px}
+@media(hover:hover) and (pointer:fine){.place-marker:hover .marker-graphic{filter:brightness(1.08)}}
+@media(max-width:760px){.marker-label{max-width:130px}}

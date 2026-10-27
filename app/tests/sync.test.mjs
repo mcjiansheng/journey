@@ -124,3 +124,221 @@ test('durable local completion preserves blocked sync errors and clears recovere
   assert.equal(recovered.subject.getState().error, null);
   assert.equal(recovered.subject.getState().status, 'synced');
 });
+
+function recoveryFixture(queue, options={}) {
+  const posts=[],storage=new Map();let handler=options.handler,failStorage=false;
+  const snapshot=id=>({trip:{id,name:id},objects:id==='t'?(options.objects||[]):[],cursor:1,epoch:1});
+  const ok=data=>({ok:true,json:async()=>structuredClone(data)});
+  const sandbox={structuredClone,performance:options.performance||performance,crypto:{randomUUID},previewReschedule,navigator:{onLine:true},
+    window:{addEventListener(){}},document:{addEventListener(){},visibilityState:'hidden'},setTimeout,clearTimeout,setInterval(){},useSyncExternalStore(){},
+    openDB:async()=>({put:async(_,value,key)=>{if(options.beforePut)await options.beforePut();if(failStorage)throw new Error('full');storage.set(key,structuredClone(value));},delete:async(_,key)=>storage.delete(key)}),
+    fetch:async(url,request)=>{
+      const path=url.replace('/journey','');
+      if(path==='/api/auth/logout')return ok({ok:true});
+      if(path==='/api/clock'&&options.clock)return ok(await options.clock());
+      if(path==='/api/clock')return ok({leaseId:'lease',serverTime:Date.now(),expiresAt:Date.now()+100000});
+      if(path.endsWith('/operations')){const body=JSON.parse(request.body);posts.push(body);if(handler){const result=await handler(body,path);if(result)return result;}return ok({snapshot:snapshot(path.split('/')[3])});}
+      if(path.startsWith('/api/trips/'))return ok(snapshot(path.split('/')[3]));
+      throw new Error('Unexpected '+path);
+    }};
+  const subject=new Script(`(function(){${controllerSource}
+    account={user:{id:'A',preferences:{}},trips:[{id:'t',name:'Trip'},{id:'other',name:'Other'}],snapshots:{t:${JSON.stringify(snapshot('t'))}},contexts:{},queue:${JSON.stringify(queue)}};
+    csrf='csrf';selected='t';connection='current';lease={leaseId:'lease',uncertaintyMs:2,serverTime:Date.now(),expiresAt:Date.now()+100000};leasePerformance=performance.now();leaseWall=Date.now();renderAccount();
+    return {flush,logout,getRecoveryPaused:()=>recoveryPaused,reapplyPending,discardPending,retryPending,clearError,mutate,captureScope,setContext,updateDrafts,persistLocal,
+      withLocal:job=>serializeLocal(job),select:id=>{selected=id;renderAccount();},getState:()=>state,getQueue:()=>clone(account.queue),add:op=>{account.queue.push(op);renderAccount();},switchAccount:(queue=[])=>{authEpoch++;account=emptyAccount({id:'B'});account.queue=clone(queue);selected=null;renderAccount();}};
+  })()`).runInNewContext(sandbox);
+  return {subject,posts,storage,setHandler:fn=>handler=fn,failStorage:()=>{failStorage=true;},restoreStorage:()=>{failStorage=false;}};
+}
+const queued=(id,tripId='t',extra={})=>({id,tripId,objectId:tripId,kind:'patch',patch:{name:id},generation:0,clock:{leaseId:'lease',elapsedMs:0,uncertaintyMs:2},...extra});
+const failed=(code,status=409)=>({ok:false,status,json:async()=>({error:{code,message:code}})});
+
+test('a rejected operation blocks its trip suffix while other trips continue; dismissing error preserves recovery',async()=>{
+  const f=recoveryFixture([queued('first'),queued('later'),queued('independent','other')],{handler:body=>body.id==='first'?failed('STALE'):null});
+  await f.subject.flush();
+  assert.deepEqual(f.posts.map(x=>x.id),['first','independent']);
+  f.subject.clearError();
+  assert.equal(f.subject.getState().status,'blocked');
+  assert.deepEqual(Array.from(f.subject.getState().pendingRecoveryGroups[0].opIds),['first','later']);
+  assert.equal(f.subject.getQueue()[0].generation,0);
+});
+
+test('a lost receipt remains offline and is retried using identical operation content',async()=>{
+  let attempts=0;
+  const f=recoveryFixture([queued('first'),queued('later')],{handler:()=>{if(attempts++===0)throw new Error('connection lost');}});
+  await f.subject.flush();
+  assert.equal(f.subject.getState().status,'offline');
+  assert.equal(f.subject.getQueue()[0].receiptUnknown,true);
+  assert.equal(f.subject.getState().pendingRecoveryGroups[0].canReapply,false);
+  await f.subject.retryPending('first');
+  assert.deepEqual(f.posts[0],f.posts[1]);
+  assert.deepEqual(f.posts.map(x=>x.id),['first','first','later']);
+  assert.equal(f.subject.getState().status,'synced');
+});
+
+test('reapplying a confirmed suffix shares a clock and preserves original order, object identity and generation',async()=>{
+  const f=recoveryFixture([queued('first','t',{blocked:'CLOCK_UNCERTAIN',clock:{uncertain:true}}),queued('later','t',{generation:3}),queued('fixed','t',{blocked:'STALE',generation:4})]);
+  const preview=f.subject.getState().pendingRecoveryGroups[0];
+  await f.subject.reapplyPending(preview);
+  await f.subject.flush();
+  // Recovery's automatic flush can still be finishing when the action resolves.
+  await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal(f.posts.length,2);
+  assert.ok(f.posts[0].id<f.posts[1].id);
+  assert.deepEqual(f.posts[0].clock,f.posts[1].clock);
+  assert.equal(f.posts[1].generation,3);
+  assert.equal(f.posts[0].objectId,'t');
+  assert.equal(f.subject.getQueue()[0].blocked,'STALE');
+});
+
+test('changed confirmation refuses a newly expanded suffix',async()=>{
+  const f=recoveryFixture([queued('first','t',{blocked:'CLOCK_UNCERTAIN',clock:{uncertain:true}})]);
+  const preview=f.subject.getState().pendingRecoveryGroups[0];
+  f.subject.add(queued('new'));
+  await assert.rejects(f.subject.discardPending(preview),e=>e.code==='RECOVERY_CHANGED'&&e.details.preview.opIds.length===2);
+  assert.equal(f.subject.getQueue().length,2);
+});
+
+test('failed durable recovery retains the original queued operation',async()=>{
+  const f=recoveryFixture([queued('first','t',{blocked:'CLOCK_UNCERTAIN',clock:{uncertain:true}})]);
+  const original=f.subject.getQueue();f.failStorage();
+  await assert.rejects(f.subject.reapplyPending(f.subject.getState().pendingRecoveryGroups[0]),{code:'LOCAL_STORAGE'});
+  assert.deepEqual(f.subject.getQueue(),original);
+});
+
+test('object-level 403 keeps trip membership after successful authoritative access check',async()=>{
+  const f=recoveryFixture([queued('first'),queued('later')],{handler:()=>failed('OBJECT_FORBIDDEN',403)});
+  await f.subject.flush();
+  assert.equal(f.subject.getState().trips.length,2);
+  assert.equal(f.subject.getQueue().length,2);
+  assert.equal(f.posts.length,1);
+});
+
+test('discard waits for in-flight operation and rejects its changed suffix',async()=>{
+  let release,started;
+  const begun=new Promise(resolve=>started=resolve);
+  const f=recoveryFixture([queued('inflight'),queued('uncertain','t',{blocked:'CLOCK_UNCERTAIN',clock:{uncertain:true}})] ,{handler:()=>{started();return new Promise(resolve=>release=()=>resolve(null));}});
+  const preview=f.subject.getState().pendingRecoveryGroups[0];
+  const flushing=f.subject.flush();await begun;
+  const discard=f.subject.discardPending(preview);
+  assert.equal(f.subject.getState().recoveryBusy,true);
+  release();await flushing;await discard;
+  assert.equal(f.subject.getQueue().length,0);
+  assert.equal(f.posts.length,1);
+});
+
+test('account switching during in-flight recovery cannot affect the new account',async()=>{
+  let release,started;
+  const begun=new Promise(resolve=>started=resolve);
+  const f=recoveryFixture([queued('inflight'),queued('uncertain','t',{blocked:'CLOCK_UNCERTAIN',clock:{uncertain:true}})],{handler:()=>{started();return new Promise(resolve=>release=()=>resolve(null));}});
+  const flushing=f.subject.flush();await begun;
+  const recovery=f.subject.discardPending(f.subject.getState().pendingRecoveryGroups[0]);recovery.catch(()=>{});
+  f.subject.switchAccount();release();await flushing;
+  await assert.rejects(recovery,{code:'SESSION_CHANGED'});
+  assert.equal(f.subject.getState().user.id,'B');assert.equal(f.subject.getQueue().length,0);
+});
+
+test('ordinary retry storage failure preserves the blocked queue exactly',async()=>{
+  const f=recoveryFixture([queued('first','t',{blocked:'STALE'})]);
+  const original=f.subject.getQueue();f.failStorage();
+  await assert.rejects(f.subject.retryPending('first'),{code:'LOCAL_STORAGE'});
+  assert.deepEqual(f.subject.getQueue(),original);
+  assert.equal(f.posts.length,0);
+});
+
+test('queued mutation captures its originating trip before waiting for local persistence',async()=>{
+  const f=recoveryFixture([]);let release,started;const began=new Promise(resolve=>started=resolve);
+  const held=f.subject.withLocal(()=>new Promise(resolve=>{release=resolve;started();}));
+  await began;
+  const mutation=f.subject.mutate({objectId:'t',kind:'patch',patch:{name:'old trip'}});mutation.catch(()=>{});
+  f.subject.select('other');release();await held;
+  await assert.rejects(mutation,{code:'SESSION_CHANGED'});
+  assert.equal(f.subject.getQueue().length,0);
+});
+
+test('recovery persistence preserves drafts edited while the storage transaction is pending',async()=>{
+  let release,started;const began=new Promise(resolve=>started=resolve),gate=new Promise(resolve=>release=resolve);
+  const f=recoveryFixture([queued('first','t',{blocked:'CLOCK_UNCERTAIN',clock:{uncertain:true}})],{beforePut:()=>{started();return gate;}});
+  const scope=f.subject.captureScope(),recovery=f.subject.discardPending(f.subject.getState().pendingRecoveryGroups[0]);
+  await began;f.subject.setContext({drafts:{expense:{title:'new draft'}}},scope);release();
+  await recovery;await f.subject.persistLocal(scope);
+  assert.equal(f.storage.get('account:A').contexts.t.drafts.expense.title,'new draft');
+  assert.equal(f.storage.get('account:A').queue.length,0);
+});
+
+test('recovery summaries distinguish queued business objects and retain earlier create and rename context',()=>{
+  const f=recoveryFixture([
+    queued('create','t',{kind:'create',objectId:'meal',objectType:'expense',blocked:'CLOCK_UNCERTAIN',patch:{title:'午餐',payment:{currency:'CNY',amountMinor:2000,status:'estimated'}}}),
+    queued('rename','t',{objectId:'meal',patch:{title:'晚餐'}}),
+    queued('notes','t',{objectId:'meal',patch:{notes:'private long text'}}),
+    queued('missing','t',{objectId:'absent',patch:{notes:'private'}}),
+    queued('dates','t',{kind:'reschedule',patch:{startDate:'2026-10-20',dayCount:3,moves:[]}}),
+  ]);
+  const summaries=Array.from(f.subject.getState().pendingRecoveryGroups[0].operations,op=>op.summary);
+  assert.match(summaries[0],/添加费用「午餐」.*预计 CNY 20/);
+  assert.match(summaries[1],/修改费用「晚餐」/);
+  assert.match(summaries[2],/修改费用「晚餐」.*备注/);
+  assert.equal(summaries[3],'修改已不可用的内容');
+  assert.match(summaries[4],/2026-10-20 至 2026-10-22/);
+  assert.ok(summaries.every(summary=>!summary.includes('private')));
+});
+
+test('discard refuses unknown receipts without submitting them; explicit retry confirms using the original operation',async()=>{
+  const f=recoveryFixture([queued('unknown','t',{receiptUnknown:true}),queued('blocked','t',{blocked:'STALE'})]);
+  const preview=f.subject.getState().pendingRecoveryGroups[0],original=f.subject.getQueue();
+  assert.equal(preview.canDiscard,false);assert.equal(preview.canReapply,false);
+  await assert.rejects(f.subject.discardPending(preview),{code:'RECEIPT_UNCONFIRMED'});
+  assert.equal(f.posts.length,0);assert.deepEqual(f.subject.getQueue(),original);
+  await f.subject.retryPending('unknown');
+  assert.equal(f.posts.length,1);assert.equal(f.posts[0].id,'unknown');
+  assert.deepEqual(f.posts[0].clock,original[0].clock);
+  assert.equal(f.subject.getQueue().length,1);assert.equal(f.subject.getQueue()[0].id,'blocked');
+});
+
+test('successful remote receipt with failed local storage retains the original operation for idempotent confirmation',async()=>{
+  const f=recoveryFixture([queued('confirmed')]);const original=f.subject.getQueue();
+  f.failStorage();await f.subject.flush();
+  assert.equal(f.subject.getState().error.code,'LOCAL_STORAGE');
+  assert.deepEqual(f.subject.getQueue(),original);
+  assert.equal(f.subject.getQueue()[0].blocked,undefined);
+  f.restoreStorage();await f.subject.persistLocal();
+  await new Promise(resolve=>setTimeout(resolve,5));
+  assert.deepEqual(f.posts[0],f.posts[1]);assert.equal(f.subject.getQueue().length,0);
+});
+
+
+test('local persistence waiting preserves the input occurrence clock and captured payload',async()=>{
+  let now=1000,release,started;const began=new Promise(resolve=>started=resolve);
+  const f=recoveryFixture([],{performance:{now:()=>now}});
+  const held=f.subject.withLocal(()=>new Promise(resolve=>{release=resolve;started();}));await began;
+  now=1100;const input={objectId:'t',kind:'patch',patch:{name:'input at 1100'}};
+  const mutation=f.subject.mutate(input);
+  input.patch.name='changed after dispatch';
+  // A collaborator's edit at elapsed 500 must remain later than this local input.
+  now=1700;release();await held;const operation=await mutation;
+  assert.equal(operation.clock.elapsedMs,100);
+  assert.ok(operation.clock.elapsedMs<500);
+  assert.equal(operation.patch.name,'input at 1100');
+  assert.equal(operation.tripId,'t');
+});
+
+
+test('an old account recovery cannot release a new account recovery lock after logout resets busy',async()=>{
+  let releasePost,postStarted,releaseClock,clockStarted;
+  const posted=new Promise(resolve=>postStarted=resolve),clockBegan=new Promise(resolve=>clockStarted=resolve);
+  const clockGate=new Promise(resolve=>releaseClock=resolve);
+  const f=recoveryFixture([queued('inflight'),queued('old-block','t',{blocked:'CLOCK_UNCERTAIN',clock:{uncertain:true}})],{
+    handler:()=>{postStarted();return new Promise(resolve=>releasePost=()=>resolve(null));},
+    clock:()=>{clockStarted();return clockGate;},
+  });
+  const flushing=f.subject.flush();await posted;
+  const oldRecovery=f.subject.discardPending(f.subject.getState().pendingRecoveryGroups[0]);oldRecovery.catch(()=>{});
+  await f.subject.logout();assert.equal(f.subject.getState().recoveryBusy,false);
+  f.subject.switchAccount([queued('new-block','other',{blocked:'CLOCK_UNCERTAIN',clock:{uncertain:true}})]);
+  const newRecovery=f.subject.reapplyPending(f.subject.getState().pendingRecoveryGroups[0]);
+  releasePost();await flushing;await clockBegan;
+  await assert.rejects(oldRecovery,{code:'SESSION_CHANGED'});
+  assert.equal(f.subject.getState().recoveryBusy,true);
+  assert.equal(f.subject.getRecoveryPaused(),true);
+  f.setHandler(null);releaseClock({leaseId:'new-lease',serverTime:Date.now(),expiresAt:Date.now()+100000});
+  await newRecovery;assert.equal(f.subject.getState().recoveryBusy,false);
+});
