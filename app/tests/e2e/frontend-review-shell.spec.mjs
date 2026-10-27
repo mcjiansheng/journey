@@ -71,11 +71,13 @@ test('trip creation proceeds during a pending destination lookup using device ti
  await expect.poll(()=>page.evaluate(async()=>(await fetch('/api/trips').then(r=>r.json())).trips[0].timezone)).toBe('Asia/Tokyo');
 });
 
-test('map retains full desktop navigation and page columns share an edge',async({page})=>{
- await page.setViewportSize({width:1440,height:900});await seed(page);await page.getByRole('button',{name:/继续旅程/}).click();
+test('map can retain full desktop navigation and page columns share an edge',async({page})=>{
+ await page.setViewportSize({width:1440,height:900});await seed(page);
+ await page.evaluate(()=>{localStorage.setItem('journey.appearance',JSON.stringify({autoCollapseMapSidebar:false}));document.documentElement.dataset.mapSidebarCollapse='false'});
+ await page.getByRole('button',{name:/继续旅程/}).click();
  const before=await page.locator('.sidebar').boundingBox();const itinerary=await page.locator('.itinerary-page').boundingBox();
  await nav(page,'费用').click();const ledger=await page.locator('.ledger-page').boundingBox();expect(ledger.x).toBeCloseTo(itinerary.x);expect(ledger.width).toBeCloseTo(itinerary.width);
- await nav(page,'地图').click();await expect(page.locator('.trip-title')).toContainText('南京三日慢游');
+ await nav(page,'地图').click();await expect(page.locator('.map-trip-title')).toContainText('南京三日慢游');
  await expect(page.locator('.sidebar-foot')).toBeVisible();await expect(nav(page,'管理').locator('span')).toBeVisible();
  const map=await page.locator('.sidebar').boundingBox();expect(map.width).toBeCloseTo(before.width);expect(map.height).toBeCloseTo(before.height);
  await page.screenshot({path:'../.local/evidence/frontend-review/desktop-map-shell.png'});
