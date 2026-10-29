@@ -19,14 +19,17 @@ product=add('product','isa = PBXFileReference; explicitFileType = wrapper.applic
 testproduct=add('testproduct','isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = JourneyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR;')
 testref=add('testref','isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JourneyTests.swift; sourceTree = "<group>";')
 testbuild=add('testbuild',f'isa = PBXBuildFile; fileRef = {testref};')
+routefixture=add('routefixture','isa = PBXFileReference; lastKnownFileType = text.json; path = ../fixtures/routes.json; sourceTree = SOURCE_ROOT;')
+routefixturebuild=add('routefixturebuild',f'isa = PBXBuildFile; fileRef = {routefixture};')
 group=add('sources',f'isa = PBXGroup; children = {arr(refs+[plist,asset])}; path = Journey; sourceTree = "<group>";')
-testgroup=add('tests',f'isa = PBXGroup; children = {arr([testref])}; path = JourneyTests; sourceTree = "<group>";')
+testgroup=add('tests',f'isa = PBXGroup; children = {arr([testref,routefixture])}; path = JourneyTests; sourceTree = "<group>";')
 products=add('products',f'isa = PBXGroup; children = {arr([product,testproduct])}; name = Products; sourceTree = "<group>";')
 main=add('main',f'isa = PBXGroup; children = {arr([group,testgroup,products])}; sourceTree = "<group>";')
 sources=add('sourcesphase',f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = {arr(builds)}; runOnlyForDeploymentPostprocessing = 0;')
 resources=add('resourcesphase',f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = {arr([assetbuild])}; runOnlyForDeploymentPostprocessing = 0;')
 frameworks=add('frameworks','isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;')
 testsources=add('testsources',f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = {arr([testbuild])}; runOnlyForDeploymentPostprocessing = 0;')
+testresources=add('testresources',f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = {arr([routefixturebuild])}; runOnlyForDeploymentPostprocessing = 0;')
 common='CLANG_ENABLE_MODULES = YES; SWIFT_VERSION = 5.0; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; TARGETED_DEVICE_FAMILY = "1,2";'
 projectconfigs=[]; appconfigs=[]; testconfigs=[]
 for name in ['Debug','Release']:
@@ -38,7 +41,7 @@ pc=config('pc',projectconfigs); ac=config('ac',appconfigs); tc=config('tc',testc
 target=add('target',f'isa = PBXNativeTarget; buildConfigurationList = {ac}; buildPhases = {arr([sources,frameworks,resources])}; buildRules = (); dependencies = (); name = Journey; productName = Journey; productReference = {product}; productType = "com.apple.product-type.application";')
 proxy=add('proxy',f'isa = PBXContainerItemProxy; containerPortal = {uid("project")}; proxyType = 1; remoteGlobalIDString = {target}; remoteInfo = Journey;')
 dep=add('dep',f'isa = PBXTargetDependency; target = {target}; targetProxy = {proxy};')
-testtarget=add('testtarget',f'isa = PBXNativeTarget; buildConfigurationList = {tc}; buildPhases = {arr([testsources])}; buildRules = (); dependencies = {arr([dep])}; name = JourneyTests; productName = JourneyTests; productReference = {testproduct}; productType = "com.apple.product-type.bundle.unit-test";')
+testtarget=add('testtarget',f'isa = PBXNativeTarget; buildConfigurationList = {tc}; buildPhases = {arr([testsources,testresources])}; buildRules = (); dependencies = {arr([dep])}; name = JourneyTests; productName = JourneyTests; productReference = {testproduct}; productType = "com.apple.product-type.bundle.unit-test";')
 uiref=add('uiref','isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JourneyUITests/JourneyUITests.swift; sourceTree = "<group>";')
 uibuild=add('uibuild',f'isa = PBXBuildFile; fileRef = {uiref};')
 objects[main]=objects[main].replace(arr([group,testgroup,products]),arr([group,testgroup,uiref,products]))

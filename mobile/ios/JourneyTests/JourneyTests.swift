@@ -276,9 +276,8 @@ extension JourneyTests {
 
 extension JourneyTests {
   func testRouteSignatureMatchesWebFixtures() throws {
-    let fixtureURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-      .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(
-        "fixtures/routes.json")
+    let fixtureURL = try XCTUnwrap(
+      Bundle(for: JourneyTests.self).url(forResource: "routes", withExtension: "json"))
     let fixtures = try JSONDecoder().decode(JSON.self, from: Data(contentsOf: fixtureURL)).array
     for fixture in fixtures {
       XCTAssertEqual(

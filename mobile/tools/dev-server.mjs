@@ -7,14 +7,15 @@ import { createApp, shutdownServer } from '../../app/server/index.mjs';
 // A real Journey server with a separate database for native-client acceptance.
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const port = Number(process.env.JOURNEY_TEST_PORT || 4188);
-const origin = `http://127.0.0.1:${port}`;
+const host = process.env.JOURNEY_TEST_HOST || '127.0.0.1';
+const origin = process.env.JOURNEY_TEST_ORIGIN || `http://127.0.0.1:${port}`;
 const output = resolve(root, '.local/mobile-acceptance');
 await mkdir(output, { recursive: true });
 const app = createApp({
   databasePath: resolve(output, 'journey.sqlite'),
   config: { appOrigin: origin, basePath: '/', secureCookies: false },
 });
-const server = app.listen(port, '127.0.0.1');
+const server = app.listen(port, host);
 await new Promise((accept, reject) => {
   server.once('listening', accept);
   server.once('error', reject);

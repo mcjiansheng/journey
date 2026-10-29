@@ -6,9 +6,14 @@ final class JourneyUITests: XCTestCase {
     let fixtureURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
       .appendingPathComponent(".local/mobile-acceptance/fixture.json")
-    guard let data = try? Data(contentsOf: fixtureURL),
+    let fixtureData = ProcessInfo.processInfo.environment["JOURNEY_FIXTURE_JSON"]
+      .map { Data($0.utf8) } ?? (try? Data(contentsOf: fixtureURL))
+    guard let data = fixtureData,
       let fixture = try JSONSerialization.jsonObject(with: data) as? [String: String]
-    else { throw XCTSkip("Run node mobile/tools/dev-server.mjs --seed before UI tests") }
+    else {
+      throw XCTSkip(
+        "Run node mobile/tools/dev-server.mjs --seed and provide JOURNEY_FIXTURE_JSON for device UI tests")
+    }
     let app = XCUIApplication()
     app.launchEnvironment["JOURNEY_SERVER_URL"] = fixture["serverURL"]
     app.launch()

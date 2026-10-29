@@ -25,6 +25,35 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 
 开发签名在 Xcode 的 Signing & Capabilities 中选择自己的团队；工程未保存个人团队标识。签名需要本 App 的开发描述文件。
 
+### 真机与本地后端
+
+让 Mac 与 iPhone 连接同一局域网，使用 Mac 的局域网地址启动后端，例如：
+
+```sh
+JOURNEY_TEST_HOST=0.0.0.0 JOURNEY_TEST_ORIGIN=http://192.168.1.10:4188 \
+  node mobile/tools/dev-server.mjs --seed
+```
+
+`JOURNEY_TEST_HOST` 设置监听地址，`JOURNEY_TEST_ORIGIN` 设置手机访问地址、后端 Origin、seed 请求地址和 fixture 的 `serverURL`。端口可用 `JOURNEY_TEST_PORT` 修改。默认仍监听 `127.0.0.1:4188`。
+
+选择已配对的 iPhone，签名并执行 `build-for-testing -derivedDataPath /private/tmp/journey-ios-device` 后，把生成的 `.xctestrun` 路径设为 `XCTESTRUN`。构建产物放在 iCloud Documents 外，避免 iCloud 写入 `com.apple.FinderInfo` 后触发签名错误 `resource fork, Finder information, or similar detritus not allowed`。将 fixture JSON 注入 UI 测试 runner 的 `EnvironmentVariables`：
+
+```sh
+export XCTESTRUN='/private/tmp/journey-ios-device/Build/Products/生成的文件.xctestrun'
+python3 - <<'PY'
+import os, pathlib, plistlib
+path = pathlib.Path(os.environ['XCTESTRUN'])
+run = plistlib.loads(path.read_bytes())
+fixture = pathlib.Path('.local/mobile-acceptance/fixture.json').read_text()
+run['JourneyUITests'].setdefault('EnvironmentVariables', {})['JOURNEY_FIXTURE_JSON'] = fixture
+path.write_bytes(plistlib.dumps(run))
+PY
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -xctestrun "$XCTESTRUN" \
+  -destination "platform=iOS,id=$IOS_DEVICE_ID" test-without-building
+```
+
+`IOS_DEVICE_ID` 使用 Xcode 中该 iPhone 的设备标识。真机 UI 测试从 `JOURNEY_FIXTURE_JSON` 读取 fixture；未设置时，模拟器继续读取 Mac 上的 fixture 文件。路程签名单元测试使用测试包内的 `routes.json`，构建时直接引用 `mobile/fixtures/routes.json`。
+
 ## 已实现
 
 - 密码登录、注册、Keychain 会话恢复，Cookie、Origin 与 CSRF 按现有后端执行。
@@ -52,6 +81,6 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 - 邀请二维码扫描与二维码展示，通知开关，以及网页中的更多外观/触感选项。
 - MapKit 地图瓦片来自系统地图；离线地图包未提供。高德在线搜索和自动估算需要现有服务器地图代理可用。
 - 前台轮询用于协作更新；未提供后台同步或推送。
-- UI 自动验收使用隔离的本地真实后端。线上多人长时并发、真机安装与外网地图代理验收需继续完成。
+- UI 自动验收使用隔离的本地真实后端。iPhone 17 Pro Max / iOS 27.0.1 已完成无线安装、启动和 14 项单元测试；本次真机 UI runner 在建立控制连接时退出，登录后的页面验收尚未完成。线上多人长时并发和外网地图代理验收仍待完成。
 
 单元测试覆盖 GCJ/WGS 转换、时钟突变、费用精度、跨夏令时日期、混排排序、生命周期与多数表态投影、范围外计划日、快照版本、网页路程签名、未知回执恢复，以及账号缓存损坏隔离。
