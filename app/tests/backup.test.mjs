@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, readFile, rm, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { openDatabase } from '../server/db.mjs';
 import { openSecurityLedger } from '../server/security.mjs';
-import { createBackup, restoreBackup } from '../ops/backup.mjs';
+import { createBackup, restoreBackup, migrateSecurityLedger, verifyServiceStopMode } from '../ops/backup.mjs';
 
 async function fixture(t) {
  const dir=await mkdtemp(join(tmpdir(),'journey-backup-test-'));
@@ -62,4 +62,40 @@ test('backup key must be exactly 32 bytes and private',async t=>{
  const {options,db,security}=await fixture(t);t.after(()=>{security.close();db.close();});
  await writeFile(options.keyPath,Buffer.alloc(31));await assert.rejects(createBackup(options),/BACKUP_KEY_LENGTH/);
  await writeFile(options.keyPath,randomBytes(32));await chmod(options.keyPath,0o644);await assert.rejects(createBackup(options),/BACKUP_KEY_PERMISSIONS/);
+});
+test('new host migration with independent latest ledger works, refuses overwriting existing ledgers or sidecars, and CLI separates non-systemd mode',async t=>{
+ const {options,db,security}=await fixture(t),backupPath=await createBackup(options);
+ const olderLedger=join(dirname(options.securityPath),'older-security.sqlite');
+ await migrateSecurityLedger(options.securityPath,olderLedger);
+ security.transact(()=>{
+  db.prepare('INSERT INTO purges VALUES(?,456,2)').run('t');
+  db.prepare('DELETE FROM trips WHERE id=?').run('t');
+ },{tripIds:['t']});
+ security.close();db.close();
+ const beforeLatest=await readFile(options.securityPath);
+ await writeFile(options.securityPath+'-wal',Buffer.from('sidecar'));
+ await assert.rejects(migrateSecurityLedger(olderLedger,options.securityPath),/TARGET_LEDGER_ALREADY_EXISTS/);
+ assert.deepEqual(await readFile(options.securityPath),beforeLatest);
+ assert.deepEqual(await readFile(options.securityPath+'-wal'),Buffer.from('sidecar'));
+ await rm(options.securityPath+'-wal',{force:true});
+ const targetDir=await mkdtemp(join(tmpdir(),'journey-backup-migrate-'));
+ t.after(()=>rm(targetDir,{recursive:true,force:true}));
+ const targetMain=join(targetDir,'journey.sqlite'),targetSecurity=join(targetDir,'security.sqlite');
+ await writeFile(targetSecurity+'-wal',Buffer.from('orphan-wal'));
+ await assert.rejects(migrateSecurityLedger(options.securityPath,targetSecurity),/TARGET_LEDGER_ALREADY_EXISTS/);
+ await rm(targetSecurity+'-wal',{force:true});
+ await migrateSecurityLedger(options.securityPath,targetSecurity);
+ await restoreBackup({backupPath,mainPath:targetMain,securityPath:targetSecurity,keyPath:options.keyPath,serviceStopped:true});
+ const migratedDb=openDatabase(targetMain),migratedSec=openSecurityLedger(targetSecurity,migratedDb);
+ assert.equal(migratedDb.prepare('SELECT 1 FROM trips WHERE id=?').get('t'),undefined);
+ assert.equal(migratedDb.prepare('SELECT purgedAt FROM purges WHERE tripId=?').get('t').purgedAt,456);
+ migratedSec.close();migratedDb.close();
+ const coldDir=await mkdtemp(join(tmpdir(),'journey-backup-cold-'));
+ t.after(()=>rm(coldDir,{recursive:true,force:true}));
+ const coldMain=join(coldDir,'journey.sqlite'),coldSecurity=join(coldDir,'security.sqlite');
+ await assert.rejects(restoreBackup({backupPath,mainPath:coldMain,securityPath:coldSecurity,keyPath:options.keyPath,serviceStopped:true,allowBundledLedger:true}),/LATEST_SECURITY_LEDGER_REQUIRED/);
+ assert.equal(verifyServiceStopMode('--offline'),true);
+ assert.equal(verifyServiceStopMode('--service-stopped',()=>'ActiveState=inactive\nMainPID=0\n'),true);
+ assert.throws(()=>verifyServiceStopMode('--service-stopped',()=>'ActiveState=active\nMainPID=123\n'),/SERVICE_STILL_RUNNING/);
+ assert.throws(()=>verifyServiceStopMode('--service-stopped',()=>{throw new Error('no systemctl');}),/SERVICE_STILL_RUNNING/);
 });

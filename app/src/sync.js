@@ -7,8 +7,10 @@ const listeners = new Set();
 const freshContext = () => ({page:'itinerary',dayId:null,drafts:{},map:{},scroll:{}});
 let state = {ready:false,user:null,config:null,trips:[],snapshot:null,context:freshContext(),status:'checking',error:null,pendingCount:0,pendingRecoveryGroups:[],recoveryBusy:false,tripsLoadState:{status:'idle',error:null,hasLoaded:false},sessionExpired:false};
 let account=null, selected=null, csrf='', source=null, flushing=false, loadPromise=null, lease=null, leasePerformance=0, leaseWall=0, notifyTimer=null;
-let authEpoch=0, refreshSeq=0, database, persistChain=Promise.resolve();
+let authEpoch=0, refreshSeq=0, database, persistChain=Promise.resolve(), calibratePromise=null;
+const pendingDrafts=new WeakMap();
 let deviceId, connection='checking', recoveryPaused=false, recoveryToken=null, localChain=Promise.resolve();
+const CLOCK_SKEW_TOLERANCE_MS=2000, CLOCK_DRIFT_PPM=0.00005, CLOCK_BASE_UNCERTAINTY_MS=2;
 const flushWaiters=new Set();
 const serializeLocal=job=>{const result=localChain.catch(()=>{}).then(job);localChain=result.catch(()=>{});return result;};
 function captureScope(){return {accountId:account?.user.id,tripId:selected,epoch:authEpoch};}
@@ -54,7 +56,8 @@ function recoveryGroups(){
   return groups;
 }
 const changedSession=()=>Object.assign(new Error('账户已切换，请在当前账户继续操作'),{code:'SESSION_CHANGED'});
-const requireCurrent=(epoch,owner)=>{if(epoch!==authEpoch||owner!==account)throw changedSession();};
+const requireEpoch=epoch=>{if(epoch!==authEpoch)throw changedSession();};
+const requireCurrent=(epoch,owner)=>{requireEpoch(epoch);if(owner!==account)throw changedSession();};
 const db = () => database ||= openDB('journey-v1',1,{upgrade(d){d.createObjectStore('kv');}});
 const emit = patch => {state={...state,...patch};for(const fn of listeners)fn();};
 const clone = value => structuredClone(value);
@@ -75,10 +78,24 @@ export async function api(path,{body,method='GET',...options}={}) {
 async function persist() {
   const owner=account;
   if(!owner)return;
+  pendingDrafts.delete(owner);
   // A single transaction persists both the operation queue and its local display.
   const job=async()=>{const d=await db();const snapshot=clone(owner);await d.put('kv',snapshot,`account:${snapshot.user.id}`);};
   persistChain=persistChain.catch(()=>{}).then(job);
   try {await persistChain;}catch(e){const err=new Error('此设备未能保存修改，请保持页面打开并释放存储空间后重试');err.code='LOCAL_STORAGE';setError(err);throw err;}
+}
+function persistDrafts() {
+  const owner=account;
+  if(!owner)return Promise.resolve();
+  const existing=pendingDrafts.get(owner);
+  if(existing)return existing;
+  const pending=(persistChain=persistChain.catch(()=>{}).then(async()=>{
+    if(pendingDrafts.get(owner)!==pending)return;
+    pendingDrafts.delete(owner);
+    const d=await db();const snapshot=clone(owner);await d.put('kv',snapshot,`account:${snapshot.user.id}`);
+  })).catch(e=>{const err=new Error('此设备未能保存修改，请保持页面打开并释放存储空间后重试');err.code='LOCAL_STORAGE';setError(err);throw err;});
+  pendingDrafts.set(owner,pending);
+  return pending;
 }
 
 function optimistic(snapshot,queue) {
@@ -96,10 +113,14 @@ function optimistic(snapshot,queue) {
 }
 function renderAccount(extra={}) {
   if(!account)return;
-  const pending=account.queue.length;
+  const pending=account.queue.length,groups=recoveryGroups();
   emit({user:account.user,trips:account.trips,snapshot:selected?optimistic(account.snapshots[selected],account.queue):null,
     context:selected?(account.contexts[selected]||freshContext()):freshContext(),pendingCount:pending,
-    pendingRecoveryGroups:recoveryGroups(),status:!navigator.onLine||connection==='offline'?'offline':state.error?'error':connection==='checking'?'checking':recoveryGroups().length?'blocked':pending?'syncing':'synced',...extra});
+    pendingRecoveryGroups:groups,status:!navigator.onLine||connection==='offline'?'offline':state.error?'error':connection==='checking'?'checking':groups.length?'blocked':pending?'syncing':'synced',...extra});
+}
+function renderContext() {
+  if(!account)return;
+  emit({context:selected?(account.contexts[selected]||freshContext()):freshContext()});
 }
 function acceptSnapshot(snapshot) {
   if(!account||!snapshot?.trip)return;
@@ -115,27 +136,32 @@ async function calibrate() {
   const r=await api('/api/clock',{method:'POST',body:{deviceId}});
   requireCurrent(epoch,owner);
   const end=performance.now();
-  lease={...r,uncertaintyMs:Math.ceil((end-start)/2)+2};
+  lease={...r,uncertaintyMs:Math.ceil((end-start)/2)+CLOCK_BASE_UNCERTAINTY_MS};
   leasePerformance=(start+end)/2;leaseWall=Date.now()-(end-leasePerformance);
+}
+function ensureClock() {
+  if(!account||!csrf||state.sessionExpired||!navigator.onLine||recoveryPaused)return Promise.resolve();
+  if(lease&&!operationClock().uncertain)return Promise.resolve();
+  return calibratePromise ||= calibrate().finally(()=>{calibratePromise=null;});
 }
 function operationClock() {
   if(!lease)return {leaseId:null,elapsedMs:0,uncertaintyMs:0,uncertain:true};
   const elapsed=performance.now()-leasePerformance;
-  const changed=Math.abs((Date.now()-leaseWall)-elapsed)>2000;
-  return {leaseId:lease.leaseId,elapsedMs:Math.max(0,Math.round(elapsed)),uncertaintyMs:lease.uncertaintyMs+Math.ceil(elapsed*0.00005),...(changed||lease.serverTime+elapsed>lease.expiresAt?{uncertain:true}:{})};
+  const changed=Math.abs((Date.now()-leaseWall)-elapsed)>CLOCK_SKEW_TOLERANCE_MS;
+  return {leaseId:lease.leaseId,elapsedMs:Math.max(0,Math.round(elapsed)),uncertaintyMs:lease.uncertaintyMs+Math.ceil(elapsed*CLOCK_DRIFT_PPM),...(changed||lease.serverTime+elapsed>lease.expiresAt?{uncertain:true}:{})};
 }
 async function synchronizeSession() {
   let epoch=authEpoch;
   const s=await api('/api/session');
-  if(epoch!==authEpoch)throw changedSession();
+  requireEpoch(epoch);
   if(account&&account.user.id!==s.user.id){epoch=++authEpoch;selected=null;closeSource();}
   const stored=await (await db()).get('kv',`account:${s.user.id}`);
-  if(epoch!==authEpoch)throw changedSession();
+  requireEpoch(epoch);
   csrf=s.csrfToken;
   account=account?.user.id===s.user.id?account:stored||emptyAccount(s.user);
   account.user=s.user;
   await (await db()).put('kv',s.user.id,'activeUser');
-  if(epoch!==authEpoch)throw changedSession();
+  requireEpoch(epoch);
   emit({sessionExpired:false});
   await calibrate();
 }
@@ -226,12 +252,12 @@ async function login(challengeId,code,displayName) {
   const epoch=++authEpoch;
   const passwordMode=typeof challengeId==='object';
   const r=await api(passwordMode ? challengeId.register ? '/api/auth/register' : '/api/auth/login' : '/api/auth/verify',{method:'POST',body:passwordMode?{identifier:challengeId.identifier,password:challengeId.password,...(challengeId.register?{displayName:challengeId.displayName}:{})}:{challengeId,code,displayName}});
-  if(epoch!==authEpoch)throw changedSession();
+  requireEpoch(epoch);
   const stored=await (await db()).get('kv',`account:${r.user.id}`);
-  if(epoch!==authEpoch)throw changedSession();
+  requireEpoch(epoch);
   csrf=r.csrfToken;closeSource();selected=null;lease=null;connection='checking';emit({tripsLoadState:{status:'idle',error:null,hasLoaded:false}});
   account=stored||emptyAccount(r.user);account.user=r.user;
-  await(await db()).put('kv',r.user.id,'activeUser');if(epoch!==authEpoch)throw changedSession();emit({error:null,sessionExpired:false});await calibrate();if(epoch!==authEpoch)throw changedSession();await refreshTrips();if(epoch!==authEpoch)throw changedSession();renderAccount();if(previousTrip&&previousUserId===r.user.id)await openTrip(previousTrip);void flush();return r;
+  await(await db()).put('kv',r.user.id,'activeUser');requireEpoch(epoch);emit({error:null,sessionExpired:false});await calibrate();requireEpoch(epoch);await refreshTrips();requireEpoch(epoch);renderAccount();if(previousTrip&&previousUserId===r.user.id)await openTrip(previousTrip);void flush();return r;
 }
 async function logout() {
   const epoch=++authEpoch,owner=account;
@@ -337,7 +363,7 @@ function setContext(patch,scope) {
   requireScope(scope);
   if(!account||!(scope?.tripId||selected))return;
   const id=scope?.tripId||selected;
-  account.contexts[id]={...(account.contexts[id]||freshContext()),...patch};renderAccount();void persist().catch(()=>{});
+  account.contexts[id]={...(account.contexts[id]||freshContext()),...patch};renderContext();void persistDrafts().catch(()=>{});
   clearTimeout(navigationTimer);
   const epoch=authEpoch;
   navigationTimer=setTimeout(()=>{if(account&&epoch===authEpoch)void api('/api/navigation',{method:'PUT',body:{tripId:id,context:account.contexts[id],lastTripId:account.lastTripId}}).catch(()=>{});},700);
@@ -371,7 +397,7 @@ window.addEventListener('offline',()=>emit({status:'offline'}));
 window.addEventListener('online',()=>void retry().catch(setError));
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&account&&navigator.onLine)void retry().catch(e=>{if(e.code!=='NETWORK')setError(e);});});
 // Reconnection also runs while a tab stays visible; SSE handles content changes.
-setInterval(()=>{if(account&&navigator.onLine&&!state.sessionExpired&&account.queue.some(x=>!x.blocked))void flush();},5000);
+setInterval(()=>{if(!account||!navigator.onLine||state.sessionExpired)return;if(csrf&&(!lease||operationClock().uncertain))void ensureClock().catch(()=>{});if(account.queue.some(x=>!x.blocked))void flush();},5000);
 export function useJourney() {
   loadPromise ||= initialize();
   const value=useSyncExternalStore(fn=>{listeners.add(fn);return()=>listeners.delete(fn);},()=>state);

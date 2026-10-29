@@ -19,9 +19,9 @@ const userView=u=>({id:u.id,identifier:u.identifier,displayName:u.displayName,is
 export function createApp(options={}) {
  const config=loadConfig(options.config||{}),db=options.db||openDatabase(options.databasePath||config.databasePath),now=options.now||Date.now,app=express(),router=express.Router(),streams=new Set(),limits=new Map(),authChannels=options.sendCode?{email:true,phone:true}:channels(config);
  const security=openSecurityLedger(options.securityPath||config.securityPath||((options.databasePath||config.databasePath)===':memory:'?':memory:':(options.databasePath||config.databasePath)+'.security.sqlite'),db);
- const transact=security.transact;let passwordJobs=0,appClosing=false,databaseClosed=false;
+ const transact=security.transact,maxPasswordJobs=options.maxPasswordJobs||4,maxPasswordQueue=options.maxPasswordQueue??16,passwordWaiters=[];let passwordJobs=0,appClosing=false,databaseClosed=false;
  function requireRunning(){if(appClosing)fail('SERVER_STOPPING','服务正在更新，请稍后重试',503);}
- async function passwordDigest(password,salt){if(passwordJobs>=4)fail('AUTH_BUSY','登录服务繁忙，请稍后再试',503);passwordJobs++;try{return (await scryptAsync(password,salt,64)).toString('hex');}finally{passwordJobs--;}}
+ async function passwordDigest(password,salt){requireRunning();if(passwordJobs>=maxPasswordJobs){if(passwordWaiters.length>=maxPasswordQueue)fail('AUTH_BUSY','登录服务繁忙，请稍后再试',503);await new Promise((resolveWait,rejectWait)=>passwordWaiters.push({resolve:resolveWait,reject:rejectWait}));requireRunning();}passwordJobs++;try{const runner=options.hashPassword||scryptAsync;return (await runner(password,salt,64)).toString('hex');}finally{passwordJobs--;const nextWaiter=passwordWaiters.shift();if(nextWaiter)nextWaiter.resolve();}}
  app.disable('x-powered-by');app.set('trust proxy',config.trustProxy||false);
  app.use((req,res,nextMiddleware)=>{
   req.requestId=randomUUID();res.set('X-Request-Id',req.requestId);
@@ -96,7 +96,7 @@ export function createApp(options={}) {
  app.use(config.basePath,router);if(config.basePath!=='/')app.get('/',(req,res)=>res.redirect(config.basePath));
  app.use((err,req,res,nextMiddleware)=>{if(res.headersSent)return nextMiddleware(err);const status=err.status||500;res.status(status).json({error:{code:err.code||'INTERNAL_ERROR',message:status===500?'服务暂时不可用，请稍后重试':err.message,...(err.details?{details:err.details}:{})}});});
  app.locals.db=db;app.locals.config=config;
- app.locals.drainStreams=()=>{appClosing=true;for(const s of streams){clearInterval(s.timer);s.res.end();}streams.clear();};
+ app.locals.drainStreams=()=>{appClosing=true;while(passwordWaiters.length){const waiter=passwordWaiters.shift();try{fail('SERVER_STOPPING','服务正在更新，请稍后重试',503);}catch(err){waiter.reject(err);}}for(const s of streams){clearInterval(s.timer);s.res.end();}streams.clear();};
  app.locals.close=()=>{if(databaseClosed)return;app.locals.drainStreams();databaseClosed=true;security.close();if(!options.db)db.close();};return app;
 }
 export function shutdownServer(server,app,{timeoutMs=10000}={}) {

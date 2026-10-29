@@ -70,6 +70,15 @@ class DeploymentClientTests(unittest.TestCase):
         result, _ = self.run_client([self.response('queued'), self.response('success', 1)])
         self.assertEqual(result, 1)
 
+    def test_custom_deploy_user_and_invalid_user_rejection(self):
+        self.environment['DEPLOY_USER'] = 'custom_deployer-1'
+        result, calls = self.run_client([self.response('queued'), self.response('success')])
+        self.assertEqual(result, 0)
+        self.assertIn('custom_deployer-1@example.com', calls[0].args[0])
+        self.environment['DEPLOY_USER'] = 'bad user;rm'
+        with self.assertRaisesRegex(ValueError, 'Invalid deployment port or user'):
+            self.run_client([self.response('queued')])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -24,10 +24,16 @@ def main():
     user = os.environ.get('DEPLOY_USER', 'journey-deploy')
     if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9.:-]*', host):
         raise ValueError('Invalid deployment host')
-    if not port.isdecimal() or not 1 <= int(port) <= 65535 or user != 'journey-deploy':
+    if not port.isdecimal() or not 1 <= int(port) <= 65535 or not re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', user):
         raise ValueError('Invalid deployment port or user')
     with archive.open('rb') as stream:
-        digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+        if hasattr(hashlib, 'file_digest'):
+            digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+        else:
+            hasher = hashlib.sha256()
+            for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                hasher.update(chunk)
+            digest = hasher.hexdigest()
     with tempfile.TemporaryDirectory(prefix='journey-ssh-') as directory:
         key, known_hosts = Path(directory) / 'key', Path(directory) / 'known_hosts'
         key.write_text(os.environ['DEPLOY_SSH_KEY'].rstrip() + '\n')

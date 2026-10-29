@@ -27,8 +27,17 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
     private var foreground = true
 
     fun setForeground(value: Boolean) {
+        val resumed = !foreground && value
         foreground = value
-        if (!value) launch { saveContext() }
+        if (!value) {
+            launch { saveContext() }
+        } else if (resumed && ready && user != null && !sessionExpired) {
+            launch {
+                ensureSession()
+                sync()
+                if (tripId == null) refreshTrips() else refreshCurrent()
+            }
+        }
     }
 
     var user by mutableStateOf<JSONObject?>(null)
@@ -436,7 +445,7 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
         if (session.o("user").s("id") != current)
             throw ApiFailure("SESSION_CHANGED", "账号已变化，请重新登录。未上传修改保留在原账号。", 401)
         api.csrf = session.s("csrfToken")
-        if (lease == null) acquireClock()
+        if (lease == null || clock().optBoolean("uncertain")) acquireClock()
         pending
             .filter { it.s("blocked") == "CSRF_REJECTED" }
             .forEach {

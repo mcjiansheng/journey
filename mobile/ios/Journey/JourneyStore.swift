@@ -466,20 +466,28 @@ import SwiftUI
     user = response["user"]
     csrf = response["csrfToken"].string
   }
+  private func pollCycle() async {
+    guard !Task.isCancelled, !user.isNull else { return }
+    do {
+      if csrf.isEmpty { try await restoreConnection() }
+      if lease == nil || lease!.clock()["uncertain"].bool {
+        try await renewLease()
+      }
+      await flush()
+      try await refresh()
+    } catch { status = "暂时离线" }
+  }
   func startPolling() {
     guard pollTask == nil else { return }
     pollTask = Task { [weak self] in
+      if let self, self.ready, !self.user.isNull,
+         self.csrf.isEmpty || self.lease == nil || self.lease!.clock()["uncertain"].bool {
+        await self.pollCycle()
+      }
       while !Task.isCancelled {
         try? await Task.sleep(for: .seconds(8))
-        guard !Task.isCancelled, let self, !self.user.isNull else { continue }
-        do {
-          if self.csrf.isEmpty { try await self.restoreConnection() }
-          if self.lease == nil || self.lease!.clock()["uncertain"].bool {
-            try await self.renewLease()
-          }
-          await self.flush()
-          try await self.refresh()
-        } catch { self.status = "暂时离线" }
+        guard !Task.isCancelled, let self else { continue }
+        await self.pollCycle()
       }
     }
   }
