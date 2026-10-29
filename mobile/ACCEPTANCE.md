@@ -40,3 +40,5 @@ Xcode 27.1，通过局域网连接 iOS 27.0.1。测试后端使用独立 SQLite 
 构建目录使用 `/private/tmp/journey-ios-iphone-20261029`。仓库位于 iCloud Documents，直接在仓库内生成 `.app` 会被加上 `com.apple.FinderInfo`，导致 codesign 报 `resource fork, Finder information, or similar detritus not allowed`。
 
 本次未验证真机登录、四页操作及保存结果。测试结束后已停止本地后端。测试日志保存在 `.local/ios-iphone-test-run3.log`、`.local/ios-iphone-ui-run4.log`，单元测试结果保存在 `.local/iphone-acceptance/results-run3.xcresult`。
+
+恢复调试时，Xcode 仍显示手机 `unavailable`，主动读取设备 App 列表返回 CoreDevice error 4016，尚未建立可信设备服务连接。账号输入框已指定邮箱键盘并标记为用户名输入，避免默认中文键盘影响邮箱输入；修改后的签名真机构建通过，尚未安装到手机验证。构建日志保存在 `.local/ios-iphone-test-build-resume.log`。
