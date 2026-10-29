@@ -1,0 +1,122 @@
+[
+  {
+    "name": "活动之间",
+    "from": {
+      "id": "activity-a",
+      "payload": {
+        "place": {
+          "name": "南京博物院",
+          "address": "",
+          "lng": 118.8254,
+          "lat": 32.0418,
+          "provider": "amap",
+          "providerPlaceId": "B001",
+          "coordSystem": "GCJ-02"
+        }
+      }
+    },
+    "to": {
+      "id": "activity-b",
+      "payload": {
+        "place": {
+          "name": "玄武湖",
+          "address": "",
+          "lng": 118.8,
+          "lat": 32.08,
+          "provider": null,
+          "providerPlaceId": null,
+          "coordSystem": "GCJ-02"
+        }
+      }
+    },
+    "mode": "walking",
+    "inputSignature": "[\"[\\\"activity-a\\\",[\\\"B001\\\",118.8254,32.0418,\\\"\\\",\\\"南京博物院\\\"],\\\"activity-b\\\",[\\\"\\\",118.8,32.08,\\\"\\\",\\\"玄武湖\\\"]]\",\"walking\"]"
+  },
+  {
+    "name": "独立出发地与整数坐标",
+    "from": {
+      "id": "origin",
+      "payload": {
+        "place": {
+          "name": "出发点",
+          "address": "入口 / 南门 \"A\"",
+          "lng": 118,
+          "lat": 32,
+          "provider": null,
+          "providerPlaceId": null,
+          "coordSystem": "GCJ-02"
+        }
+      }
+    },
+    "to": {
+      "id": "activity-c",
+      "payload": {
+        "place": {
+          "name": "终点",
+          "address": "",
+          "lng": 119,
+          "lat": 33,
+          "provider": null,
+          "providerPlaceId": null,
+          "coordSystem": "GCJ-02"
+        }
+      }
+    },
+    "mode": "driving",
+    "inputSignature": "[\"[\\\"origin\\\",[\\\"\\\",118,32,\\\"入口 / 南门 \\\\\\\"A\\\\\\\"\\\",\\\"出发点\\\"],\\\"activity-c\\\",[\\\"\\\",119,33,\\\"\\\",\\\"终点\\\"]]\",\"driving\"]"
+  },
+  {
+    "name": "暂缺坐标",
+    "from": {
+      "id": "activity-a",
+      "payload": {
+        "place": null
+      }
+    },
+    "to": {
+      "id": "activity-b",
+      "payload": {
+        "place": {
+          "name": "手填地点",
+          "address": "南京市",
+          "lng": null,
+          "lat": null,
+          "provider": null,
+          "providerPlaceId": null,
+          "coordSystem": "GCJ-02"
+        }
+      }
+    },
+    "mode": "transit",
+    "inputSignature": "[\"[\\\"activity-a\\\",[\\\"\\\",null,null,\\\"\\\",\\\"\\\"],\\\"activity-b\\\",[\\\"\\\",null,null,\\\"南京市\\\",\\\"手填地点\\\"]]\",\"transit\"]"
+  },
+  {
+    "name": "接近赤道和本初子午线的坐标",
+    "from": {
+      "id": "tiny-from",
+      "payload": {
+        "place": {
+          "name": "起点",
+          "address": "",
+          "lng": 0.00001,
+          "lat": -1e-7,
+          "providerPlaceId": null
+        }
+      }
+    },
+    "to": {
+      "id": "tiny-to",
+      "payload": {
+        "place": {
+          "name": "终点",
+          "address": "",
+          "lng": 0,
+          "lat": 0.000001,
+          "providerPlaceId": null
+        }
+      }
+    },
+    "mode": "walking",
+    "inputSignature": "[\"[\\\"tiny-from\\\",[\\\"\\\",0.00001,-1e-7,\\\"\\\",\\\"起点\\\"],\\\"tiny-to\\\",[\\\"\\\",0,0.000001,\\\"\\\",\\\"终点\\\"]]\",\"walking\"]"
+  }
+]

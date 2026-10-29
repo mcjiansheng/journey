@@ -6,6 +6,8 @@
 
 正式应用位于 `app/`，使用 React、Express 与 SQLite，包含真实账号、协作行程、高德地图、费用、成员权限、离线保存与冲突合并。既有原型与 Sites 界面参考保留在本地，通过 `.gitignore` 排除。
 
+Android 和 iOS 原生客户端位于 [`mobile/`](mobile/README.md)，分别使用 Jetpack Compose / Material 3 和 SwiftUI，连接同一后端并共享账号与旅程。页面沿用行程、地图、费用、管理的布局，采用各系统原生导航、表单和分享控件。构建、联调与安装方式见[原生客户端说明](mobile/README.md)。
+
 面向熟人结伴旅行的响应式Web工具。以行程、地图和费用组织共同规划：先记录想法，逐步安排，出行时继续使用同一份行程。
 
 按本轮确认决定，课程项目使用手机号或邮箱加密码注册登录；短信和邮件验证码留作正式运营接入。部署入口采用 `journey.jscloud.wang`，与现有 L4D2 隔离运行。界面优先适配 iOS 浏览器、原生 Android 与电脑，使用 Liquid Glass 光学层次和响应式导航。
