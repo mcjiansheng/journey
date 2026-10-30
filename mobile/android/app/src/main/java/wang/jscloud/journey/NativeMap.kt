@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -29,10 +30,11 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 
 private const val OSM_STYLE =
-    """{"version":8,"sources":{"osm":{"type":"raster","tiles":["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],"tileSize":256,"maxzoom":19,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#e5eee5"}},{"id":"osm","type":"raster","source":"osm"}]}"""
+    """{"version":8,"sources":{"osm":{"type":"raster","tiles":["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],"tileSize":256,"maxzoom":19,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#EEF2EC"}},{"id":"osm","type":"raster","source":"osm"}]}"""
 
 @Composable
 fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
+    val routeColor = MaterialTheme.colorScheme.primary.toArgb()
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val mapTrip = remember { s.tripId }
@@ -128,7 +130,7 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
             }
         }
     }
-    LaunchedEffect(nativeMap, points.map { it.toString() }, route?.toString()) {
+    LaunchedEffect(nativeMap, points.map { it.toString() }, route?.toString(), routeColor) {
         nativeMap?.let { map ->
             map.clear()
             points.forEach { p ->
@@ -152,7 +154,7 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
                     map.addPolyline(
                         PolylineOptions()
                             .addAll(coords)
-                            .color(android.graphics.Color.rgb(36, 107, 88))
+                            .color(routeColor)
                             .width(5f)
                     )
             }
@@ -174,7 +176,7 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Field("搜索地点", query, { query = it }, Modifier.weight(1f))
-            Button(
+            SecondaryButton(
                 {
                     s.action {
                         results =

@@ -5,6 +5,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -18,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -52,72 +56,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val Green = Color(0xff246b58)
-private val LightColors =
-    lightColorScheme(
-        primary = Green,
-        secondary = Green,
-        tertiary = Green,
-        primaryContainer = Color(0xffe5eee5),
-        onPrimaryContainer = Color(0xff24342f),
-        secondaryContainer = Color(0xffe5eee5),
-        onSecondaryContainer = Color(0xff24342f),
-        tertiaryContainer = Color(0xffe5eee5),
-        onTertiaryContainer = Color(0xff24342f),
-        surfaceTint = Green,
-        surfaceContainerHighest = Color(0xffe5eee5),
-        surfaceContainerHigh = Color(0xfff1f3ec),
-        surfaceContainer = Color(0xfffffefa),
-        surfaceContainerLow = Color(0xfffffefa),
-        surfaceContainerLowest = Color(0xfffffefa),
-        onSurfaceVariant = Color(0xff69746d),
-        outlineVariant = Color(0xffdce2d9),
-        background = Color(0xfff3f3ed),
-        surface = Color(0xfffffefa),
-        surfaceVariant = Color(0xffe5eee5),
-        onSurface = Color(0xff24342f),
-        onBackground = Color(0xff24342f),
-        outline = Color(0xffdce2d9),
-        error = Color(0xffa63731),
-    )
-
-@Composable
-fun JourneyTheme(store: JourneyStore, content: @Composable () -> Unit) {
-    val preference = store.user?.o("preferences")?.s("theme", "system")
-    val dark =
-        preference == "dark" ||
-            (preference == "system" && androidx.compose.foundation.isSystemInDarkTheme())
-    MaterialTheme(
-        colorScheme =
-            if (dark)
-                darkColorScheme(
-                    primary = Color(0xffa4d7c3),
-                    secondary = Color(0xffa4d7c3),
-                    tertiary = Color(0xffa4d7c3),
-                    primaryContainer = Color(0xff365647),
-                    onPrimaryContainer = Color(0xffdeeee3),
-                    secondaryContainer = Color(0xff365647),
-                    onSecondaryContainer = Color(0xffdeeee3),
-                    tertiaryContainer = Color(0xff365647),
-                    onTertiaryContainer = Color(0xffdeeee3),
-                    surfaceContainerHighest = Color(0xff34463b),
-                    surfaceContainerHigh = Color(0xff2e3e34),
-                    surfaceContainer = Color(0xff27352c),
-                    surfaceContainerLow = Color(0xff233027),
-                    surfaceContainerLowest = Color(0xff19231d),
-                    surfaceTint = Color(0xffa4d7c3),
-                    onSurface = Color(0xffdeeee3),
-                    onBackground = Color(0xffdeeee3),
-                    onSurfaceVariant = Color(0xffb1c3b5),
-                    background = Color(0xff1e2923),
-                    surface = Color(0xff27352c),
-                )
-            else LightColors,
-        shapes = Shapes(medium = RoundedCornerShape(18.dp), large = RoundedCornerShape(24.dp)),
-        content = content,
-    )
-}
-
 @Composable
 fun Field(
     label: String,
@@ -140,7 +78,7 @@ fun Field(
 fun Choice(label: String, value: String, choices: List<String>, set: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+        SecondaryButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Text("$label：$value")
         }
         DropdownMenu(expanded, { expanded = false }) {
@@ -161,7 +99,8 @@ fun Choice(label: String, value: String, choices: List<String>, set: (String) ->
 fun Panel(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = LocalJourneyPalette.current.card),
+        border = BorderStroke(1.dp, LocalJourneyPalette.current.border),
         shape = RoundedCornerShape(20.dp),
     ) {
         Column(
@@ -209,6 +148,14 @@ fun Sheet(title: String, onClose: () -> Unit, content: @Composable ColumnScope.(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JourneyApp(s: JourneyStore, initialInvite: String?) {
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
+    LaunchedEffect(s.user?.s("id")) {
+        if (s.user != null) {
+            focus.clearFocus()
+            keyboard?.hide()
+        }
+    }
     var modal by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<JSONObject?>(null) }
     var initialPlace by remember { mutableStateOf<JSONObject?>(null) }
@@ -220,162 +167,186 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
         if (s.user != null && !initialInvite.isNullOrBlank()) modal = "join"
     }
     val trip = s.snapshot?.o("trip")
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        if (s.tripId == null) "同行  JOURNEY" else trip?.s("name") ?: "旅程",
-                        maxLines = 1,
-                    )
-                },
-                navigationIcon = {
-                    if (s.tripId != null)
-                        IconButton({ s.home() }) { Icon(Icons.Outlined.ArrowBack, "返回旅程列表") }
-                },
-                actions = {
-                    if (s.user != null)
-                        IconButton({ modal = "profile" }) {
-                            Icon(Icons.Outlined.AccountCircle, "个人设置")
-                        }
-                },
-            )
-        },
-        bottomBar = {
-            if (s.tripId != null) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    listOf(
-                            "行程" to Icons.Outlined.EventNote,
-                            "地图" to Icons.Outlined.Map,
-                            "费用" to Icons.Outlined.Payments,
-                            "管理" to Icons.Outlined.Group,
+    JourneyBackdrop {
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                    title = {
+                        Text(
+                            if (s.tripId == null) "同行  JOURNEY" else trip?.s("name") ?: "旅程",
+                            maxLines = 1,
                         )
-                        .forEach { (name, icon) ->
-                            NavigationBarItem(
-                                selected = s.page == name,
-                                onClick = { s.page = name },
-                                icon = { Icon(icon, name) },
-                                label = { Text(name) },
-                            )
-                        }
-                }
-            }
-        },
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            if (s.user != null)
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        s.status + (if (s.pending.isNotEmpty()) " · ${s.pending.size} 项" else ""),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    TextButton({ s.action { s.retry() } }) { Text("刷新") }
-                }
-            when {
-                !s.ready ->
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                s.user == null || s.sessionExpired -> LoginScreen(s)
-                s.tripId == null ->
-                    Column(
-                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        Heading("下一站，和谁一起？", "一起安排，把旅途留给彼此。")
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Button({ modal = "create" }) { Text("创建旅程") }
-                            OutlinedButton({ modal = "join" }) { Text("加入旅程") }
-                        }
-                        if (s.trips.isEmpty())
-                            Panel {
-                                Text(if (s.status == "离线") "本机暂时没有旅程，连接后刷新" else "还没有旅程，从创建或加入开始")
+                    },
+                    navigationIcon = {
+                        if (s.tripId != null)
+                            IconButton({ s.home() }) { Icon(Icons.Outlined.ArrowBack, "返回旅程列表") }
+                    },
+                    actions = {
+                        if (s.user != null)
+                            IconButton({ modal = "profile" }) {
+                                Icon(Icons.Outlined.AccountCircle, "个人设置")
                             }
-                        s.trips.forEach { t ->
-                            Card(
-                                onClick = { s.action { s.openTrip(t.s("id")) } },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(20.dp),
-                            ) {
-                                Column(
-                                    Modifier.padding(22.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    },
+                )
+            },
+            bottomBar = {
+                if (s.tripId != null) {
+                    Surface(
+                        modifier = Modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
+                        shape = RoundedCornerShape(32.dp),
+                        color = LocalJourneyPalette.current.elevated,
+                        border = BorderStroke(1.dp, LocalJourneyPalette.current.border),
+                        shadowElevation = 3.dp,
+                    ) {
+                        NavigationBar(
+                            containerColor = Color.Transparent,
+                            tonalElevation = 0.dp,
+                            windowInsets = WindowInsets(0, 0, 0, 0),
+                        ) {
+                            listOf(
+                                "行程" to Icons.Outlined.EventNote,
+                                "地图" to Icons.Outlined.Map,
+                                "费用" to Icons.Outlined.Payments,
+                                "管理" to Icons.Outlined.Group,
+                            ).forEach { (name, icon) ->
+                                NavigationBarItem(
+                                    selected = s.page == name,
+                                    onClick = { s.page = name },
+                                    icon = { Icon(icon, name) },
+                                    label = { Text(name) },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                                        indicatorColor = LocalJourneyPalette.current.selected,
+                                        unselectedIconColor = LocalJourneyPalette.current.muted,
+                                        unselectedTextColor = LocalJourneyPalette.current.muted,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+        ) { padding ->
+            Column(Modifier.fillMaxSize().padding(padding)) {
+                if (s.user != null)
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            s.status + (if (s.pending.isNotEmpty()) " · ${s.pending.size} 项" else ""),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                        TextButton({ s.action { s.retry() } }) { Text("刷新") }
+                    }
+                when {
+                    !s.ready ->
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    s.user == null || s.sessionExpired -> LoginScreen(s)
+                    s.tripId == null ->
+                        Column(
+                            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            Heading("下一站，和谁一起？", "一起安排，把旅途留给彼此。")
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                SecondaryButton({ modal = "create" }) { Text("创建旅程") }
+                                SecondaryButton({ modal = "join" }) { Text("加入旅程") }
+                            }
+                            if (s.trips.isEmpty())
+                                Panel {
+                                    Text(if (s.status == "离线") "本机暂时没有旅程，连接后刷新" else "还没有旅程，从创建或加入开始")
+                                }
+                            s.trips.forEach { t ->
+                                Card(
+                                    onClick = { s.action { s.openTrip(t.s("id")) } },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(24.dp),
+                                    colors = CardDefaults.cardColors(containerColor = LocalJourneyPalette.current.card),
+                                    border = BorderStroke(1.dp, LocalJourneyPalette.current.border),
                                 ) {
-                                    Icon(
-                                        Icons.Outlined.Explore,
-                                        null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
-                                    Text(t.s("name"), style = MaterialTheme.typography.titleLarge)
-                                    Text(
-                                        listOf(
-                                                t.s("destination"),
-                                                t.s("startDate"),
-                                                if (t.optBoolean("archived")) "已归档" else "",
-                                            )
-                                            .filter { it.isNotEmpty() }
-                                            .joinToString(" · "),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
+                                    Column(
+                                        Modifier.padding(22.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.Explore,
+                                            null,
+                                            modifier = Modifier.background(LocalJourneyPalette.current.icon, RoundedCornerShape(14.dp)).padding(12.dp),
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
+                                        Text(t.s("name"), style = MaterialTheme.typography.titleLarge)
+                                        Text(
+                                            listOf(
+                                                    t.s("destination"),
+                                                    t.s("startDate"),
+                                                    if (t.optBoolean("archived")) "已归档" else "",
+                                                )
+                                                .filter { it.isNotEmpty() }
+                                                .joinToString(" · "),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
-                s.page == "地图" ->
-                    NativeMapScreen(
-                        s,
-                        onActivity = { p ->
-                            editing = null
-                            initialPlace = p
-                            modal = "activity"
-                        },
-                    )
-                else ->
-                    Column(
-                        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        if (
-                            s.pending.any {
-                                it.s("blocked").isNotEmpty() || it.optBoolean("unknown")
-                            }
+                    s.page == "地图" ->
+                        NativeMapScreen(
+                            s,
+                            onActivity = { p ->
+                                editing = null
+                                initialPlace = p
+                                modal = "activity"
+                            },
                         )
-                            RecoveryPanel(s)
-                        when (s.page) {
-                            "行程" ->
-                                ItineraryScreen(
-                                    s,
-                                    onEdit = { o ->
-                                        editing = o
-                                        initialPlace = null
-                                        modal = "activity"
-                                    },
-                                    onSchedule = { modal = "schedule" },
-                                    onRoute = { from, to, route ->
-                                        routeFrom = from
-                                        routeTo = to
-                                        routeObject = route
-                                        modal = "route"
-                                    },
-                                )
-                            "费用" ->
-                                LedgerScreen(s) { o ->
-                                    editing = o
-                                    modal = "expense"
+                    else ->
+                        Column(
+                            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            if (
+                                s.pending.any {
+                                    it.s("blocked").isNotEmpty() || it.optBoolean("unknown")
                                 }
-                            "管理" ->
-                                ManagementScreen(
-                                    s,
-                                    onInvite = { modal = "invites" },
-                                    onRename = { modal = "rename" },
-                                )
+                            )
+                                RecoveryPanel(s)
+                            when (s.page) {
+                                "行程" ->
+                                    ItineraryScreen(
+                                        s,
+                                        onEdit = { o ->
+                                            editing = o
+                                            initialPlace = null
+                                            modal = "activity"
+                                        },
+                                        onSchedule = { modal = "schedule" },
+                                        onRoute = { from, to, route ->
+                                            routeFrom = from
+                                            routeTo = to
+                                            routeObject = route
+                                            modal = "route"
+                                        },
+                                    )
+                                "费用" ->
+                                    LedgerScreen(s) { o ->
+                                        editing = o
+                                        modal = "expense"
+                                    }
+                                "管理" ->
+                                    ManagementScreen(
+                                        s,
+                                        onInvite = { modal = "invites" },
+                                        onRename = { modal = "rename" },
+                                    )
+                            }
                         }
-                    }
+                }
             }
         }
     }
@@ -413,7 +384,7 @@ fun LoginScreen(s: JourneyStore) {
         Icon(
             Icons.Outlined.Explore,
             null,
-            Modifier.size(56.dp),
+            Modifier.background(LocalJourneyPalette.current.icon, RoundedCornerShape(22.dp)).padding(16.dp).size(40.dp),
             tint = MaterialTheme.colorScheme.primary,
         )
         Heading("好旅程，从同行开始", "把想去的地方，变成共同的回忆。")
@@ -462,7 +433,7 @@ fun CreateSheet(s: JourneyStore, close: () -> Unit) {
                 zone = ""
             },
         )
-        OutlinedButton({
+        SecondaryButton({
             s.action {
                 val r =
                     s.api.request(
@@ -533,7 +504,7 @@ fun JoinSheet(s: JourneyStore, code: String, setCode: (String) -> Unit, close: (
                 preview = null
             },
         )
-        OutlinedButton(
+        SecondaryButton(
             {
                 s.action {
                     preview = s.api.request("/api/invites/${JourneyApi.encode(normalized)}")
@@ -683,9 +654,9 @@ fun ObjectActions(s: JourneyStore, o: JSONObject) {
         trip.s("ownerId") == s.user?.s("id") ||
             (trip.s("teamMode") == "admin" && me?.optBoolean("isAdmin") == true)
     val canRestore = trip.s("ownerId") == s.user?.s("id") || me?.optBoolean("isAdmin") == true
-    Row(Modifier.horizontalScroll(rememberScrollState())) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (!deleted && o.s("kind") == "activity")
-            TextButton({
+            SecondaryButton({
                 s.action {
                     s.mutate(
                         "express",
@@ -702,7 +673,7 @@ fun ObjectActions(s: JourneyStore, o: JSONObject) {
                 Text(if (own?.optBoolean("notParticipating") == true) "重新参加" else "不参加")
             }
         val field = if (deleted) "wishRestore" else "wishDelete"
-        TextButton({
+        SecondaryButton({
             s.action {
                 s.mutate(
                     "express",
@@ -719,7 +690,7 @@ fun ObjectActions(s: JourneyStore, o: JSONObject) {
             )
         }
         if (if (deleted) canRestore else canDelete)
-            TextButton({
+            SecondaryButton({
                 s.action {
                     s.mutate(
                         if (deleted) "restore" else "delete",

@@ -141,7 +141,7 @@ struct RouteEditor: View {
   var currentTo: JSON { store.objects.first(where: { $0.id == to.id }) ?? to }
   var body: some View {
     NavigationStack {
-      Form {
+      JourneyForm {
         Section("前往下一站") {
           Text(
             (from == nil
@@ -227,8 +227,8 @@ struct RouteEditor: View {
                 expectedAccount: account)
               dismiss()
             }
-          }.disabled(store.busy || estimating)
-        }
+          }.journeyButton(prominent: true).disabled(store.busy || estimating)
+        }.journeyOwnGlass()
       }.onAppear {
         account = store.user.id
         tripID = store.selectedTrip ?? ""

@@ -137,7 +137,7 @@ fun ActivitySheet(
                 TextButton({ set("place", null) }) { Text("移除地点") }
             }
         Field("搜索地点", query, { query = it })
-        OutlinedButton(
+        SecondaryButton(
             {
                 s.action {
                     results = s.api.search(query, s.snapshot?.o("trip")?.s("destination").orEmpty())

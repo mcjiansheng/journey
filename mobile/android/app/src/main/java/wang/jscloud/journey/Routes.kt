@@ -176,7 +176,7 @@ fun RouteSheet(
                 estimateSignature = null
             },
         )
-        OutlinedButton(
+        SecondaryButton(
             {
                 val queryFrom = fromId
                 val queryPlace = independent?.copyJson()

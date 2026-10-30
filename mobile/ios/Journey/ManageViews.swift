@@ -9,7 +9,7 @@ struct ManageView: View {
   @State private var leave = false
   @State private var purge = false
   var body: some View {
-    Form {
+    JourneyForm {
       Section("当前旅程") {
         TextField("旅程名称", text: $name)
         TextField("目的地", text: $destination)
@@ -28,7 +28,7 @@ struct ManageView: View {
               try await store.mutate(object: store.trip, kind: "patch", patch: .object(patch))
             }
           }
-        }.disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+        }.journeyButton(prominent: true).disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
         NavigationLink("日期与计划天数") { RescheduleView() }
         NavigationLink("成员与邀请") { TeamView() }
         NavigationLink("已删除的内容") { DeletedView() }
@@ -72,14 +72,14 @@ struct ManageView: View {
         NavigationLink("保存与同步") { SyncView() }
         Button("返回我的旅程") { store.selectedTrip = nil }
       }
-    }.scrollContentBackground(.hidden).background(Palette.background).navigationTitle("旅程管理")
+    }.navigationTitle("旅程管理")
       .onAppear {
         name = store.trip["name"].string
         destination = store.trip["destination"].string
         zone = store.trip["timezone"].string
       }.sheet(isPresented: $profile) { ProfileView() }.sheet(isPresented: $leave) {
         NavigationStack {
-          Form {
+          JourneyForm {
             if store.snapshot["members"].array.count == 1 {
               Text("你是最后一位成员，退出后旅程及其内容将永久清除。")
               Toggle("确认永久清除旅程及内容", isOn: $purge)
@@ -104,7 +104,7 @@ struct ManageView: View {
 struct DeletedView: View {
   @EnvironmentObject var store: JourneyStore
   var body: some View {
-    List {
+    JourneyList {
       ForEach(store.objects.filter { $0["state"].string == "deleted" }) { o in
         VStack(alignment: .leading, spacing: 12) {
           Text(
@@ -124,7 +124,7 @@ struct TeamView: View {
   @State private var invite: JSON = .null
   @State private var hours = 24
   var body: some View {
-    List {
+    JourneyList {
       Section("同行的伙伴") {
         ForEach(store.snapshot["members"].array, id: \.id) { member in
           VStack(alignment: .leading, spacing: 10) {
@@ -136,7 +136,7 @@ struct TeamView: View {
                 Text(
                   member["userId"].string == store.trip["ownerId"].string
                     ? "创建者" : member["isAdmin"].bool ? "管理员" : "成员"
-                ).font(.caption).foregroundStyle(.secondary)
+                ).font(.caption).foregroundStyle(Palette.muted)
               }
             }
             if store.isOwner && member["userId"].string != store.trip["ownerId"].string {
@@ -182,7 +182,7 @@ struct TeamView: View {
             if let url = URL(string: invite["url"].string) { ShareLink("分享邀请", item: url) }
             Text(
               "有效至 " + Date(timeIntervalSince1970: invite["expiresAt"].number / 1000).formatted()
-            ).font(.caption).foregroundStyle(.secondary)
+            ).font(.caption).foregroundStyle(Palette.muted)
           }
         }
       }
@@ -237,7 +237,7 @@ struct RescheduleView: View {
   @State private var end = Date()
   @State private var moveActivities = false
   var body: some View {
-    Form {
+    JourneyForm {
       DatePicker("出发日期", selection: $start, displayedComponents: .date)
       DatePicker("结束日期", selection: $end, in: start..., displayedComponents: .date)
       Toggle("活动随原计划日一起移动", isOn: $moveActivities)

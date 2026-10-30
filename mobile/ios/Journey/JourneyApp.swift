@@ -1,20 +1,5 @@
 import SwiftUI
 
-enum Palette {
-  static let accent = Color(red: 36 / 255, green: 107 / 255, blue: 88 / 255)
-  static let background = Color(
-    uiColor: UIColor {
-      $0.userInterfaceStyle == .dark
-        ? UIColor(red: 0.09, green: 0.13, blue: 0.11, alpha: 1)
-        : UIColor(red: 243 / 255, green: 243 / 255, blue: 237 / 255, alpha: 1)
-    })
-  static let surface = Color(
-    uiColor: UIColor {
-      $0.userInterfaceStyle == .dark
-        ? UIColor(red: 0.15, green: 0.20, blue: 0.17, alpha: 1)
-        : UIColor(red: 1, green: 254 / 255, blue: 250 / 255, alpha: 1)
-    })
-}
 @main struct JourneyApp: App {
   @StateObject private var store = JourneyStore()
   @Environment(\.scenePhase) private var phase
@@ -39,7 +24,8 @@ struct RootView: View {
   var body: some View {
     Group {
       if !store.ready {
-        ProgressView("正在连接同行…")
+        ProgressView("正在连接同行…").frame(maxWidth: .infinity, maxHeight: .infinity)
+          .foregroundStyle(Palette.muted).background { JourneyBackground() }
       } else if store.user.isNull || store.sessionExpired {
         LoginView()
       } else if store.selectedTrip != nil {
@@ -65,13 +51,15 @@ struct LoginView: View {
   @State private var name = ""
   var body: some View {
     NavigationStack {
-      Form {
+      JourneyForm {
         Section {
           VStack(alignment: .leading, spacing: 14) {
-            Image(systemName: "safari").font(.system(size: 52)).foregroundStyle(Palette.accent)
+            Image(systemName: "safari").font(.system(size: 34)).foregroundStyle(Palette.accent)
+              .frame(width: 68, height: 68).background(
+                Palette.iconBackground, in: RoundedRectangle(cornerRadius: 22))
             Text("同行").font(.largeTitle.bold())
             Text("JOURNEY").font(.caption).tracking(4)
-            Text("和同伴一起，把旅行慢慢安排好。").foregroundStyle(.secondary)
+            Text("和同伴一起，把旅行慢慢安排好。").foregroundStyle(Palette.muted)
           }.padding(.vertical, 24).listRowBackground(Color.clear)
         }
         Section {
@@ -92,9 +80,9 @@ struct LoginView: View {
             }
           }.disabled(
             store.busy || identifier.isEmpty || password.isEmpty || (register && name.isEmpty)
-          ).accessibilityIdentifier("auth.submit")
+          ).journeyButton(prominent: true).accessibilityIdentifier("auth.submit")
         }
-      }.scrollContentBackground(.hidden).background(Palette.background).navigationTitle("")
+      }.navigationTitle("")
     }
   }
 }
@@ -103,26 +91,21 @@ struct HomeView: View {
   @State private var sheet: String?
   var body: some View {
     NavigationStack {
-      List {
+      JourneyList {
         Section {
           VStack(alignment: .leading, spacing: 12) {
             Label("同行 JOURNEY", systemImage: "safari").font(.headline).foregroundStyle(
               Palette.accent)
             Text("我的旅程").font(.largeTitle.bold())
-            Text("把下一段好时光，留给彼此。").foregroundStyle(.secondary)
+            Text("把下一段好时光，留给彼此。").foregroundStyle(Palette.muted)
           }.padding(.vertical, 14).listRowBackground(Color.clear)
         }
         Section {
-          Button {
-            sheet = "create"
-          } label: {
-            Label("创建旅程", systemImage: "plus.circle.fill")
-          }
-          Button {
-            sheet = "join"
-          } label: {
-            Label("加入旅程", systemImage: "person.badge.plus")
-          }
+          ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) { homeActions }
+            VStack(spacing: 12) { homeActions }
+          }.controlSize(.large).listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
         }
         if !store.cache.queue.isEmpty {
           NavigationLink {
@@ -140,24 +123,32 @@ struct HomeView: View {
             Button {
               store.perform { try await store.open(trip.id) }
             } label: {
-              VStack(alignment: .leading, spacing: 7) {
-                Text(trip["name"].string).font(.headline).foregroundStyle(.primary)
-                Text(
-                  [
-                    trip["destination"].string, trip["startDate"].string,
-                    trip["archived"].bool
-                      ? "已归档"
-                      : trip["state"].string == "deleted"
-                        ? "已删除" : "\(Int(trip["dayCount"].number)) 天",
-                  ].filter { !$0.isEmpty }.joined(separator: " · ")
-                ).font(.subheadline).foregroundStyle(.secondary)
-              }.padding(.vertical, 9)
+              HStack(spacing: 16) {
+                Image(systemName: "safari").font(.title2).foregroundStyle(Palette.accent)
+                  .frame(width: 52, height: 58)
+                  .background(Palette.iconBackground, in: RoundedRectangle(cornerRadius: 17))
+                VStack(alignment: .leading, spacing: 7) {
+                  Text(trip["name"].string).font(.headline).foregroundStyle(Palette.text)
+                  Text(
+                    [
+                      trip["destination"].string, trip["startDate"].string,
+                      trip["archived"].bool
+                        ? "已归档"
+                        : trip["state"].string == "deleted"
+                          ? "已删除" : "\(Int(trip["dayCount"].number)) 天",
+                    ].filter { !$0.isEmpty }.joined(separator: " · ")
+                  ).font(.subheadline).foregroundStyle(Palette.muted)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(
+                  Palette.muted)
+              }.padding(.vertical, 4)
             }.buttonStyle(.plain).accessibilityIdentifier("trip.open." + trip.id)
           }
         }
-        Text(store.status).font(.caption).foregroundStyle(.secondary)
-      }.scrollContentBackground(.hidden).background(Palette.background).navigationTitle("").toolbar
-      {
+        Text(store.status).font(.caption).foregroundStyle(Palette.muted).listRowBackground(
+          Color.clear)
+      }.navigationTitle("").toolbar {
         Button {
           sheet = "profile"
         } label: {
@@ -177,6 +168,20 @@ struct HomeView: View {
     }
   }
 }
+extension HomeView {
+  @ViewBuilder var homeActions: some View {
+    Button {
+      sheet = "create"
+    } label: {
+      Label("创建旅程", systemImage: "plus").frame(maxWidth: .infinity)
+    }.journeyButton()
+    Button {
+      sheet = "join"
+    } label: {
+      Label("加入旅程", systemImage: "person.badge.plus").frame(maxWidth: .infinity)
+    }.journeyButton()
+  }
+}
 struct SheetID: Identifiable {
   var id: String
   init(_ id: String) { self.id = id }
@@ -194,7 +199,7 @@ struct CreateTripView: View {
   @State private var resolving = false
   var body: some View {
     NavigationStack {
-      Form {
+      JourneyForm {
         Section {
           TextField("旅程名称", text: $name).accessibilityIdentifier("trip.name")
           TextField("目的地", text: $destination).accessibilityIdentifier("trip.destination")
@@ -208,7 +213,7 @@ struct CreateTripView: View {
             Text("平等团队").tag("equal")
           }
           Text(mode == "equal" ? "每位同伴都能共同管理旅程。" : "管理员负责旅程管理，同伴一起编辑安排。").font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Palette.muted)
         }
         Section {
           Picker("记账币种", selection: $currency) { ForEach(currencies, id: \.self) { Text($0) } }
@@ -246,7 +251,7 @@ struct CreateTripView: View {
         }.disabled(
           store.busy || name.isEmpty || destination.trimmingCharacters(in: .whitespaces).isEmpty
             || mode.isEmpty || zone.isEmpty
-        ).accessibilityIdentifier("trip.create")
+        ).journeyButton(prominent: true).accessibilityIdentifier("trip.create")
       }.navigationTitle("新旅程").toolbar { Button("取消") { dismiss() } }
     }
   }
@@ -269,7 +274,7 @@ struct JoinView: View {
   }
   var body: some View {
     NavigationStack {
-      Form {
+      JourneyForm {
         TextField("邀请编码或链接", text: $input).textInputAutocapitalization(.never)
           .autocorrectionDisabled().onChange(of: input) { _, _ in preview = .null }
         if !preview.isNull {
@@ -299,14 +304,12 @@ struct WorkspaceView: View {
   @State private var tab = "itinerary"
   var body: some View {
     TabView(selection: $tab) {
-      NavigationStack { ItineraryView() }.tabItem {
-        Label("行程", systemImage: "list.bullet.rectangle")
-      }.tag("itinerary")
-      NavigationStack { TripMapView() }.tabItem { Label("地图", systemImage: "map") }.tag("map")
-      NavigationStack { ExpensesView() }.tabItem { Label("费用", systemImage: "creditcard") }.tag(
-        "ledger")
-      NavigationStack { ManageView() }.tabItem { Label("管理", systemImage: "slider.horizontal.3") }
-        .tag("settings")
+      NavigationStack { ItineraryView() }.toolbar(.hidden, for: .tabBar).tag("itinerary")
+      NavigationStack { TripMapView() }.toolbar(.hidden, for: .tabBar).tag("map")
+      NavigationStack { ExpensesView() }.toolbar(.hidden, for: .tabBar).tag("ledger")
+      NavigationStack { ManageView() }.toolbar(.hidden, for: .tabBar).tag("settings")
+    }.safeAreaInset(edge: .bottom, spacing: 0) {
+      JourneyTabBar(selection: $tab)
     }.safeAreaInset(edge: .top, spacing: 0) {
       if !store.cache.queue.isEmpty {
         Label("\(store.cache.queue.count) 项修改等待同步", systemImage: "arrow.triangle.2.circlepath")
@@ -338,10 +341,10 @@ struct ProfileView: View {
   @AppStorage("journey.theme") var theme = "system"
   var body: some View {
     NavigationStack {
-      Form {
+      JourneyForm {
         Section("个人资料") {
           TextField("你的称呼", text: $name)
-          Text(store.user["identifier"].string).foregroundStyle(.secondary)
+          Text(store.user["identifier"].string).foregroundStyle(Palette.muted)
           Button("保存称呼") {
             store.perform { try await store.updateProfile(.object(["displayName": .string(name)])) }
           }
@@ -368,7 +371,7 @@ struct SyncView: View {
   @EnvironmentObject var store: JourneyStore
   @State private var confirm: String?
   var body: some View {
-    List {
+    JourneyList {
       Section {
         Text(store.status)
         Button("重试并确认修改") { Task { await store.retryPending() } }
@@ -386,7 +389,7 @@ struct SyncView: View {
                   ? "正在等待服务器确认"
                   : op.blocked == "CLOCK_UNCERTAIN"
                     ? "需要确认重新应用" : op.blocked == nil ? "等待上传" : "暂时无法提交"
-              ).font(.caption).foregroundStyle(.secondary)
+              ).font(.caption).foregroundStyle(Palette.muted)
             }
           }
           if ops.first?.blocked == "CLOCK_UNCERTAIN" && !ops.contains(where: \.receiptUnknown) {
@@ -394,7 +397,7 @@ struct SyncView: View {
           }
         }
       }
-      if store.cache.queue.isEmpty { Text("修改已保存并同步").foregroundStyle(.secondary) }
+      if store.cache.queue.isEmpty { Text("修改已保存并同步").foregroundStyle(Palette.muted) }
     }.navigationTitle("保存与同步").confirmationDialog(
       "以现在的时间重新应用这些修改？",
       isPresented: Binding(get: { confirm != nil }, set: { if !$0 { confirm = nil } })

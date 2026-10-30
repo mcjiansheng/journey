@@ -42,3 +42,18 @@ Xcode 27.1，通过局域网连接 iOS 27.0.1。测试后端使用独立 SQLite 
 本次未验证真机登录、四页操作及保存结果。测试结束后已停止本地后端。测试日志保存在 `.local/ios-iphone-test-run3.log`、`.local/ios-iphone-ui-run4.log`，单元测试结果保存在 `.local/iphone-acceptance/results-run3.xcresult`。
 
 恢复调试时，Xcode 仍显示手机 `unavailable`，主动读取设备 App 列表返回 CoreDevice error 4016，尚未建立可信设备服务连接。账号输入框已指定邮箱键盘并标记为用户名输入，避免默认中文键盘影响邮箱输入；修改后的签名真机构建通过，尚未安装到手机验证。构建日志保存在 `.local/ios-iphone-test-build-resume.log`。
+
+## 2026-10-31 · 原生亮暗主题与 Liquid Glass
+
+原生两端改为同一套绿色语义色：亮色薄荷底，暗色深绿底与亮薄荷主色。加入三向柔和背景光晕，统一卡片、图标底色、主次按钮和悬浮导航。网页样式未修改。颜色角色见 [THEME.md](THEME.md)。
+
+iOS 26 起使用系统 `glass` 按钮与 `glassEffect` 材质。主按钮和底栏把原生玻璃背景与前景内容分开，避免系统覆盖文字和选中颜色。页面继续由原来的 TabView 与 NavigationStack 保留状态；活动删除收进更多菜单。
+
+本轮验证：
+
+- iOS 模拟器构建通过；14 项 XCTest 通过。iOS 27.0 / iPhone 18 Pro 的亮暗主题 UI 验收通过，覆盖首页、四页切换、选中反馈、活动、路程和费用保存。逐页截图已检查。
+- Android `assembleDebug`、`testDebugUnitTest`、`lintDebug` 通过；13 项 JVM 测试通过，1 项未注入接口配置的 API 测试跳过，Lint 0 错误。亮暗主题原生流程各通过一次，覆盖登录、四页切换、活动／费用保存及前台刷新。
+- Android 地图保留现有日间地图瓦片，地图外围控件随主题切换。
+- iOS 26.5 的本机模拟器启动停顿，本轮最终界面验收在 iOS 27.0 完成。旧版 iOS 按钮回退通过编译；本轮未安装真机。
+
+最终安装包和预览存放于 `releases/mobile/theme-20261031/`，不提交 Git。Android APK 使用默认正式服务地址。构建和验收日志保存在 `.local/android-theme-production-build.log`、`.local/ios-theme-glass-test.log`、`.local/ios-theme-tint-verified-test.log`；Xcode 截图随对应 `.xcresult` 保存。

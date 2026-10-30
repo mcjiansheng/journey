@@ -24,7 +24,7 @@ fun ManagementScreen(s: JourneyStore, onInvite: () -> Unit, onRename: () -> Unit
         Text(trip.s("timezone"))
         TextButton(onRename) { Text("修改名称与目的地") }
         if (me?.optBoolean("canInvite") == true || admin)
-            OutlinedButton(onInvite) { Text("邀请同行伙伴") }
+            SecondaryButton(onInvite) { Text("邀请同行伙伴") }
     }
     Text("同行伙伴 · ${members.size}", style = MaterialTheme.typography.titleMedium)
     members.forEach { m ->
@@ -78,7 +78,7 @@ fun ManagementScreen(s: JourneyStore, onInvite: () -> Unit, onRename: () -> Unit
             }
         }
     val archived = s.trips.find { it.s("id") == trip.s("id") }?.optBoolean("archived") ?: false
-    OutlinedButton(
+    SecondaryButton(
         {
             s.action {
                 s.management(
@@ -197,7 +197,7 @@ fun InvitesSheet(s: JourneyStore, close: () -> Unit) {
             Panel {
                 Text(r.s("code"), style = MaterialTheme.typography.headlineSmall)
                 Text(r.s("url"))
-                Button({
+                SecondaryButton({
                     ctx.startActivity(
                         Intent.createChooser(
                             Intent(Intent.ACTION_SEND)

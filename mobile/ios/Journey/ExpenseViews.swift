@@ -42,11 +42,11 @@ struct ExpensesView: View {
     Array(Set(expenses.map { $0["payload"]["payment"]["currency"].string })).sorted()
   }
   var body: some View {
-    List {
+    JourneyList {
       Section("旅程开支") {
         ForEach(totals, id: \.self) { currency in
           VStack(alignment: .leading, spacing: 7) {
-            Text(currency).font(.caption).foregroundStyle(.secondary)
+            Text(currency).font(.caption).foregroundStyle(Palette.muted)
             Text(
               Money.display(
                 .number(
@@ -65,7 +65,7 @@ struct ExpensesView: View {
                         && $0["payload"]["payment"]["status"].string == "estimated"
                     }.reduce(0) { $0 + $1["payload"]["payment"]["amountMinor"].number }),
                   currency: currency)
-            ).font(.subheadline).foregroundStyle(.secondary)
+            ).font(.subheadline).foregroundStyle(Palette.muted)
           }.padding(.vertical, 9)
         }
       }
@@ -85,16 +85,16 @@ struct ExpensesView: View {
                     Text(
                       item["payload"]["title"].string.isEmpty
                         ? "未命名费用" : item["payload"]["title"].string
-                    ).foregroundStyle(.primary)
+                    ).foregroundStyle(Palette.text)
                     if !item["payload"]["notes"].string.isEmpty {
                       Text(item["payload"]["notes"].string).font(.caption).foregroundStyle(
-                        .secondary)
+                        Palette.muted)
                     }
                     if let activity = store.objects.first(where: {
                       $0.id == item["payload"]["activityId"].string
                     }) {
                       Text(activity["payload"]["title"].string).font(.caption).foregroundStyle(
-                        .secondary)
+                        Palette.muted)
                     }
                   }
                   Spacer()
@@ -104,19 +104,21 @@ struct ExpensesView: View {
                       currency: item["payload"]["payment"]["currency"].string)
                   ).foregroundStyle(Palette.accent)
                 }
-              }
+              }.buttonStyle(.plain)
               LifecycleActions(object: item)
             }.padding(.vertical, 7)
           }
         }
       }
-    }.scrollContentBackground(.hidden).background(Palette.background).navigationTitle("旅程费用")
+    }.navigationTitle("旅程费用")
       .toolbar {
-        Button {
-          adding = true
-        } label: {
-          Label("添加费用", systemImage: "plus")
-        }
+        ToolbarItem(placement: .topBarTrailing) {
+          Button {
+            adding = true
+          } label: {
+            Label("添加费用", systemImage: "plus")
+          }.journeyButton(prominent: true)
+        }.journeyOwnGlass()
       }.sheet(isPresented: $adding) { ExpenseEditor() }.sheet(item: $editing) {
         ExpenseEditor(object: $0)
       }
@@ -162,7 +164,7 @@ struct ExpenseEditor: View {
   }
   var body: some View {
     NavigationStack {
-      Form {
+      JourneyForm {
         if !restore.isNull {
           Section {
             Text("有上次未完成的输入")
@@ -236,8 +238,8 @@ struct ExpenseEditor: View {
               try store.removeDraft(key)
               dismiss()
             }
-          }.disabled(store.busy || !restore.isNull)
-        }
+          }.journeyButton(prominent: true).disabled(store.busy || !restore.isNull)
+        }.journeyOwnGlass()
       }.onAppear { initialize() }.onChange(of: store.objects) { _, objects in
         guard let obj = objects.first(where: { $0.id == object?.id }) else { return }
         for (k, v) in obj["payload"].dictionary where !dirty.contains(k) {

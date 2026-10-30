@@ -2,7 +2,7 @@
 
 Android 使用 Kotlin、Jetpack Compose 和 Material 3；iOS 使用 SwiftUI。两个工程直接连接 Journey 的 Express 服务，沿用网页端账号、旅程、成员、收藏和账本。
 
-页面延续现有「我的旅程 → 行程 / 地图 / 费用 / 管理」结构，沿用暖灰底色与墨绿色强调色；日期选择、表单、弹层、分享和导航使用各平台原生控件。
+页面延续现有「我的旅程 → 行程 / 地图 / 费用 / 管理」结构，沿用网页的薄荷背景与绿色强调色，并提供同色相暗色主题；日期选择、表单、弹层、分享和导航使用各平台原生控件。
 
 ## 工程
 
@@ -59,3 +59,5 @@ iOS 使用 [MapKit for SwiftUI](https://developer.apple.com/documentation/mapkit
 ## 开发与发布
 
 开发在 `dev` 分支进行，检查后提交并推送 `origin/dev`。原生安装包与网页发布分别构建。合并 `main` 仍需用户确认并通过 Pull Request。
+
+原生主题角色、配色和 iOS Liquid Glass 用法见[配色说明](THEME.md)。

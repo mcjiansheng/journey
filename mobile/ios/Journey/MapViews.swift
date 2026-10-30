@@ -55,7 +55,7 @@ struct PlacePicker: View {
   @State private var searching = false
   var body: some View {
     NavigationStack {
-      List {
+      JourneyList {
         Section {
           HStack {
             TextField("搜索地点", text: $query).onSubmit { search() }
@@ -71,7 +71,7 @@ struct PlacePicker: View {
             } label: {
               VStack(alignment: .leading, spacing: 6) {
                 Text(place["name"].string)
-                Text(place["address"].string).font(.caption).foregroundStyle(.secondary)
+                Text(place["address"].string).font(.caption).foregroundStyle(Palette.muted)
               }
             }
           }
@@ -180,9 +180,9 @@ struct TripMapView: View {
         MapCompass()
         MapScaleView()
       }.frame(minHeight: 230)
-      List {
+      JourneyList {
         Section("收藏地点") {
-          if favorites.isEmpty { Text("收藏沿途想去的地方").foregroundStyle(.secondary) }
+          if favorites.isEmpty { Text("收藏沿途想去的地方").foregroundStyle(Palette.muted) }
           ForEach(favorites) { o in
             Button {
               selected = MapPinItem(id: o.id, place: o["payload"], favorite: o)
@@ -194,7 +194,7 @@ struct TripMapView: View {
             } label: {
               VStack(alignment: .leading) {
                 Text(o["payload"]["name"].string)
-                Text(o["payload"]["address"].string).font(.caption).foregroundStyle(.secondary)
+                Text(o["payload"]["address"].string).font(.caption).foregroundStyle(Palette.muted)
               }
             }
           }
@@ -227,10 +227,10 @@ struct TripMapView: View {
         }
       ) { pin in
         NavigationStack {
-          Form {
+          JourneyForm {
             Section {
               Text(pin.place["name"].string).font(.title2)
-              Text(pin.place["address"].string).foregroundStyle(.secondary)
+              Text(pin.place["address"].string).foregroundStyle(Palette.muted)
             }
             Button("添加到行程") {
               pendingActivityPlace = pin.place
