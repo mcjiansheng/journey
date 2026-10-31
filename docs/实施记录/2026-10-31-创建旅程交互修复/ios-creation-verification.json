@@ -1,0 +1,36 @@
+{
+  "platform": "iOS",
+  "device": "iPhone 18 Pro",
+  "runtime": "iOS 27.0",
+  "buildForTesting": "passed",
+  "unitTests": {
+    "passed": 20,
+    "failed": 0
+  },
+  "coreUITest": {
+    "passed": 1,
+    "failed": 0,
+    "checks": [
+      "北京目的地，无需查询或手动时区",
+      "默认管理员团队",
+      "团队卡片可切换",
+      "点卡片收起键盘",
+      "直接创建并进入行程"
+    ]
+  },
+  "createdTrip": {
+    "name": "北京时区验收 1793460602",
+    "destination": "北京",
+    "timezone": "Asia/Shanghai",
+    "teamMode": "admin",
+    "startDate": "2026-10-31",
+    "dayCount": 1
+  },
+  "screenshot": "ios-create-trip.png",
+  "sourceMatchesTestedLocalMirror": true,
+  "logs": {
+    "build": "/tmp/journey-create-ios-keyboard-build.log",
+    "unit": "/tmp/journey-create-ios-local-tests.log",
+    "ui": "/tmp/journey-create-ios-final-ui.log"
+  }
+}
