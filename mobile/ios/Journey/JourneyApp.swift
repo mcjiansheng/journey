@@ -216,12 +216,15 @@ struct CreateTripView: View {
   @State private var end = Date()
   @State private var creating = false
   @State private var creationError: String?
+  @FocusState private var textFocus: String?
   var body: some View {
     NavigationStack {
       JourneyForm {
         Section {
-          TextField("旅程名称", text: $name).accessibilityIdentifier("trip.name")
-          TextField("目的地", text: $destination).accessibilityIdentifier("trip.destination")
+          TextField("旅程名称", text: $name).focused($textFocus, equals: "name")
+            .accessibilityIdentifier("trip.name")
+          TextField("目的地", text: $destination).focused($textFocus, equals: "destination")
+            .accessibilityIdentifier("trip.destination")
           DatePicker("出发日期", selection: $start, displayedComponents: .date)
             .environment(\.calendar, TripCreationDate.calendar()).environment(
               \.timeZone, TimeZone.current)
@@ -230,7 +233,13 @@ struct CreateTripView: View {
               \.timeZone, TimeZone.current)
         }
         Section {
-          TeamModeCards(selection: $mode)
+          TeamModeCards(
+            selection: Binding(
+              get: { mode },
+              set: {
+                mode = $0
+                textFocus = nil
+              }))
         } header: {
           Text("同行方式")
         } footer: {

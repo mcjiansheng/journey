@@ -52,6 +52,7 @@ final class JourneyUITests: XCTestCase {
     app.buttons["team.mode.equal"].tap()
     XCTAssertTrue(app.buttons["team.mode.equal"].isSelected)
     app.buttons["team.mode.admin"].tap()
+    XCTAssertFalse(app.keyboards.firstMatch.exists)
     app.swipeUp()
     let screenshot = XCTAttachment(screenshot: app.screenshot())
     screenshot.name = "create-trip-beijing-team-cards"
