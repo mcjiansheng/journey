@@ -9,6 +9,60 @@ final class JourneyUITests: XCTestCase {
     try verifyNativeScreens(theme: "light", edit: false)
   }
 
+  func testCreateTripWithAutomaticBeijingTimezone() throws {
+    continueAfterFailure = false
+    let fixtureURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent(".local/mobile-acceptance/fixture.json")
+    let data =
+      ProcessInfo.processInfo.environment["JOURNEY_FIXTURE_JSON"].map { Data($0.utf8) }
+      ?? (try? Data(contentsOf: fixtureURL))
+    guard let data, let fixture = try JSONSerialization.jsonObject(with: data) as? [String: String]
+    else { throw XCTSkip("Local backend fixture is required") }
+    let app = XCUIApplication()
+    app.launchEnvironment["JOURNEY_SERVER_URL"] = fixture["serverURL"]
+    app.launchArguments = ["-journey.theme", "light"]
+    app.launch()
+    let account = app.textFields["auth.identifier"]
+    let ready = XCTNSPredicateExpectation(
+      predicate: NSPredicate { _, _ in
+        account.exists || app.buttons["创建旅程"].exists || app.buttons["我的旅程"].exists
+      }, object: app)
+    XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 20), .completed)
+    if account.exists {
+      account.tap()
+      account.typeText(fixture["identifier"]!)
+      let password = app.secureTextFields["auth.password"]
+      password.tap()
+      password.typeText(fixture["password"]!)
+      app.buttons["auth.submit"].tap()
+    }
+    if app.buttons["我的旅程"].exists { app.buttons["我的旅程"].tap() }
+    XCTAssertTrue(app.buttons["创建旅程"].waitForExistence(timeout: 20))
+    app.buttons["创建旅程"].tap()
+    let title = app.textFields["trip.name"]
+    XCTAssertTrue(title.waitForExistence(timeout: 5))
+    title.tap()
+    title.typeText("北京时区验收 " + String(Int(Date().timeIntervalSince1970)))
+    let destination = app.textFields["trip.destination"]
+    destination.tap()
+    destination.typeText("北京")
+    XCTAssertTrue(app.buttons["team.mode.admin"].isSelected)
+    XCTAssertFalse(app.buttons["按目的地确认时区"].exists)
+    app.buttons["team.mode.equal"].tap()
+    XCTAssertTrue(app.buttons["team.mode.equal"].isSelected)
+    app.buttons["team.mode.admin"].tap()
+    app.swipeUp()
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "create-trip-beijing-team-cards"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+    let create = app.buttons["trip.create"]
+    XCTAssertTrue(create.isEnabled)
+    create.tap()
+    XCTAssertTrue(app.buttons["tab.itinerary"].waitForExistence(timeout: 20))
+  }
+
   private func verifyNativeScreens(theme: String, edit: Bool) throws {
     continueAfterFailure = false
     let fixtureURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()

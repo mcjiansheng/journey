@@ -345,3 +345,88 @@ enum SnapshotProjection {
     return snap
   }
 }
+
+struct DestinationTimezoneSelection {
+  private(set) var identifier: String
+  private(set) var destination = ""
+  private(set) var revision = 0
+  private(set) var isManual = false
+
+  init(identifier: String = TimeZone.current.identifier) { self.identifier = identifier }
+
+  mutating func changeDestination(
+    _ value: String, deviceTimezone: String = TimeZone.current.identifier
+  ) {
+    let query = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard query != destination else { return }
+    destination = query
+    revision += 1
+    guard !isManual else { return }
+    identifier = DestinationTimezones.known(destination) ?? deviceTimezone
+  }
+
+  mutating func choose(_ value: String) {
+    identifier = value
+    isManual = true
+    revision += 1
+  }
+
+  mutating func useAutomatic(deviceTimezone: String = TimeZone.current.identifier) {
+    isManual = false
+    revision += 1
+    identifier = DestinationTimezones.known(destination) ?? deviceTimezone
+  }
+
+  mutating func resolve(_ value: String, revision expected: Int) {
+    guard expected == revision, !isManual else { return }
+    identifier = value
+  }
+}
+
+enum JourneyTimeZone {
+  static func label(_ identifier: String) -> String {
+    let common = [
+      "Asia/Shanghai": "北京时间", "Asia/Hong_Kong": "香港时间", "Asia/Taipei": "台北时间",
+      "Asia/Tokyo": "日本时间", "Asia/Seoul": "韩国时间", "Asia/Singapore": "新加坡时间",
+      "Asia/Bangkok": "泰国时间", "Europe/London": "伦敦时间", "Europe/Paris": "巴黎时间",
+      "America/New_York": "纽约时间", "America/Los_Angeles": "洛杉矶时间",
+      "Australia/Sydney": "悉尼时间", "Pacific/Auckland": "新西兰时间",
+    ]
+    return common[identifier] ?? TimeZone(identifier: identifier)?.localizedName(
+      for: .standard, locale: Locale(identifier: "zh_CN")) ?? "当地时间"
+  }
+  static func offset(_ identifier: String) -> String {
+    let seconds = TimeZone(identifier: identifier)?.secondsFromGMT() ?? 0
+    return String(
+      format: "GMT%@%02d:%02d", seconds < 0 ? "−" : "+", abs(seconds) / 3600,
+      abs(seconds) % 3600 / 60)
+  }
+  static var common: [String] {
+    var seen = Set<String>()
+    return
+      ([TimeZone.current.identifier] + [
+        "Asia/Shanghai", "Asia/Hong_Kong", "Asia/Taipei", "Asia/Tokyo", "Asia/Seoul",
+        "Asia/Singapore", "Asia/Bangkok", "Europe/London", "Europe/Paris", "America/New_York",
+        "America/Los_Angeles", "Australia/Sydney", "Pacific/Auckland",
+      ]).filter { seen.insert($0).inserted }
+  }
+}
+
+// DatePicker values in the create form are civil dates in the device time zone.
+enum TripCreationDate {
+  static func calendar(timezone: TimeZone = .current) -> Calendar {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = timezone
+    return calendar
+  }
+  static func string(_ date: Date, timezone: TimeZone = .current) -> String {
+    let parts = calendar(timezone: timezone).dateComponents([.year, .month, .day], from: date)
+    return String(format: "%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
+  }
+  static func dayCount(from start: Date, through end: Date, timezone: TimeZone = .current) -> Int {
+    let civil = calendar(timezone: timezone)
+    return civil.dateComponents(
+      [.day], from: civil.startOfDay(for: start), to: civil.startOfDay(for: end)
+    ).day! + 1
+  }
+}

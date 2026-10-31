@@ -242,9 +242,11 @@ import SwiftUI
   func create(_ body: JSON) async throws {
     let r = try await api("/api/trips", method: "POST", body: body)
     accept(r)
-    selectedTrip = r["trip"].id
-    try await refreshTrips()
+    if !cache.trips.contains(where: { $0.id == r["trip"].id }) {
+      cache.trips.insert(r["trip"], at: 0)
+    }
     try persist()
+    selectedTrip = r["trip"].id
   }
   func join(_ code: String) async throws {
     let r = try await api(

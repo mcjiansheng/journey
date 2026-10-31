@@ -15,7 +15,12 @@ import {
 import { Modal, Field, AsyncButton, IconButton, Empty, errorMessage, useDraft } from './ui.jsx';
 import { dateAdd, dateRangeDays } from '../domain.js';
 import { resolveDestinationTimezone } from '../amap.js';
-import { migrateTimezoneChoice, validTimezone, timezoneLabel } from '../destination-timezone.js';
+import {
+  knownDestinationTimezone,
+  migrateTimezoneChoice,
+  validTimezone,
+  timezoneLabel,
+} from '../destination-timezone.js';
 import TeamModePicker from './TeamModePicker.jsx';
 import './entry.css';
 export { default as Login } from './Login.jsx';
@@ -54,12 +59,9 @@ export function CreateTrip({ journey: j, onClose }) {
   const destination = form.destination.trim(),
     automatic = form.timezoneChoice === 'destination';
   const destinationTimezone =
-    lookup.destination === destination && lookup.status === 'ready' ? lookup.timezone : null;
+    knownDestinationTimezone(destination) ||
+    (lookup.destination === destination && lookup.status === 'ready' ? lookup.timezone : null);
   const timezone = automatic ? destinationTimezone || localZone : form.timezoneChoice;
-  const pending =
-    automatic &&
-    !!destination &&
-    (lookup.destination !== destination || lookup.status === 'pending');
   const reference = useMemo(
     () => (form.startDate ? new Date(`${form.startDate}T12:00:00Z`) : new Date()),
     [form.startDate],
@@ -93,7 +95,7 @@ export function CreateTrip({ journey: j, onClose }) {
   useEffect(() => {
     const sequence = ++lookupSequence.current,
       controller = new AbortController();
-    if (!automatic) return () => controller.abort();
+    if (!automatic || knownDestinationTimezone(destination)) return () => controller.abort();
     if (!destination) {
       setLookup({ destination: '', status: 'idle', timezone: null, error: '' });
       return () => controller.abort();
@@ -119,13 +121,7 @@ export function CreateTrip({ journey: j, onClose }) {
   }, [destination, automatic]);
   const automaticLabel = destinationTimezone
     ? `目的地当地 · ${timezoneLabel(destinationTimezone, reference)}`
-    : pending
-      ? '目的地当地 · 正在确认…'
-      : !destination
-        ? '目的地当地 · 填写目的地后确认'
-        : automatic && lookup.status === 'error'
-          ? '目的地当地 · 未能确认'
-          : '按目的地自动确定';
+    : `当地时区 · ${timezoneLabel(localZone, reference)}`;
   return (
     <Modal title="开始一段新旅程" initialFocus="input" onClose={onClose}>
       <form

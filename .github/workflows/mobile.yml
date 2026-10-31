@@ -3,9 +3,9 @@ name: Native clients
 on:
   push:
     branches: [dev, main]
-    paths: ['mobile/**', 'design/**', 'scripts/generate-design-tokens.mjs', '.github/workflows/mobile.yml']
+    paths: ['mobile/**', 'design/**', 'shared/**', 'scripts/generate-*.mjs', '.github/workflows/mobile.yml']
   pull_request:
-    paths: ['mobile/**', 'design/**', 'scripts/generate-design-tokens.mjs', '.github/workflows/mobile.yml']
+    paths: ['mobile/**', 'design/**', 'shared/**', 'scripts/generate-*.mjs', '.github/workflows/mobile.yml']
   workflow_dispatch:
 
 permissions:
@@ -23,6 +23,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Check shared design tokens
         run: node scripts/generate-design-tokens.mjs --check
+      - name: Check shared destination timezones
+        run: node scripts/generate-destination-timezones.mjs --check
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin

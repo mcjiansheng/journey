@@ -209,12 +209,13 @@ struct CreateTripView: View {
   @Environment(\.dismiss) var dismiss
   @State private var name = ""
   @State private var destination = ""
-  @State private var zone = ""
-  @State private var mode = ""
+  @State private var timezone = DestinationTimezoneSelection()
+  @State private var mode = "admin"
   @State private var currency = "CNY"
   @State private var start = Date()
   @State private var end = Date()
-  @State private var resolving = false
+  @State private var creating = false
+  @State private var creationError: String?
   var body: some View {
     NavigationStack {
       JourneyForm {
@@ -222,58 +223,179 @@ struct CreateTripView: View {
           TextField("旅程名称", text: $name).accessibilityIdentifier("trip.name")
           TextField("目的地", text: $destination).accessibilityIdentifier("trip.destination")
           DatePicker("出发日期", selection: $start, displayedComponents: .date)
+            .environment(\.calendar, TripCreationDate.calendar()).environment(
+              \.timeZone, TimeZone.current)
           DatePicker("结束日期", selection: $end, in: start..., displayedComponents: .date)
-        }
-        Section("同行方式") {
-          Picker("团队模式", selection: $mode) {
-            Text("请选择").tag("")
-            Text("管理员团队").tag("admin")
-            Text("平等团队").tag("equal")
-          }
-          Text(mode == "equal" ? "每位同伴都能共同管理旅程。" : "管理员负责旅程管理，同伴一起编辑安排。").font(.caption)
-            .foregroundStyle(Palette.muted)
+            .environment(\.calendar, TripCreationDate.calendar()).environment(
+              \.timeZone, TimeZone.current)
         }
         Section {
-          Picker("记账币种", selection: $currency) { ForEach(currencies, id: \.self) { Text($0) } }
-          Picker("旅程时区", selection: $zone) {
-            Text("请选择目的地当地时区").tag("")
-            ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0).tag($0) }
-          }
-          Button(resolving ? "正在确认…" : "按目的地确认时区") {
-            Task {
-              resolving = true
-              defer { resolving = false }
-              do { zone = try await PlaceSearch.timezone(destination, store: store) } catch {
-                store.error = error.localizedDescription
-              }
-            }
-          }.disabled(destination.isEmpty || resolving)
+          TeamModeCards(selection: $mode)
+        } header: {
+          Text("同行方式")
+        } footer: {
+          Text("大家都能添加和编辑行程。")
         }
-        Button("创建旅程") {
-          store.perform {
-            let count =
-              JourneyDate.calendar.dateComponents(
-                [.day], from: JourneyDate.calendar.startOfDay(for: start),
-                to: JourneyDate.calendar.startOfDay(for: end)
-              ).day! + 1
-            guard (1...365).contains(count) else { throw APIError(message: "请选择 1 至 365 天的日期范围") }
-            try await store.create(
-              .object([
-                "id": .string(UUID().uuidString), "name": .string(name),
-                "destination": .string(destination.trimmingCharacters(in: .whitespaces)),
-                "startDate": .string(JourneyDate.string(start)), "dayCount": .integer(count),
-                "teamMode": .string(mode), "timezone": .string(zone), "currency": .string(currency),
-              ]))
-            dismiss()
+        Section {
+          DisclosureGroup("更多设置") {
+            Picker("记账币种", selection: $currency) { ForEach(currencies, id: \.self) { Text($0) } }
+            NavigationLink {
+              JourneyTimeZonePicker(
+                selection: Binding(get: { timezone.identifier }, set: { timezone.choose($0) }),
+                useAutomatic: { timezone.useAutomatic() })
+            } label: {
+              LabeledContent("旅程时区", value: JourneyTimeZone.label(timezone.identifier))
+            }.accessibilityIdentifier("trip.timezone")
           }
-        }.disabled(
-          store.busy || name.isEmpty || destination.trimmingCharacters(in: .whitespaces).isEmpty
-            || mode.isEmpty || zone.isEmpty
-        ).journeyButton(prominent: true).accessibilityIdentifier("trip.create")
-      }.navigationTitle("新旅程").toolbar { Button("取消") { dismiss() } }
+        }
+        Section {
+          if let creationError {
+            Text(creationError).foregroundStyle(Palette.danger).accessibilityIdentifier(
+              "trip.create.error")
+          }
+          Button(creating ? "正在创建…" : "创建旅程") { create() }
+            .disabled(
+              creating || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
+            .journeyButton(prominent: true).accessibilityIdentifier("trip.create")
+        }
+      }.disabled(creating).navigationTitle("新旅程").toolbar {
+        Button("取消") { dismiss() }.disabled(creating)
+      }
+      .interactiveDismissDisabled(creating)
+      .onChange(of: destination) { _, value in timezone.changeDestination(value) }
+      .onChange(of: start) { _, value in if end < value { end = value } }
+      .task(id: timezone.revision) {
+        let query = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        timezone.changeDestination(query)
+        guard !query.isEmpty, !timezone.isManual, DestinationTimezones.known(query) == nil else {
+          return
+        }
+        let revision = timezone.revision
+        do {
+          try await Task.sleep(for: .milliseconds(350))
+          let identified = try await PlaceSearch.timezone(query, store: store)
+          guard !Task.isCancelled else { return }
+          timezone.resolve(identified, revision: revision)
+        } catch { /* Keep the current device time zone when lookup is unavailable. */  }
+      }
+    }
+  }
+  func create() {
+    creating = true
+    creationError = nil
+    Task {
+      defer { creating = false }
+      do {
+        let count = TripCreationDate.dayCount(from: start, through: end)
+        guard (1...365).contains(count) else { throw APIError(message: "请选择 1 至 365 天的日期范围") }
+        try await store.create(
+          .object([
+            "id": .string(UUID().uuidString),
+            "name": .string(name.trimmingCharacters(in: .whitespacesAndNewlines)),
+            "destination": .string(destination.trimmingCharacters(in: .whitespacesAndNewlines)),
+            "startDate": .string(TripCreationDate.string(start)), "dayCount": .integer(count),
+            "teamMode": .string(mode), "timezone": .string(timezone.identifier),
+            "currency": .string(currency),
+          ]))
+        dismiss()
+      } catch { creationError = error.localizedDescription }
     }
   }
 }
+
+struct TeamModeCards: View {
+  @Binding var selection: String
+  var body: some View {
+    VStack(spacing: 12) {
+      option("admin", "管理员团队", "创建者与管理员可直接删除。成员可表达自己的意见。", symbol: "shield.lefthalf.filled")
+      option("equal", "平等团队", "成员通过集体表态删除内容。创建者也可直接删除。", symbol: "person.3.fill")
+    }
+  }
+  func option(_ value: String, _ title: String, _ detail: String, symbol: String) -> some View {
+    let selected = selection == value
+    return Button {
+      selection = value
+    } label: {
+      HStack(alignment: .top, spacing: 12) {
+        Image(systemName: symbol).font(.title2).foregroundStyle(Palette.accent)
+          .frame(width: 44, height: 44).background(
+            Palette.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 12)
+          )
+          .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 6) {
+          Text(title).font(.headline).foregroundStyle(Palette.text)
+          Text(detail).font(.subheadline).foregroundStyle(Palette.muted).fixedSize(
+            horizontal: false, vertical: true)
+        }.frame(maxWidth: .infinity, alignment: .leading)
+        Image(systemName: selected ? "checkmark.circle.fill" : "circle").font(.title3)
+          .foregroundStyle(selected ? Palette.accent : Palette.muted).accessibilityHidden(true)
+      }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+          selected ? Palette.accent.opacity(0.09) : Palette.surfaceSolid,
+          in: RoundedRectangle(cornerRadius: 16)
+        )
+        .overlay {
+          RoundedRectangle(cornerRadius: 16).strokeBorder(
+            selected ? Palette.accent : Palette.border, lineWidth: selected ? 1.5 : 1)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 16))
+    }.buttonStyle(.plain).accessibilityElement(children: .combine)
+      .accessibilityAddTraits(selected ? [.isSelected] : []).accessibilityIdentifier(
+        "team.mode." + value)
+  }
+}
+
+struct JourneyTimeZonePicker: View {
+  @Binding var selection: String
+  var useAutomatic: (() -> Void)? = nil
+  @Environment(\.dismiss) private var dismiss
+  @State private var query = ""
+  var zones: [String] {
+    guard !query.isEmpty else {
+      return JourneyTimeZone.common.contains(selection)
+        ? JourneyTimeZone.common : [selection] + JourneyTimeZone.common
+    }
+    return TimeZone.knownTimeZoneIdentifiers.filter {
+      JourneyTimeZone.label($0).localizedCaseInsensitiveContains(query)
+        || $0.localizedCaseInsensitiveContains(query)
+    }
+  }
+  var body: some View {
+    JourneyList {
+      if let useAutomatic {
+        Button("根据目的地自动选择", systemImage: "location") {
+          useAutomatic()
+          dismiss()
+        }
+        .accessibilityIdentifier("timezone.automatic")
+      }
+      Section(query.isEmpty ? "常用时区" : "搜索结果") {
+        ForEach(zones, id: \.self) { identifier in
+          Button {
+            selection = identifier
+            dismiss()
+          } label: {
+            HStack {
+              VStack(alignment: .leading, spacing: 4) {
+                Text(JourneyTimeZone.label(identifier)).foregroundStyle(Palette.text)
+                Text(JourneyTimeZone.offset(identifier)).font(.caption).foregroundStyle(
+                  Palette.muted)
+              }
+              Spacer()
+              if identifier == selection {
+                Image(systemName: "checkmark").foregroundStyle(Palette.accent)
+              }
+            }
+          }.accessibilityIdentifier("timezone." + identifier)
+        }
+      }
+    }.navigationTitle("旅程时区").navigationBarTitleDisplayMode(.inline).searchable(
+      text: $query, prompt: "搜索城市或时区")
+  }
+}
+
 let currencies = [
   "CNY", "USD", "EUR", "JPY", "GBP", "HKD", "KRW", "SGD", "THB", "TWD", "AUD", "CAD",
 ]

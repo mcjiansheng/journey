@@ -1,6 +1,6 @@
 import AMapLoader from '@amap/amap-jsapi-loader';
 import { api } from './sync';
-import { timezoneFromGeocodes } from './destination-timezone.js';
+import { knownDestinationTimezone, timezoneFromGeocodes } from './destination-timezone.js';
 import { normalizePlaceInformation } from './place-information.js';
 
 let promise;
@@ -124,9 +124,11 @@ export async function geocode(address, city = '', { signal } = {}) {
   return p ? normalizePlace({ ...p, name: address, address: p.formattedAddress }) : null;
 }
 export async function resolveDestinationTimezone(destination, { signal } = {}) {
+  const known = knownDestinationTimezone(destination);
+  if (known) return known;
   const result = await geocodeResponse(destination, '', { signal });
   const timezone = timezoneFromGeocodes(result?.geocodes);
-  if (!timezone) throw new Error('未能确定目的地时区，请在更多设置中手动选择。');
+  if (!timezone) throw new Error('未能确定目的地时区');
   return timezone;
 }
 export async function reverseGeocode(lng, lat) {

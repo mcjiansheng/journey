@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {timezoneFromAdcode,timezoneFromGeocodes,migrateTimezoneChoice,validTimezone,timezoneLabel} from '../src/destination-timezone.js';
+import {knownDestinationTimezone,timezoneFromAdcode,timezoneFromGeocodes,migrateTimezoneChoice,validTimezone,timezoneLabel} from '../src/destination-timezone.js';
+
+test('common destinations resolve locally without a geocoding service',()=>{
+ for(const place of ['北京',' 北京市 ','中国北京市','BEIJING','南京','乌鲁木齐','福建','泉州、漳州、厦门、莆田'])assert.equal(knownDestinationTimezone(place),'Asia/Shanghai',place);
+ for(const [place,zone] of [['香港','Asia/Hong_Kong'],['澳门','Asia/Macau'],['台北','Asia/Taipei'],['东京','Asia/Tokyo'],['New York','America/New_York']])assert.equal(knownDestinationTimezone(place),zone);
+});
+test('unknown or mixed destinations retain the caller device default instead of guessing from a substring',()=>{
+ for(const place of ['', '未命名目的地', '纽约北京路', '北京、纽约', '北京、', 'ABC'])assert.equal(knownDestinationTimezone(place),null,place);
+});
 
 test('valid mainland administrative prefixes use Beijing time, including Xinjiang',()=>{
  const prefixes=['11','12','13','14','15','21','22','23','31','32','33','34','35','36','37','41','42','43','44','45','46','50','51','52','53','54','61','62','63','64','65'];
@@ -13,7 +21,7 @@ test('Taiwan, Hong Kong and Macau have their own IANA identities',()=>{
  assert.equal(timezoneFromAdcode('810000'),'Asia/Hong_Kong');
  assert.equal(timezoneFromAdcode('820000'),'Asia/Macau');
 });
-test('unknown prefixes and malformed administrative codes require manual selection',()=>{
+test('unknown prefixes and malformed administrative codes do not identify a timezone',()=>{
  for(const value of [null,undefined,'',110000,'11000','1100000','11abcd',' 110000 ','000000','200000','240000','380000','470000','550000','600000','990000'])assert.equal(timezoneFromAdcode(value),null,String(value));
 });
 test('only the actual first geocoder administrative code determines automatic civil time',()=>{

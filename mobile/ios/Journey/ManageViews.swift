@@ -23,8 +23,10 @@ struct ManageView: View {
       Section(store.trip["name"].string) {
         TextField("旅程名称", text: $name).focused($focused, equals: "name")
         TextField("目的地", text: $destination).focused($focused, equals: "destination")
-        Picker("旅程时区", selection: $zone) {
-          ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0).tag($0) }
+        NavigationLink {
+          JourneyTimeZonePicker(selection: $zone)
+        } label: {
+          LabeledContent("旅程时区", value: JourneyTimeZone.label(zone))
         }
         if saved {
           Label("已保存", systemImage: "checkmark").font(.caption).foregroundStyle(Palette.muted)
@@ -35,8 +37,7 @@ struct ManageView: View {
       }
       if store.isOwner {
         Section {
-          Picker(
-            "团队模式",
+          TeamModeCards(
             selection: Binding(
               get: { store.trip["teamMode"].string },
               set: { mode in
@@ -45,11 +46,9 @@ struct ManageView: View {
                     "/api/trips/\(store.trip.id)/team", method: "PATCH",
                     body: .object(["teamMode": .string(mode)]))
                 }
-              })
-          ) {
-            Text("管理员团队").tag("admin")
-            Text("平等团队").tag("equal")
-          }
+              }))
+        } footer: {
+          Text("大家都能添加和编辑行程。")
         }
       }
       Section {

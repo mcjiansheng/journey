@@ -514,12 +514,14 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
     }
 
     suspend fun createTrip(form: JSONObject) {
-        val s = api.request("/api/trips", "POST", form.put("id", UUID.randomUUID().toString()))
-        refreshTrips()
-        tripId = s.o("trip").s("id")
-        storeSnapshot(tripId!!, s)
+        val response = api.request("/api/trips", "POST", form.copyJson().put("id", UUID.randomUUID().toString()))
+        // The creation response already contains the trip, members and initial days.
+        trips = tripsWithCreatedTrip(trips, response)
+        tripId = response.o("trip").s("id")
+        storeSnapshot(tripId!!, response)
         selectedDay = null
         page = "行程"
+        status = "已同步"
     }
 
     suspend fun join(code: String) {

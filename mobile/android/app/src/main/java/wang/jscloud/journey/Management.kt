@@ -63,20 +63,11 @@ fun ManagementScreen(s: JourneyStore, onInvite: () -> Unit, onRename: () -> Unit
             }
         }
     }
-    if (owner)
-        Choice(
-            "团队模式",
-            if (trip.s("teamMode") == "equal") "平等协作" else "管理员管理",
-            listOf("管理员管理", "平等协作"),
-        ) { v ->
-            s.action {
-                s.management(
-                    "/api/trips/${trip.s("id")}/team",
-                    "PATCH",
-                    obj("teamMode" to if (v == "平等协作") "equal" else "admin"),
-                )
-            }
+    if (owner) TeamModeCards(trip.s("teamMode"), { mode ->
+        s.action {
+            s.management("/api/trips/${trip.s("id")}/team", "PATCH", obj("teamMode" to mode))
         }
+    }, enabled = !s.busy)
     val archived = s.trips.find { it.s("id") == trip.s("id") }?.optBoolean("archived") ?: false
     SecondaryButton(
         {

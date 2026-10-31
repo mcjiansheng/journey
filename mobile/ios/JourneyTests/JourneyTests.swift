@@ -406,3 +406,104 @@ extension JourneyTests {
     XCTAssertNil(store.undoDeletion)
   }
 }
+
+extension JourneyTests {
+  func testDestinationTimezoneDefaultsAndLocalChineseCities() {
+    var selection = DestinationTimezoneSelection()
+    XCTAssertEqual(selection.identifier, TimeZone.current.identifier)
+    selection.changeDestination("北京", deviceTimezone: "Europe/London")
+    XCTAssertEqual(selection.identifier, "Asia/Shanghai")
+    selection.changeDestination("南京", deviceTimezone: "Europe/London")
+    XCTAssertEqual(selection.identifier, "Asia/Shanghai")
+    XCTAssertEqual(JourneyTimeZone.label(selection.identifier), "北京时间")
+  }
+
+  func testDestinationTimezoneRejectsStaleAndManualOverrides() {
+    var selection = DestinationTimezoneSelection(identifier: "Asia/Shanghai")
+    selection.changeDestination("unlisted-first", deviceTimezone: "Europe/London")
+    let oldRevision = selection.revision
+    selection.resolve("Asia/Tokyo", revision: oldRevision)
+    XCTAssertEqual(selection.identifier, "Asia/Tokyo")
+    selection.changeDestination("unlisted-second", deviceTimezone: "Europe/London")
+    XCTAssertEqual(selection.identifier, "Europe/London")
+    selection.resolve("America/New_York", revision: oldRevision)
+    XCTAssertEqual(selection.identifier, "Europe/London")
+    let currentRevision = selection.revision
+    selection.choose("Europe/Paris")
+    selection.resolve("Asia/Tokyo", revision: currentRevision)
+    XCTAssertEqual(selection.identifier, "Europe/Paris")
+    selection.changeDestination("北京", deviceTimezone: "Europe/London")
+    XCTAssertTrue(selection.isManual)
+    XCTAssertEqual(selection.identifier, "Europe/Paris")
+    selection.useAutomatic(deviceTimezone: "Europe/London")
+    XCTAssertFalse(selection.isManual)
+    XCTAssertEqual(selection.identifier, "Asia/Shanghai")
+  }
+
+  @MainActor func testCreateUsesReturnedTripWithoutSecondListRequest() async throws {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [JourneyMockProtocol.self]
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    var listRequests = 0
+    let created: JSON = .object([
+      "trip": .object([
+        "id": .string("created-trip"), "name": .string("北京假期"),
+        "timezone": .string("Asia/Shanghai"), "teamMode": .string("admin"),
+      ]),
+      "objects": .array([]), "members": .array([]), "epoch": .integer(1), "cursor": .integer(1),
+    ])
+    JourneyMockProtocol.handler = { request in
+      if request.url!.path == "/api/auth/login" {
+        return (
+          200,
+          .object(["user": .object(["id": .string("creator")]), "csrfToken": .string("token")])
+        )
+      }
+      if request.url!.path == "/api/trips" {
+        if request.httpMethod == "POST" { return (200, created) }
+        listRequests += 1
+        return listRequests == 1
+          ? (200, .object(["trips": .array([])]))
+          : (503, .object(["error": .object(["message": .string("list unavailable")])]))
+      }
+      return (
+        200,
+        .object([
+          "leaseId": .string("lease"), "serverTime": .number(Date().timeIntervalSince1970 * 1000),
+          "expiresAt": .number(Date().timeIntervalSince1970 * 1000 + 86_400_000),
+        ])
+      )
+    }
+    let store = JourneyStore(
+      urlSession: URLSession(configuration: configuration),
+      serverURL: "https://journey-create-test.invalid", storageDirectory: directory)
+    defer {
+      store.stopPolling()
+      JourneyMockProtocol.handler = nil
+      try? FileManager.default.removeItem(at: directory)
+    }
+    try await store.login(identifier: "creator", password: "password", name: "", register: false)
+    try await store.create(.object(["name": .string("北京假期")]))
+    XCTAssertEqual(listRequests, 1)
+    XCTAssertEqual(store.selectedTrip, "created-trip")
+    XCTAssertEqual(store.trips.first?["name"].string, "北京假期")
+    XCTAssertEqual(store.trip["timezone"].string, "Asia/Shanghai")
+  }
+}
+
+extension JourneyTests {
+  func testTripCreationKeepsBeijingCivilDateAtHalfPastMidnight() throws {
+    let timezone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+    let date = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-11-01T00:30:00+08:00"))
+    XCTAssertEqual(TripCreationDate.string(date, timezone: timezone), "2026-11-01")
+    XCTAssertEqual(TripCreationDate.dayCount(from: date, through: date, timezone: timezone), 1)
+    XCTAssertEqual(TripCreationDate.calendar(timezone: timezone).component(.day, from: date), 1)
+  }
+  func testTripCreationCountsCivilDaysAcrossDaylightSaving() throws {
+    let timezone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+    let formatter = ISO8601DateFormatter()
+    let start = try XCTUnwrap(formatter.date(from: "2026-03-07T00:30:00-05:00"))
+    let end = try XCTUnwrap(formatter.date(from: "2026-03-10T00:30:00-04:00"))
+    XCTAssertEqual(TripCreationDate.dayCount(from: start, through: end, timezone: timezone), 4)
+  }
+}

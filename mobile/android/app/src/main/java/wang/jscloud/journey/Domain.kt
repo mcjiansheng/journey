@@ -371,3 +371,10 @@ private fun canonicalJson(value: Any?): String =
         }
         else -> value.toString()
     }
+
+internal fun tripsWithCreatedTrip(trips: List<JSONObject>, snapshot: JSONObject): List<JSONObject> {
+    val trip = snapshot.o("trip").copyJson()
+        .put("members", snapshot.a("members"))
+        .put("archived", false)
+    return listOf(trip) + trips.filter { it.s("id") != trip.s("id") }
+}

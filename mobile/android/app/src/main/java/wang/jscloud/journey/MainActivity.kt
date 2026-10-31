@@ -445,72 +445,59 @@ fun CreateSheet(s: JourneyStore, close: () -> Unit) {
     var destination by remember { mutableStateOf("") }
     var start by remember { mutableStateOf(LocalDate.now().toString()) }
     var end by remember { mutableStateOf(LocalDate.now().plusDays(2).toString()) }
-    var zone by remember { mutableStateOf("") }
+    val deviceZone = remember { ZoneId.systemDefault().id }
+    var zone by remember { mutableStateOf(deviceZone) }
+    var manualZone by remember { mutableStateOf(false) }
     var currency by remember { mutableStateOf("CNY") }
-    var mode by remember { mutableStateOf("") }
+    var mode by remember { mutableStateOf("admin") }
+    var moreSettings by remember { mutableStateOf(false) }
+    LaunchedEffect(destination, manualZone) {
+        if (manualZone || destination.isBlank()) return@LaunchedEffect
+        val query = destination.trim()
+        val known = knownDestinationTimezone(query)
+        zone = known ?: deviceZone
+        if (known == null) {
+            kotlinx.coroutines.delay(350)
+            val detected = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    val r = s.api.request("/_AMapService/v3/geocode/geo?address=${JourneyApi.encode(query)}")
+                    timezoneForAdcode(r.a("geocodes").rows().firstOrNull()?.s("adcode").orEmpty())
+                }.getOrNull()
+            }
+            if (destination.trim() == query && !manualZone) zone = detected ?: deviceZone
+        }
+    }
     Sheet("创建旅程", close) {
         Field("旅程名称", name, { name = it })
-        Field(
-            "目的地",
-            destination,
-            {
-                destination = it
-                zone = ""
-            },
-        )
-        SecondaryButton({
-            s.action {
-                val r =
-                    s.api.request(
-                        "/_AMapService/v3/geocode/geo?address=${JourneyApi.encode(destination)}"
-                    )
-                zone =
-                    timezoneForAdcode(r.a("geocodes").rows().firstOrNull()?.s("adcode").orEmpty())
-                        ?: ""
-                if (zone.isEmpty()) throw IllegalStateException("请手动填写目的地时区")
-            }
-        }) {
-            Text("查询目的地时区")
+        Field("目的地", destination, {
+            destination = it
+            if (!manualZone) zone = knownDestinationTimezone(it.trim()) ?: deviceZone
+        })
+        DateField("开始日期", start, { start = it })
+        DateField("结束日期", end, { end = it })
+        TeamModeCards(mode, { mode = it })
+        TextButton({ moreSettings = !moreSettings }) {
+            Text("更多设置")
+            Icon(if (moreSettings) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null)
         }
-        Field("开始日期 YYYY-MM-DD", start, { start = it })
-        Field("结束日期 YYYY-MM-DD", end, { end = it })
-        Field("当地时区，如 Asia/Shanghai", zone, { zone = it })
-        Field("默认币种", currency, { currency = it.uppercase() })
-        Choice("团队模式", mode, listOf("管理员管理", "平等协作")) { mode = it }
-        Text(
-            if (mode == "平等协作") "成员共同决定内容的删除与恢复。" else "管理员可以管理成员与删除内容。",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Button(
-            {
-                s.action {
-                    val a = LocalDate.parse(start)
-                    val b = LocalDate.parse(end)
-                    val count = ChronoUnit.DAYS.between(a, b) + 1
-                    require(count in 1..365) { "日期范围需为 1–365 天" }
-                    ZoneId.of(zone)
-                    s.createTrip(
-                        obj(
-                            "name" to name.trim(),
-                            "destination" to destination.trim(),
-                            "startDate" to a.toString(),
-                            "dayCount" to count,
-                            "timezone" to zone,
-                            "currency" to currency,
-                            "teamMode" to if (mode == "平等协作") "equal" else "admin",
-                        )
-                    )
-                    close()
-                }
-            },
-            enabled =
-                !s.busy &&
-                    name.isNotBlank() &&
-                    destination.isNotBlank() &&
-                    zone.isNotBlank() &&
-                    mode.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
+        if (moreSettings) {
+            SearchableSetupChoice("当地时间", timezoneLabel(zone),
+                linkedMapOf(deviceZone to (tripTimezones[deviceZone] ?: timezoneLabel(deviceZone))).apply { putAll(tripTimezones) },
+                selectedId = zone, searchOptions = ::searchTripTimezones) {
+                zone = it
+                manualZone = true
+            }
+            if (manualZone) TextButton({ manualZone = false }) { Text("根据目的地自动选择") }
+            SearchableSetupChoice("记账币种", tripCurrencies[currency] ?: currency, tripCurrencies,
+                selectedId = currency) { currency = it }
+        }
+        Button({
+            val form = runCatching { createTripForm(name, destination, start, end, zone, currency, mode) }
+            s.action {
+                s.createTrip(form.getOrThrow())
+                close()
+            }
+        }, enabled = !s.busy && name.isNotBlank() && destination.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
             Text("创建旅程")
         }
     }

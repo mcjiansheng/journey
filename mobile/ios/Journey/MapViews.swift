@@ -1,3 +1,4 @@
+import CoreLocation
 import MapKit
 import SwiftUI
 
@@ -24,25 +25,35 @@ enum PlaceSearch {
     }
   }
   @MainActor static func timezone(_ query: String, store: JourneyStore) async throws -> String {
+    if let identifier = DestinationTimezones.known(query) { return identifier }
+    let geocoder = CLGeocoder()
+    if let placemark = try? await geocoder.geocodeAddressString(query).first,
+      let identifier = placemark.timeZone?.identifier
+    {
+      return identifier
+    }
+    try Task.checkCancellation()
     let q =
       query.addingPercentEncoding(
         withAllowedCharacters: .urlQueryAllowed.subtracting(CharacterSet(charactersIn: "&+?#")))
       ?? ""
     let r = try await store.api("/_AMapService/v3/geocode/geo?address=\(q)")
     let code = r["geocodes"].array.first?["adcode"].string ?? ""
-    let prefix = String(code.prefix(2))
     let mainland = [
       "11", "12", "13", "14", "15", "21", "22", "23", "31", "32", "33", "34", "35", "36", "37",
       "41", "42", "43", "44", "45", "46", "50", "51", "52", "53", "54", "61", "62", "63", "64",
       "65",
     ]
-    guard code.count == 6 else { throw APIError(message: "未能确认目的地时区，请手动选择") }
-    if mainland.contains(prefix) { return "Asia/Shanghai" }
-    if let zone = ["71": "Asia/Taipei", "81": "Asia/Hong_Kong", "82": "Asia/Macau"][prefix] {
-      return zone
+    if code.count == 6 {
+      let prefix = String(code.prefix(2))
+      if mainland.contains(prefix) { return "Asia/Shanghai" }
+      if let zone = ["71": "Asia/Taipei", "81": "Asia/Hong_Kong", "82": "Asia/Macau"][prefix] {
+        return zone
+      }
     }
-    throw APIError(message: "未能确认目的地时区，请手动选择")
+    throw APIError(message: "未能确认目的地时区")
   }
+
 }
 struct PlacePicker: View {
   @EnvironmentObject var store: JourneyStore
