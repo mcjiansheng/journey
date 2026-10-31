@@ -42,7 +42,7 @@ private val LightPalette = JourneyPalette(
     page = DesignTokens.lightPage,
     card = DesignTokens.lightSurface,
     border = Color(0xFF829B88).copy(alpha = .18f),
-    icon = Color(0xFFD9E4D2),
+    icon = DesignTokens.lightIconBackground,
     text = DesignTokens.lightText,
     muted = DesignTokens.lightMuted,
     primary = DesignTokens.lightPrimary,
@@ -50,17 +50,17 @@ private val LightPalette = JourneyPalette(
     danger = DesignTokens.lightDanger,
     selected = Color(0xFF7FCBA5).copy(alpha = .16f),
     secondary = Color.White.copy(alpha = .7f),
-    elevated = Color(0xFFF7F9F5),
-    ambientTop = Color(0xFFDDE7E7),
-    ambientBottom = Color(0xFFF3EFDF),
-    ambientMint = Color(0xFFDCEBDE),
+    elevated = DesignTokens.lightElevated,
+    ambientTop = DesignTokens.lightAmbientSky,
+    ambientBottom = DesignTokens.lightAmbientLow,
+    ambientMint = DesignTokens.lightAmbientMint,
 )
 private val DarkPalette = JourneyPalette(
     dark = true,
     page = DesignTokens.darkPage,
     card = DesignTokens.darkSurface,
     border = Color.White.copy(alpha = .08f),
-    icon = Color(0xFF22302A),
+    icon = DesignTokens.darkIconBackground,
     text = DesignTokens.darkText,
     muted = DesignTokens.darkMuted,
     primary = DesignTokens.darkPrimary,
@@ -68,10 +68,10 @@ private val DarkPalette = JourneyPalette(
     danger = DesignTokens.darkDanger,
     selected = Color(0xFF7FCBA5).copy(alpha = .16f),
     secondary = Color.White.copy(alpha = .08f),
-    elevated = Color(0xFF1C2721),
-    ambientTop = Color(0xFF14201F),
-    ambientBottom = Color(0xFF1A1D14),
-    ambientMint = Color(0xFF142219),
+    elevated = DesignTokens.darkElevated,
+    ambientTop = DesignTokens.darkAmbientSky,
+    ambientBottom = DesignTokens.darkAmbientLow,
+    ambientMint = DesignTokens.darkAmbientMint,
 )
 
 val LocalJourneyPalette = staticCompositionLocalOf { LightPalette }
@@ -130,9 +130,10 @@ fun JourneyBackdrop(content: @Composable () -> Unit) {
             fun glow(color: Color, center: Offset, radius: Float) {
                 drawRect(Brush.radialGradient(listOf(color, color.copy(alpha = 0f)), center, radius))
             }
-            glow(p.ambientTop, Offset(size.width, 0f), size.height * .7f)
-            glow(p.ambientMint, Offset(0f, size.height * .3f), size.width * 1.1f)
-            glow(p.ambientBottom, Offset(size.width * .4f, size.height), size.height * .65f)
+            val glowScale = if (p.dark) 1.4f else 1f
+            glow(p.ambientTop, Offset(size.width, 0f), size.height * .7f * glowScale)
+            glow(p.ambientMint, Offset(0f, size.height * .3f), size.width * 1.1f * glowScale)
+            glow(p.ambientBottom, Offset(size.width * .4f, size.height), size.height * .65f * glowScale)
         }
         content()
     }

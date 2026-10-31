@@ -59,8 +59,10 @@ export default function App() {
     [edit, setEdit] = useState(null),
     [intent, setIntent] = useState(initialInvite);
   const scrollRef = useRef(null);
+  const [expenseActivityId, setExpenseActivityId] = useState(null);
   const tripId = j.snapshot?.trip?.id;
   useEffect(() => setNotice(null), [j.user?.id, tripId]);
+  useEffect(() => setExpenseActivityId(null), [j.user?.id, tripId]);
   const editingActivity = edit?.object
     ? j.snapshot?.objects?.find((o) => o.id === edit.object.id) || edit.object
     : null;
@@ -107,6 +109,7 @@ export default function App() {
     j.setContext({ selection: null });
   }
   function switchPage(p) {
+    setExpenseActivityId(null);
     if (!tripDeleted)
       j.setContext({
         page: p,
@@ -190,7 +193,12 @@ export default function App() {
                 <span>我的旅程</span>
               </button>
               {!tripDeleted && (
-                <SelectionTrack as="nav" activeKey={page} aria-label="主导航">
+                <SelectionTrack
+                  as="nav"
+                  activeKey={page}
+                  layoutKey={page === 'map'}
+                  aria-label="主导航"
+                >
                   {pages.map(([key, label, Icon]) => (
                     <button
                       aria-label={label}
@@ -241,7 +249,9 @@ export default function App() {
                   {j.status === 'offline' ? (
                     <CloudOff size={15} />
                   ) : j.status === 'synced' ? (
-                    <Cloud size={15} />
+                    <Cloud size={16} aria-hidden="true">
+                      <path d="m9 14 2 2 4-4" />
+                    </Cloud>
                   ) : ['blocked', 'error'].includes(j.status) ? (
                     <AlertCircle size={15} />
                   ) : (
@@ -264,6 +274,11 @@ export default function App() {
                       </span>
                     ))}
                   </div>
+                  {j.snapshot.members.length > 1 && (
+                    <span className="member-overflow" aria-hidden="true">
+                      +{j.snapshot.members.length - 1}
+                    </span>
+                  )}
                   <Users size={18} />
                 </button>
               </div>
@@ -297,7 +312,13 @@ export default function App() {
                   onDeleted={() => setModal('deleted')}
                 />
               ) : page === 'map' ? null : page === 'expenses' ? (
-                <Ledger key={`${j.user.id}:${tripId}`} journey={j} onEditActivity={onEdit} />
+                <Ledger
+                  key={`${j.user.id}:${tripId}:${expenseActivityId || 'all'}`}
+                  journey={j}
+                  onEditActivity={onEdit}
+                  activityId={expenseActivityId}
+                  onClearActivityFilter={() => setExpenseActivityId(null)}
+                />
               ) : page === 'settings' ? (
                 <Settings
                   journey={j}
@@ -311,6 +332,10 @@ export default function App() {
                   onEdit={onEdit}
                   onDates={() => setModal('dates')}
                   onDeleted={() => setModal('deleted')}
+                  onViewExpenses={(activityId) => {
+                    setExpenseActivityId(activityId);
+                    j.setContext({ page: 'expenses' });
+                  }}
                 />
               )}
             </main>

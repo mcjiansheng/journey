@@ -20,23 +20,24 @@ enum Palette {
   static let surfaceSolid = DesignTokens.surface
   static let secondarySurface = DesignTokens.surface
   static let border = adaptive(0xB5C6BB, 0xFFFFFF, lightAlpha: 0.30, darkAlpha: 0.08)
-  static let iconBackground = adaptive(0xD9E4D2, 0x22302A)
+  static let iconBackground = DesignTokens.iconBackground
   static let text = DesignTokens.text
   static let muted = DesignTokens.muted
   static let accent = DesignTokens.primary
   static let onAccent = DesignTokens.onPrimary
   static let selected = adaptive(0xFFFFFF, 0x7FCBA5, darkAlpha: 0.16)
   static let danger = DesignTokens.danger
-  static let mint = adaptive(0xDCEEE5, 0x14261C, lightAlpha: 0.65, darkAlpha: 0.60)
-  static let sky = adaptive(0xDCEBF7, 0x14201F, lightAlpha: 0.63)
-  static let warm = adaptive(0xFFF8E7, 0x1A1D14, lightAlpha: 0.60)
+  static let mint = DesignTokens.ambientMint
+  static let sky = DesignTokens.ambientSky
+  static let low = DesignTokens.ambientLow
   static let shadow = adaptive(0x294B3B, 0x000000, lightAlpha: 0.04, darkAlpha: 0.12)
 }
 
 struct JourneyBackground: View {
+  @Environment(\.colorScheme) private var colorScheme
   var body: some View {
     GeometryReader { geometry in
-      let radius = max(geometry.size.width, geometry.size.height) * 0.8
+      let radius = max(geometry.size.width, geometry.size.height) * (colorScheme == .dark ? 1.15 : 0.8)
       ZStack {
         Palette.background
         RadialGradient(
@@ -44,7 +45,7 @@ struct JourneyBackground: View {
         RadialGradient(
           colors: [Palette.sky, .clear], center: .topTrailing, startRadius: 0, endRadius: radius)
         RadialGradient(
-          colors: [Palette.warm, .clear], center: .bottom, startRadius: 0, endRadius: radius)
+          colors: [Palette.low, .clear], center: .bottom, startRadius: 0, endRadius: radius)
       }
     }.ignoresSafeArea().allowsHitTesting(false)
   }

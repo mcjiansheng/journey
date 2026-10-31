@@ -34,6 +34,59 @@ class NativeFlowTest {
     }
 
     @Test
+    fun r3LightAndDarkScreenshots() {
+        val args = InstrumentationRegistry.getArguments()
+        val identifier = args.getString("identifier")
+        val password = args.getString("password")
+        val trip = args.getString("tripName")
+        assumeTrue("Pass fixture account and tripName", identifier != null && password != null && trip != null)
+        compose.waitUntil(30000) {
+            compose.onAllNodesWithText("邮箱或手机号").fetchSemanticsNodes().isNotEmpty() ||
+                compose.onAllNodesWithContentDescription("个人设置").fetchSemanticsNodes().isNotEmpty()
+        }
+        if (compose.onAllNodesWithContentDescription("个人设置").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithContentDescription("个人设置").performClick()
+            compose.onNodeWithText("退出账号").performScrollTo().performClick()
+            waitText("邮箱或手机号")
+        }
+        compose.onNodeWithText("邮箱或手机号").performTextInput(identifier!!)
+        compose.onNodeWithText("密码").performTextInput(password!!)
+        compose.onAllNodesWithText("登录").onLast().performClick()
+        waitText(trip!!)
+        for ((theme, choice) in listOf("light" to "浅色", "dark" to "深色")) {
+            compose.onNodeWithContentDescription("个人设置").performClick()
+            compose.onNodeWithText("外观").performClick()
+            compose.onAllNodesWithText(choice).onLast().performClick()
+            compose.onNodeWithText("保存设置").performClick()
+            compose.waitUntil(10000) { compose.onAllNodesWithText("保存设置").fetchSemanticsNodes().isEmpty() }
+            capture("android-$theme-home")
+            compose.onNodeWithText(trip).performClick()
+            waitText("添加活动")
+            capture("android-$theme-itinerary")
+            compose.onNodeWithText("添加活动").performScrollTo().performClick()
+            waitText("活动名称")
+            compose.onNodeWithText("完成", substring = false).assertExists()
+            capture("android-$theme-activity-editor")
+            compose.onNodeWithText("收起", substring = false).performClick()
+            compose.onNodeWithText("地图", substring = false).performClick()
+            waitText("我的收藏")
+            compose.waitUntil(15000) {
+                compose.onAllNodesWithTag("journey-map-ready").fetchSemanticsNodes().isNotEmpty() ||
+                    compose.onAllNodesWithTag("journey-map-loading").fetchSemanticsNodes().isNotEmpty()
+            }
+            capture("android-$theme-map")
+            compose.onNodeWithText("费用", substring = false).performClick()
+            waitText("添加费用")
+            capture("android-$theme-ledger")
+            compose.onNodeWithText("管理", substring = false).performClick()
+            waitText("旅程管理")
+            capture("android-$theme-management")
+            compose.onNodeWithContentDescription("返回旅程列表").performClick()
+            waitText(trip)
+        }
+    }
+
+    @Test
     fun realLoginItineraryMapLedgerAndManagement() {
         val args = InstrumentationRegistry.getArguments()
         val identifier = args.getString("identifier")

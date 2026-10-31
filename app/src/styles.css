@@ -187,8 +187,8 @@ small {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #dfe9da;
-  color: #40624f;
+  background: var(--avatar-bg);
+  color: var(--avatar-fg);
   border: 2px solid var(--surface);
   border-radius: 50%;
   flex-shrink: 0;
@@ -1728,11 +1728,8 @@ details[open] > summary {
   color-scheme: dark;
 }
 :root[data-theme='dark'] .sidebar {
-  background: #252f28;
+  background: linear-gradient(160deg, var(--optical-sheen), transparent 45%), var(--optical-panel);
   border-color: var(--line);
-}
-:root[data-theme='dark'] .sidebar nav button.selected {
-  background: var(--surface);
 }
 :root[data-theme='dark'] .primary {
   background: var(--accent);
@@ -1740,7 +1737,7 @@ details[open] > summary {
 }
 :root[data-theme='dark'] .continue-card,
 :root[data-theme='dark'] .ledger-total {
-  background: #314438;
+  background: var(--hero-surface);
   border-color: var(--line);
 }
 :root[data-theme='dark'] .ledger-total > span,
@@ -1750,45 +1747,43 @@ details[open] > summary {
 :root[data-theme='dark'] .trip-art,
 :root[data-theme='dark'] .brand-mark,
 :root[data-theme='dark'] .avatar {
-  background: #405546;
-  color: #cae2cf;
+  background: var(--avatar-bg);
+  color: var(--avatar-fg);
 }
 :root[data-theme='dark'] .share-invite {
   background: var(--bg);
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-theme='system'] {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
     background: var(--bg);
     color: var(--text);
     color-scheme: dark;
   }
-  :root[data-theme='system'] .sidebar {
-    background: #252f28;
+  :root:not([data-theme='light']):not([data-theme='dark']) .sidebar {
+    background:
+      linear-gradient(160deg, var(--optical-sheen), transparent 45%), var(--optical-panel);
     border-color: var(--line);
   }
-  :root[data-theme='system'] .sidebar nav button.selected {
-    background: var(--surface);
-  }
-  :root[data-theme='system'] .primary {
+  :root:not([data-theme='light']):not([data-theme='dark']) .primary {
     background: var(--accent);
     color: var(--on-accent);
   }
-  :root[data-theme='system'] .continue-card,
-  :root[data-theme='system'] .ledger-total {
-    background: #314438;
+  :root:not([data-theme='light']):not([data-theme='dark']) .continue-card,
+  :root:not([data-theme='light']):not([data-theme='dark']) .ledger-total {
+    background: var(--hero-surface);
     border-color: var(--line);
   }
-  :root[data-theme='system'] .ledger-total > span,
-  :root[data-theme='system'] .ledger-total small {
+  :root:not([data-theme='light']):not([data-theme='dark']) .ledger-total > span,
+  :root:not([data-theme='light']):not([data-theme='dark']) .ledger-total small {
     color: var(--muted);
   }
-  :root[data-theme='system'] .trip-art,
-  :root[data-theme='system'] .brand-mark,
-  :root[data-theme='system'] .avatar {
-    background: #405546;
-    color: #cae2cf;
+  :root:not([data-theme='light']):not([data-theme='dark']) .trip-art,
+  :root:not([data-theme='light']):not([data-theme='dark']) .brand-mark,
+  :root:not([data-theme='light']):not([data-theme='dark']) .avatar {
+    background: var(--avatar-bg);
+    color: var(--avatar-fg);
   }
-  :root[data-theme='system'] .share-invite {
+  :root:not([data-theme='light']):not([data-theme='dark']) .share-invite {
     background: var(--bg);
   }
 }
@@ -2263,7 +2258,7 @@ body {
 }
 .modal {
   box-shadow:
-    inset 0 1px 0 #ffffffb8,
+    inset 0 1px 0 var(--optical-edge),
     0 24px 90px #102d2c30;
 }
 .modal[open] {
@@ -2720,31 +2715,6 @@ body {
     padding: 10px 11px;
   }
 }
-:root[data-theme='dark'] .activity-card,
-:root[data-theme='dark'] .day-tabs button,
-:root[data-theme='dark'] .trip-card,
-:root[data-theme='dark'] .continue-card {
-  box-shadow:
-    inset 0 1px 0 #ffffff0c,
-    0 8px 22px #00000012;
-}
-:root[data-theme='dark'] .sidebar nav button.selected {
-  border-color: #ffffff0c;
-  box-shadow:
-    inset 0 1px 0 #ffffff0c,
-    0 4px 12px #00000010;
-}
-:root[data-theme='dark'] .secondary {
-  box-shadow:
-    inset 0 1px 0 #ffffff0c,
-    0 3px 9px #00000010;
-}
-:root[data-theme='dark'] .modal,
-:root[data-theme='dark'] .bottom-nav {
-  box-shadow:
-    inset 0 1px 0 #ffffff12,
-    0 15px 50px #00000025;
-}
 :root[data-transparency='true'] .activity-card,
 :root[data-transparency='true'] .trip-header,
 :root[data-transparency='true'] .day-tabs button {
@@ -2791,10 +2761,7 @@ body:has(> .site-filing),
 .app-shell:not(.map-shell),
 .home,
 .auth-page {
-  background:
-    radial-gradient(ellipse at 2% 5%, var(--ambient-mint), transparent 50%),
-    radial-gradient(ellipse at 93% 15%, var(--ambient-sky), transparent 50%),
-    radial-gradient(ellipse at 64% 96%, var(--ambient-warm), transparent 55%), var(--bg);
+  background: var(--page-background);
 }
 .home,
 .auth-page {
@@ -3146,7 +3113,7 @@ body:has(> .site-filing),
   }
 }
 @media (prefers-color-scheme: dark) and (hover: hover) and (pointer: fine) {
-  :root[data-theme='system'] [data-pointer-active]::after {
+  :root:not([data-theme='light']):not([data-theme='dark']) [data-pointer-active]::after {
     background: radial-gradient(
       150px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
       #d8fff414,

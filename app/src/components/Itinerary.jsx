@@ -1,8 +1,11 @@
-import SelectionTrack from './SelectionTrack.jsx';
+import ScrollableTabs from './ScrollableTabs.jsx';
 import { reducedMotion } from '../usePageNavigation.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   CalendarDays,
+  LocateFixed,
+  ArrowDownToLine,
+  Wallet,
   Plus,
   MapPin,
   Trash2,
@@ -614,7 +617,7 @@ export function Reschedule({ journey: j, onClose }) {
   );
 }
 
-export default function Itinerary({ journey: j, onEdit, onDates, onDeleted }) {
+export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onViewExpenses }) {
   const [route, setRoute] = useState(null),
     [dayMenuId, setDayMenuId] = useState(null),
     [dragging, setDragging] = useState(null),
@@ -894,13 +897,28 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted }) {
         !!prev || !!leg || (o.payload.time?.mode === 'precise' && !!o.payload.time.start);
       const notParticipating = o.expressions?.filter((e) => e.notParticipating).length || 0,
         wishDelete = o.expressions?.filter((e) => e.wishDelete).length || 0;
-      const expenseTotals = active(j.snapshot, 'expense')
-        .filter((e) => e.payload.activityId === o.id && e.payload.payment.amountMinor !== null)
-        .reduce((totals, e) => {
-          const p = e.payload.payment;
-          totals[p.currency] = (totals[p.currency] || 0) + p.amountMinor;
-          return totals;
-        }, {});
+      const linkedExpenses = active(j.snapshot, 'expense').filter(
+        (e) => e.payload.activityId === o.id,
+      );
+      const expenseSummaries = ['paid', 'estimated'].flatMap((status) => {
+        const totals = linkedExpenses
+          .filter((e) => e.payload.payment.status === status)
+          .reduce((totals, e) => {
+            const payment = e.payload.payment;
+            const summary = (totals[payment.currency] ||= { amount: 0, count: 0, known: false });
+            summary.count++;
+            if (payment.amountMinor !== null) {
+              summary.amount += payment.amountMinor;
+              summary.known = true;
+            }
+            return totals;
+          }, {});
+        return Object.entries(totals).map(([currency, summary]) => ({
+          status,
+          currency,
+          ...summary,
+        }));
+      });
       const dropClass =
         dragging?.targetId === o.id && dragging.id !== o.id
           ? dragging.after
@@ -991,12 +1009,18 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted }) {
                 </p>
               )}
               <div className="activity-toolbar">
-                {(Object.keys(expenseTotals).length > 0 ||
-                  notParticipating > 0 ||
-                  wishDelete > 0) && (
+                {(expenseSummaries.length > 0 || notParticipating > 0 || wishDelete > 0) && (
                   <div className="activity-opinions">
-                    {Object.entries(expenseTotals).map(([currency, amount]) => (
-                      <span key={currency}>{money(amount, currency)}</span>
+                    {expenseSummaries.map(({ status, currency, amount, count, known }) => (
+                      <button
+                        className="activity-expense-link"
+                        key={`${status}-${currency}`}
+                        onClick={() => onViewExpenses(o.id)}
+                      >
+                        <Wallet size={14} />
+                        {status === 'paid' ? '已付' : '预计'}{' '}
+                        {known ? money(amount, currency) : '金额待补'} · {count} 笔
+                      </button>
                     ))}
                     {notParticipating > 0 && <span>{notParticipating} 人不参加</span>}
                     {wishDelete > 0 && (
@@ -1080,9 +1104,31 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted }) {
     <div className={`page itinerary-page${sorting ? ' is-sorting' : ''}`}>
       <h1 className="sr-only">行程</h1>
       <div className="itinerary-toolbar">
-        <SelectionTrack
+        {((todayDay && todayDay.id !== current?.id) || nextActivity) && (
+          <nav className="day-browse-actions" aria-label="浏览行程">
+            {todayDay && todayDay.id !== current?.id && (
+              <button
+                className="secondary day-jump desktop-today-jump"
+                onClick={() => j.setContext({ dayId: todayDay.id })}
+              >
+                <LocateFixed size={16} />
+                回到今天
+              </button>
+            )}
+            {nextActivity && (
+              <button className="secondary day-jump" onClick={showNext}>
+                <ArrowDownToLine size={16} />
+                下一项 {nextActivity.payload.time.start}
+              </button>
+            )}
+          </nav>
+        )}
+
+        <ScrollableTabs
+          selection
           activeKey={current?.id}
-          className="day-tabs"
+          className="itinerary-date-tabs"
+          trackClassName="day-tabs"
           role="tablist"
           aria-label="计划日"
         >
@@ -1091,14 +1137,19 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted }) {
               key={d.id}
               role="tab"
               aria-selected={d.id === current?.id}
-              className={d.id === current?.id ? 'selected' : ''}
+              className={`${d.id === current?.id ? 'selected' : ''}${d.payload.date === today ? ' is-today' : ''}`}
+              aria-current={d.payload.date === today ? 'date' : undefined}
               onClick={() => j.setContext({ dayId: d.id })}
             >
               <strong>{dayLabel(d, j.snapshot.trip)}</strong>
-              {d.payload.date && <small>{d.payload.date.slice(5).replace('-', ' / ')}</small>}
+              {d.payload.date && (
+                <small>
+                  {d.payload.date === today ? '今天' : d.payload.date.slice(5).replace('-', ' / ')}
+                </small>
+              )}
             </button>
           ))}
-        </SelectionTrack>
+        </ScrollableTabs>
         {current && (
           <div
             className="mobile-day-bar"
@@ -1127,8 +1178,11 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted }) {
             <select
               aria-label="当前计划日"
               value={current.id}
-              onChange={(e) => j.setContext({ dayId: e.target.value })}
+              onChange={(e) =>
+                j.setContext({ dayId: e.target.value === 'today' ? todayDay.id : e.target.value })
+              }
             >
+              {todayDay && todayDay.id !== current.id && <option value="today">回到今天</option>}
               {days.map((d) => (
                 <option value={d.id} key={d.id}>
                   {dayLabel(d, j.snapshot.trip)}
@@ -1145,20 +1199,19 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted }) {
             >
               <ChevronRight size={18} />
             </button>
+            {todayDay && todayDay.id !== current.id && (
+              <button
+                className="icon-button mobile-today-jump"
+                aria-label="回到今天"
+                onClick={() => j.setContext({ dayId: todayDay.id })}
+              >
+                <LocateFixed size={17} />
+              </button>
+            )}
           </div>
         )}
         <div className="day-heading">
           <div className="button-row">
-            {todayDay && todayDay.id !== current?.id && (
-              <button className="text-button" onClick={() => j.setContext({ dayId: todayDay.id })}>
-                今天
-              </button>
-            )}
-            {nextActivity && (
-              <button className="text-button" onClick={showNext}>
-                下一项
-              </button>
-            )}
             {(list.length > 0 ||
               outside.some((day) => orderedActivities(j.snapshot, day.id).length > 0)) && (
               <button
@@ -1190,6 +1243,14 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted }) {
           </div>
         </div>
       </div>
+      {nextActivity && (
+        <nav className="mobile-next-activity" aria-label="浏览行程">
+          <button className="secondary day-jump" onClick={showNext}>
+            <ArrowDownToLine size={16} />
+            下一项 {nextActivity.payload.time.start}
+          </button>
+        </nav>
+      )}
       {!current && j.snapshot.objects.some((o) => o.kind === 'day' && o.state === 'deleted') && (
         <button className="text-button deleted-days-entry" onClick={onDeleted}>
           已删除的计划日

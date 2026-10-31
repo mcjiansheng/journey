@@ -4,6 +4,7 @@ import { Modal, Field, Empty, money, active, id, errorMessage, currencyFactor } 
 import { visibleDays, dayLabel } from '../domain.js';
 import { ObjectActions } from './Itinerary.jsx';
 import './editor-ledger.css';
+import ScrollableTabs from './ScrollableTabs.jsx';
 const groups = ['title', 'payment', 'notes', 'activityId', 'date'];
 const today = (timezone) =>
   new Intl.DateTimeFormat('sv-SE', { timeZone: timezone }).format(new Date());
@@ -456,14 +457,22 @@ export function ExpenseEditor({
     </Modal>
   );
 }
-export default function Ledger({ journey: j, onEditActivity }) {
+export default function Ledger({
+  journey: j,
+  onEditActivity,
+  activityId = null,
+  onClearActivityFilter,
+}) {
   const [editing, setEditing] = useState(() =>
       j.context.selection?.type === 'expense' ? j.context.selection.id : undefined,
     ),
     [paying, setPaying] = useState(null),
     [dateFilter, setDateFilter] = useState(''),
     [error, setError] = useState('');
-  const expenses = active(j.snapshot, 'expense');
+  const expenses = active(j.snapshot, 'expense').filter(
+    (o) => !activityId || o.payload.activityId === activityId,
+  );
+  const activity = activityId && j.snapshot.objects.find((o) => o.id === activityId);
   const paid = expenses.filter((o) => o.payload.payment.status === 'paid'),
     estimated = expenses.filter((o) => o.payload.payment.status === 'estimated');
   const totals = paid
@@ -601,6 +610,14 @@ export default function Ledger({ journey: j, onEditActivity }) {
           记一笔
         </button>
       </div>
+      {activityId && (
+        <div className="ledger-activity-filter">
+          <span>关联活动：{activity?.payload.title || '活动费用'}</span>
+          <button className="text-button" onClick={onClearActivityFilter}>
+            查看全部费用
+          </button>
+        </div>
+      )}
       <section className="ledger-total">
         <span>已支付合计</span>
         <div className="ledger-currency-totals">
@@ -620,7 +637,13 @@ export default function Ledger({ journey: j, onEditActivity }) {
         <small>{shown(paid).length} 笔支出</small>
       </section>
       {expenses.length > 0 && (
-        <div className="ledger-date-filter" role="group" aria-label="按日期查看">
+        <ScrollableTabs
+          activeKey={dateFilter}
+          className="ledger-date-tabs"
+          trackClassName="ledger-date-filter"
+          role="group"
+          aria-label="按日期查看"
+        >
           <button aria-pressed={!dateFilter} onClick={() => setDateFilter('')}>
             全部
           </button>
@@ -646,7 +669,7 @@ export default function Ledger({ journey: j, onEditActivity }) {
               未记录日期
             </button>
           )}
-        </div>
+        </ScrollableTabs>
       )}
 
       {error && (
@@ -661,7 +684,13 @@ export default function Ledger({ journey: j, onEditActivity }) {
         ) : (
           <Empty
             icon={Receipt}
-            title={dateFilter ? '这一天没有已支付费用' : '还没有已支付费用'}
+            title={
+              dateFilter
+                ? '这一天没有已支付费用'
+                : activityId
+                  ? '这项活动还没有已支付费用'
+                  : '还没有已支付费用'
+            }
             action={
               !dateFilter && (
                 <button

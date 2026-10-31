@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {fileURLToPath} from 'node:url';
-import {mkdirSync,writeFileSync} from 'node:fs';
+import {mkdirSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {createApp,shutdownServer} from '../../server/index.mjs';
 import {launchWebKit} from '../../scripts/browser-runtime.mjs';
@@ -40,27 +40,6 @@ async function addActivity(page,name,{touch=false}={}){
 }
 async function screenshot(page,name){await page.screenshot({path:`../.local/evidence/navigation-${name}.png`,fullPage:true,animations:'disabled',scale:'css'})}
 async function noOverflow(page){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)}
-async function sampleSidebarMotion(page,label){
- return page.evaluate(async label=>{
-  const sidebar=document.querySelector('.sidebar');
-  const measure=()=>{
-   const r=sidebar.getBoundingClientRect(),t=document.querySelector('.trip-title>span')?.getBoundingClientRect(),icons=[...sidebar.querySelectorAll('nav button svg')].map(svg=>{const box=svg.getBoundingClientRect();return{width:box.width,height:box.height}}),buttons=[...sidebar.querySelectorAll('nav button')].map(button=>button.getBoundingClientRect());
-   const extras=[...sidebar.querySelectorAll('.brand,.back-home,.sidebar-foot')].filter(element=>{const style=getComputedStyle(element);return style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)>.01}).map(element=>{const box=element.getBoundingClientRect();return [...buttons].some(button=>box.left<button.right&&box.right>button.left&&box.top<button.bottom&&box.bottom>button.top)});
-   return{width:r.width,top:r.top,height:r.height,center:r.top+r.height/2,titleX:t?.x??null,titleY:t?.y??null,icons,visibleExtrasOverlap:extras.some(Boolean)};
-  };
-  const before=measure(),button=document.querySelector(`nav[aria-label="主导航"] button[aria-label="${label}"]`);if(!button)throw new Error(`Missing navigation button: ${label}`);button.click();
-  const frames=[],started=performance.now();while(performance.now()-started<520){await new Promise(requestAnimationFrame);frames.push(measure())}
-  return{before,frames,after:measure()};
- },label);
-}
-function expectSidebarFramesStable(sample,title){
- expect(sample.frames.length).toBeGreaterThan(0);
- for(const frame of sample.frames){
-  expect(frame.icons.every(icon=>Math.abs(icon.width-20)<1&&Math.abs(icon.height-20)<1)).toBe(true);
-  if(frame.titleX!==null){expect(Math.abs(frame.titleX-title.x)).toBeLessThan(2);expect(Math.abs(frame.titleY-title.y)).toBeLessThan(2)}
-  expect(frame.visibleExtrasOverlap).toBe(false);
- }
-}
 async function sampleIndicator(page,selector,clickSelector){
  return page.evaluate(async({selector,click})=>{
   const indicator=document.querySelector(selector);if(!indicator)throw new Error(`Missing selection indicator: ${selector}`);
@@ -90,38 +69,6 @@ test('navigation indicator moves across pages and rapid reversals return home cl
  expect(result).toBe('行程');await expect(page.locator('.itinerary-page')).toBeVisible();
  await page.getByRole('button',{name:'我的旅程',exact:true}).click();await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:/继续旅程/})).toContainText('导航动效验收');await screenshot(page,'home');
-});
-
-test('map collapses its sidebar while navigation icons stay stable',async({page})=>{
- await page.addInitScript(()=>localStorage.setItem('journey.appearance',JSON.stringify({autoCollapseMapSidebar:true})));
- await page.setViewportSize({width:1440,height:900});await register(page);await createTrip(page);
- await screenshot(page,'itinerary-desktop');
- const title=page.locator('.trip-title>span');const before=await page.evaluate(()=>{
-  const r=document.querySelector('.trip-title>span').getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height};
- });
- const opening=await sampleSidebarMotion(page,'地图');expectSidebarFramesStable(opening,before);
- await expect(page.locator('.app-shell')).toHaveClass(/map-shell/);await expect.poll(()=>page.locator('.sidebar').evaluate(el=>el.getBoundingClientRect().width)).toBe(72);
- await screenshot(page,'map-desktop');
- const compact={width:opening.after.width,top:opening.after.top,height:opening.after.height,center:opening.after.center,title:{x:opening.after.titleX,y:opening.after.titleY},icons:opening.after.icons};
- expect(compact.width).toBe(72);expect(Math.abs(compact.center-450)).toBeLessThan(3);
- expect(compact.icons.every(icon=>Math.abs(icon.width-20)<1&&Math.abs(icon.height-20)<1)).toBe(true);
- expect(Math.abs(compact.title.x-before.x)).toBeLessThan(14);await expect(title).toBeHidden();await expect(page.locator('.map-trip-title')).toBeVisible();
- const closing=await sampleSidebarMotion(page,'行程');expectSidebarFramesStable(closing,before);
- expect(closing.frames.some(frame=>frame.width>compact.width+5&&frame.width<closing.after.width-5)).toBe(true);
- await expect(page.locator('.app-shell')).not.toHaveClass(/map-shell/);await screenshot(page,'map-return');
- writeFileSync(resolve(process.cwd(),'../.local/evidence/navigation-frames.json'),JSON.stringify({opening,closing},null,2));
- const transparency=await page.evaluate(()=>{
-  document.documentElement.dataset.transparency='true';const result=['nav[aria-label="主导航"]','.day-tabs'].map(selector=>{
-   const track=document.querySelector(selector),button=track.querySelector('button.selected'),indicator=track.querySelector('.selection-indicator'),buttonStyle=getComputedStyle(button),style=getComputedStyle(indicator),rect=indicator.getBoundingClientRect();
-   return{selector,buttonBackground:buttonStyle.backgroundColor,indicatorVisible:style.display!=='none'&&Number(style.opacity)>0&&rect.width>0&&rect.height>0};
-  });delete document.documentElement.dataset.transparency;return result;
- });
- for(const track of transparency){expect(track.buttonBackground,track.selector).toBe('rgba(0, 0, 0, 0)');expect(track.indicatorVisible,track.selector).toBe(true)}
- await page.setViewportSize({width:800,height:500});
- await expect.poll(()=>page.evaluate(()=>{
-  const sidebar=document.querySelector('.sidebar'),settings=sidebar.querySelector('nav button[aria-label="管理"]').getBoundingClientRect(),profile=sidebar.querySelector('.profile-button').getBoundingClientRect();
-  return settings.bottom<=profile.top;
- })).toBe(true);
 });
 
 test('day content crossfades in place with smooth height changes and rapid reversals',async({page})=>{

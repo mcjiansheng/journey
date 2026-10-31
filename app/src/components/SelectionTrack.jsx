@@ -5,16 +5,25 @@ import React, { useLayoutEffect, useRef } from 'react';
 export default function SelectionTrack({
   as: Element = 'div',
   activeKey,
+  layoutKey,
   className = '',
   children,
   ...props
 }) {
   const track = useRef(null);
   const indicator = useRef(null);
+  const previousLayout = useRef(layoutKey);
 
   useLayoutEffect(() => {
     const element = track.current;
     const surface = indicator.current;
+    // A map/sidebar morph already provides the navigation motion. Retarget its
+    // selection immediately instead of layering a second, lagging transition.
+    if (previousLayout.current !== layoutKey) {
+      delete surface.dataset.ready;
+      surface.getBoundingClientRect();
+      previousLayout.current = layoutKey;
+    }
     function measure() {
       const selected = element.querySelector(':scope > button.selected');
       if (!selected || !selected.offsetWidth) return;
@@ -34,7 +43,7 @@ export default function SelectionTrack({
       cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [activeKey, children]);
+  }, [activeKey, children, layoutKey]);
 
   return (
     <Element {...props} ref={track} className={`${className} selection-track`}>

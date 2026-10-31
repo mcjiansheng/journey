@@ -26,9 +26,9 @@ export function usePageNavigation(journey) {
     // A transform on the map would change the containing block of its fixed canvas.
     const frames =
       page === 'map'
-        ? [{ opacity: 0.65 }, { opacity: 1 }]
+        ? [{ opacity: 0 }, { opacity: 1 }]
         : [
-            { opacity: 0.65, transform: 'translateY(6px)' },
+            { opacity: 0, transform: 'translateY(6px)' },
             { opacity: 1, transform: 'translateY(0)' },
           ];
     const animation = content.animate(frames, {
