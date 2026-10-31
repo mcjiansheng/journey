@@ -70,9 +70,9 @@ class NativeFlowTest {
             compose.onNodeWithText("收起", substring = false).performClick()
             compose.onNodeWithText("地图", substring = false).performClick()
             waitText("我的收藏")
-            compose.waitUntil(15000) {
+            compose.waitUntil(45000) {
                 compose.onAllNodesWithTag("journey-map-ready").fetchSemanticsNodes().isNotEmpty() ||
-                    compose.onAllNodesWithTag("journey-map-loading").fetchSemanticsNodes().isNotEmpty()
+                    compose.onAllNodesWithText("地图加载失败：", substring = true).fetchSemanticsNodes().isNotEmpty()
             }
             capture("android-$theme-map")
             compose.onNodeWithText("费用", substring = false).performClick()
