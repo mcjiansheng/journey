@@ -13,6 +13,7 @@ test.afterAll(async()=>{if(server)await shutdownServer(server,app)});
 async function seed(page,{outside=false}={}){
  await page.goto(base);
  await page.evaluate(async({outside})=>{
+  localStorage.setItem('journey.appearance',JSON.stringify({autoCollapseMapSidebar:false}));
   const auth=await fetch('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:`design-${crypto.randomUUID()}@example.test`,password:'JourneyReview2026!',displayName:'林晓'})}).then(r=>r.json());
   const headers={'Content-Type':'application/json','X-CSRF-Token':auth.csrfToken};
   const snapshot=await fetch('/api/trips',{method:'POST',headers,body:JSON.stringify({id:crypto.randomUUID(),name:'南京三日慢游',teamMode:'equal',timezone:'Asia/Shanghai',currency:'CNY',dayCount:3,startDate:'2026-11-06',destination:'南京'})}).then(r=>r.json());

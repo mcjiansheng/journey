@@ -37,7 +37,7 @@ export function applyAppearance(p) {
   document.documentElement.dataset.theme = theme;
   document.documentElement.dataset.motion = String(p?.reducedMotion ?? 'system');
   document.documentElement.dataset.transparency = String(p?.reducedTransparency ?? 'system');
-  document.documentElement.dataset.mapSidebarCollapse = String(p?.autoCollapseMapSidebar ?? false);
+  document.documentElement.dataset.mapSidebarCollapse = String(p?.autoCollapseMapSidebar ?? true);
 }
 export function PersonalSettings({ journey: j, onClose, inline = false }) {
   const [prefs, setPrefs] = useState(() => {
@@ -143,7 +143,7 @@ export function PersonalSettings({ journey: j, onClose, inline = false }) {
             switch=""
             role="switch"
             data-native-switch={supportsNativeSwitch() ? 'true' : 'false'}
-            checked={prefs.autoCollapseMapSidebar ?? false}
+            checked={prefs.autoCollapseMapSidebar ?? true}
             onChange={(e) => preference('autoCollapseMapSidebar', e.target.checked)}
           />
         </label>

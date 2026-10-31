@@ -88,7 +88,7 @@ for(const engine of ['Chrome','WebKit'])for(const tripTitle of ['南京','地图
   if(frame.labelOpacity>.01)expect(frame.label.x+12).toBeGreaterThanOrEqual(frame.capsule.x);
  }
  await expect(page.locator('.trip-title')).toBeHidden();await expect(page.locator('.map-trip-title')).toContainText(tripTitle);
- const panel=await page.locator('.map-panel').boundingBox();expect(panel.y).toBe(20);expect(panel.x).toBe(238);
+ const panel=await page.locator('.map-panel').boundingBox();expect(panel.y).toBe(20);expect(panel.x).toBe(108);
  await screenshot(page,'title-capsule-desktop');
  // Long names and a full avatar stack fit both sidebar preferences.
  await page.evaluate(()=>{

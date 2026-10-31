@@ -47,8 +47,8 @@ async function checkPreference(page,viewport){
  await page.setViewportSize(viewport);await seed(page);
  const full={width:viewport.width<=1100?180:200,height:viewport.height-28};
  await expectSidebar(page,full);
- await nav(page,'地图').click();await expectSidebar(page,full);
- const toggle=await openPreferences(page);await expect(toggle).not.toBeChecked();await toggle.check();await toggle.uncheck();
+ await nav(page,'地图').click();await expectSidebar(page,{width:72,height:342,compact:true});
+ const toggle=await openPreferences(page);await expect(toggle).toBeChecked();await toggle.uncheck();
  await expect(page.locator('html')).toHaveAttribute('data-map-sidebar-collapse','false');
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('journey.appearance')).autoCollapseMapSidebar)).toBe(false);
  await page.keyboard.press('Escape');await expectSidebar(page,full);
