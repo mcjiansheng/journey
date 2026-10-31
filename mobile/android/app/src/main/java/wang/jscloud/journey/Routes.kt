@@ -66,6 +66,7 @@ fun RouteLink(
     from: JSONObject?,
     to: JSONObject,
     onEdit: (JSONObject?, JSONObject, JSONObject?) -> Unit,
+    showEmpty: Boolean = false,
 ) {
     val routes =
         s.objects("route").filter {
@@ -73,6 +74,7 @@ fun RouteLink(
         }
     val route =
         routes.firstOrNull { it.o("payload").s("fromId") == from?.s("id") } ?: routes.firstOrNull()
+    if (route == null && !showEmpty) return
     TextButton({ onEdit(from, to, route) }, modifier = Modifier.fillMaxWidth()) {
         val p = route?.o("payload")
         val hasMinutes = p != null && !p.isNull("minutes")
@@ -93,7 +95,11 @@ fun RouteSheet(
     existing: JSONObject?,
     close: () -> Unit,
 ) {
-    val initial = remember { existing?.o("payload")?.copyJson() }
+    val draftKey = "route-${to.s("id")}"
+    val draft = remember { s.draft(draftKey) }
+    val initial = remember { draft?.optJSONObject("payload") ?: existing?.o("payload")?.copyJson() }
+    val session = remember { EditorSession(s, draftKey, "route", existing, draft) }
+    var touched by remember { mutableStateOf(draft != null) }
     val tripId = remember { s.tripId }
     val uid = remember { s.user?.s("id") }
     val options =
@@ -145,13 +151,44 @@ fun RouteSheet(
             manual = true
         }
     }
-    Sheet("到 ${to.o("payload").s("title")} 的路程", close) {
+    val from = resolveFrom(fromId, independent)
+    val target = currentTo()
+    val payload = runCatching {
+        require(from != null && target != null)
+        val freshSignature = routeSignature(from, target, mode)
+        require(manual || estimateSignature == freshSignature)
+        val value = if (minutes.isBlank()) null else minutes.toDouble().also { require(it >= 0 && it.isFinite()) }
+        val isOrigin = from.s("id") == "origin"
+        obj("fromId" to if (isOrigin) null else from.s("id"),
+            "fromPlace" to if (isOrigin) from.o("payload").o("place") else null,
+            "toId" to target.s("id"), "mode" to mode, "minutes" to value,
+            "manual" to manual, "inputSignature" to freshSignature,
+            "path" to (estimate?.a("path") ?: JSONArray()), "distance" to estimate?.opt("distance"))
+    }.getOrNull()
+    val draftPayload = payload ?: obj("fromId" to fromId, "fromPlace" to independent,
+        "mode" to mode, "minutes" to minutes, "manual" to manual,
+        "inputSignature" to estimateSignature)
+    val fields = listOf("fromId", "fromPlace", "toId", "mode", "minutes", "manual", "inputSignature", "path", "distance")
+    fun persist(done: (() -> Unit)? = null) = session.save(obj("payload" to draftPayload),
+        payload, if (touched) fields else emptyList(), done)
+    LaunchedEffect(draftPayload.toString(), touched) {
+        if (touched) {
+            session.save(obj("payload" to draftPayload), null, fields)
+            kotlinx.coroutines.delay(500)
+            persist()
+        }
+    }
+    Sheet("到 ${to.o("payload").s("title")} 的路程", { persist(close) },
+        onDone = { persist(close) }, doneEnabled = payload != null) {
+        EditorSaveStatus(s, payload != null)
+
         Choice(
             "从哪里出发",
             if (independent != null) independent!!.s("name")
             else options.find { it.first == fromId }?.second?.first.orEmpty(),
             options.map { it.second.first },
         ) { value ->
+            touched = true
             fromId = options.first { it.second.first == value }.first
             independent = null
             estimate = null
@@ -160,6 +197,7 @@ fun RouteSheet(
             estimateSignature = null
         }
         Choice("交通方式", routeNames[mode] ?: "步行", routeNames.values.toList()) { value ->
+            touched = true
             mode = routeNames.entries.first { it.value == value }.key
             estimate = null
             minutes = ""
@@ -170,6 +208,7 @@ fun RouteSheet(
             "所需分钟（可不填）",
             minutes,
             {
+                touched = true
                 minutes = it
                 manual = true
                 estimate = null
@@ -193,6 +232,7 @@ fun RouteSheet(
                             queryMode,
                             s.snapshot?.o("trip")?.s("destination").orEmpty(),
                         )
+                    touched = true
                     minutes = result.s("minutes")
                     estimate = result
                     manual = false
@@ -202,48 +242,6 @@ fun RouteSheet(
             enabled = !s.busy,
         ) {
             Text("查询路程")
-        }
-        Button({
-            val savedFrom = fromId
-            val savedPlace = independent?.copyJson()
-            val savedSignature = estimateSignature
-            val capturedMinutes = minutes
-            val capturedMode = mode
-            val capturedManual = manual
-            val capturedEstimate = estimate?.copyJson()
-            s.action {
-                require(s.tripId == tripId && s.user?.s("id") == uid) { "当前旅程已变化，请重新打开" }
-                val from =
-                    resolveFrom(savedFrom, savedPlace) ?: throw IllegalStateException("请选择出发地点")
-                val target = currentTo() ?: throw IllegalStateException("终点活动已变化，请重新打开")
-                val freshSignature = routeSignature(from, target, capturedMode)
-                require(capturedManual || savedSignature == freshSignature) { "地点已更新，请重新查询路程" }
-                val value =
-                    if (capturedMinutes.isBlank()) null
-                    else capturedMinutes.toDouble().also { require(it >= 0) { "分钟数不能小于零" } }
-                val isOrigin = from.s("id") == "origin"
-                val payload =
-                    obj(
-                        "fromId" to if (isOrigin) null else from.s("id"),
-                        "fromPlace" to if (isOrigin) from.o("payload").o("place") else null,
-                        "toId" to target.s("id"),
-                        "mode" to capturedMode,
-                        "minutes" to value,
-                        "manual" to capturedManual,
-                        "inputSignature" to freshSignature,
-                        "path" to (capturedEstimate?.a("path") ?: JSONArray()),
-                        "distance" to capturedEstimate?.opt("distance"),
-                    )
-                s.mutate(
-                    if (existing == null) "create" else "patch",
-                    existing?.s("id") ?: UUID.randomUUID().toString(),
-                    if (existing == null) "route" else null,
-                    patch = payload,
-                )
-                close()
-            }
-        }) {
-            Text("保存路程")
         }
         existing?.let { old ->
             s.objects("route").find { it.s("id") == old.s("id") }?.let { ObjectActions(s, it) }

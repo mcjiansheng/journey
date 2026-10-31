@@ -29,7 +29,7 @@ async function createTrip(page,name='地图控件验收旅程'){
  await page.getByLabel('目的地',{exact:true}).fill('南京');await page.getByLabel('出发日期',{exact:true}).fill('2026-11-01');
  await page.getByRole('button',{name:'更多设置',exact:true}).click();await page.getByLabel('旅程时区',{exact:true}).selectOption('Asia/Shanghai');await page.getByLabel('结束日期',{exact:true}).fill('2026-11-03');
  await page.getByRole('radio',{name:'平等团队',exact:true}).check();await page.getByRole('dialog').getByRole('button',{name:'创建旅程'}).click();
- await expect(page.locator('.day-heading h2')).toContainText('第1天');
+ await expect(page.locator('.itinerary-toolbar')).toBeVisible();
 }
 async function openMap(page,{mobile=false}={}){
  await page.getByRole('navigation',{name:mobile?'手机主导航':'主导航',exact:true}).getByRole('button',{name:'地图',exact:true}).click();
@@ -45,7 +45,7 @@ async function checkNoOverflow(page){
 test('map controls align, fit the viewport, and return home',async({page})=>{
  await page.setViewportSize({width:1440,height:900});await register(page);await createTrip(page);await openMap(page);
  await expect(page.locator('.map-trip-title')).toContainText('地图控件验收旅程');
- await expect(page.getByRole('button',{name:'我的旅程',exact:true})).toBeVisible();await expect(page.locator('.map-load-error')).toContainText('地图暂时无法载入');
+ await expect(page.getByRole('button',{name:'我的旅程',exact:true})).toBeVisible();await expect(page.locator('.map-offline-message')).toContainText('地图暂时无法加载');
  const geometry=await page.evaluate(()=>{
   const rect=selector=>{const r=document.querySelector(selector).getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height}};
   return{upper:rect('.map-upper-controls'),panel:rect('.map-panel.mode-browse:not(.expanded)'),headerRight:rect('.map-shell .header-right')};
@@ -88,7 +88,7 @@ for(const engine of ['Chrome','WebKit'])for(const tripTitle of ['南京','地图
   if(frame.labelOpacity>.01)expect(frame.label.x+12).toBeGreaterThanOrEqual(frame.capsule.x);
  }
  await expect(page.locator('.trip-title')).toBeHidden();await expect(page.locator('.map-trip-title')).toContainText(tripTitle);
- const panel=await page.locator('.map-panel').boundingBox();expect(panel.y).toBe(20);expect(panel.x).toBe(108);
+ const panel=await page.locator('.map-panel').boundingBox();expect(panel.y).toBe(20);expect(panel.x).toBe(238);
  await screenshot(page,'title-capsule-desktop');
  // Long names and a full avatar stack fit both sidebar preferences.
  await page.evaluate(()=>{
@@ -258,7 +258,7 @@ for(const width of [1440,1024,390,320])test(`sync and return controls retain the
  const samples=await page.evaluate(async()=>{
   const status=document.querySelector('.sync-status'),label=status.querySelector('span'),nav=document.querySelector(innerWidth<=760?'.bottom-nav':'.sidebar nav'),home=document.querySelector(innerWidth<=760?'.header-home':'.sidebar .back-home');
   const measure=()=>{
-   const bubble=document.querySelector('.header-right').getBoundingClientRect(),button=status.getBoundingClientRect(),text=label.getBoundingClientRect(),icon=status.querySelector('svg').getBoundingClientRect(),returnBox=home.getBoundingClientRect(),returnStyle=getComputedStyle(home);
+   const bubble=document.querySelector('.header-right').getBoundingClientRect(),button=status.getBoundingClientRect(),text=label.getBoundingClientRect(),icon=(getComputedStyle(status.querySelector('svg')).display==='none'?status:status.querySelector('svg')).getBoundingClientRect(),returnBox=home.getBoundingClientRect(),returnStyle=getComputedStyle(home);
    return {home:{x:returnBox.x,y:returnBox.y,width:returnBox.width,height:returnBox.height},sameHome:home===document.querySelector(innerWidth<=760?'.header-home':'.sidebar .back-home'),homeVisible:returnStyle.display!=='none'&&returnStyle.visibility==='visible'&&Number(returnStyle.opacity)===1,homeGap:innerWidth>760?nav.getBoundingClientRect().top-returnBox.bottom:null,text:label.textContent,sameNode:status===document.querySelector('.sync-status'),bubble:{x:bubble.x,y:bubble.y,width:bubble.width,height:bubble.height},label:{x:text.x,y:text.y,width:text.width,height:text.height},icon:{x:icon.x,y:icon.y,width:icon.width,height:icon.height},centerError:Math.abs((icon.left+(text.width?text.right:icon.right))/2-(button.left+button.width/2))};
   };
   const before=measure(),frames=[];

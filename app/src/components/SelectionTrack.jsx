@@ -1,8 +1,14 @@
-import React, {useLayoutEffect, useRef} from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 
 // One persistent surface moves behind the selected button, including when a
 // second selection reverses an in-flight transition or tabs scroll horizontally.
-export default function SelectionTrack({as: Element = 'div', activeKey, className = '', children, ...props}) {
+export default function SelectionTrack({
+  as: Element = 'div',
+  activeKey,
+  className = '',
+  children,
+  ...props
+}) {
   const track = useRef(null);
   const indicator = useRef(null);
 
@@ -18,15 +24,22 @@ export default function SelectionTrack({as: Element = 'div', activeKey, classNam
     }
     measure();
     // The initial selection is already in place on the first painted frame.
-    const frame = requestAnimationFrame(() => { surface.dataset.ready = ''; });
+    const frame = requestAnimationFrame(() => {
+      surface.dataset.ready = '';
+    });
     const observer = new ResizeObserver(measure);
     observer.observe(element);
-    element.querySelectorAll(':scope > button').forEach(button => observer.observe(button));
-    return () => { cancelAnimationFrame(frame); observer.disconnect(); };
+    element.querySelectorAll(':scope > button').forEach((button) => observer.observe(button));
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [activeKey, children]);
 
-  return <Element {...props} ref={track} className={`${className} selection-track`}>
-    <span ref={indicator} className="selection-indicator" aria-hidden="true"/>
-    {children}
-  </Element>;
+  return (
+    <Element {...props} ref={track} className={`${className} selection-track`}>
+      <span ref={indicator} className="selection-indicator" aria-hidden="true" />
+      {children}
+    </Element>
+  );
 }

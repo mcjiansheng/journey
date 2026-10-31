@@ -6,6 +6,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import kotlin.math.abs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -15,9 +20,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -25,6 +33,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
@@ -78,8 +88,10 @@ fun Field(
 fun Choice(label: String, value: String, choices: List<String>, set: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        SecondaryButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("$label：$value")
+        TextButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Text(label, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
+            Text(value)
+            Icon(Icons.Outlined.ExpandMore, null)
         }
         DropdownMenu(expanded, { expanded = false }) {
             choices.forEach {
@@ -96,9 +108,9 @@ fun Choice(label: String, value: String, choices: List<String>, set: (String) ->
 }
 
 @Composable
-fun Panel(content: @Composable ColumnScope.() -> Unit) {
+fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = LocalJourneyPalette.current.card),
         border = BorderStroke(1.dp, LocalJourneyPalette.current.border),
         shape = RoundedCornerShape(20.dp),
@@ -118,7 +130,9 @@ fun Heading(title: String, sub: String = "") {
 }
 
 @Composable
-fun Sheet(title: String, onClose: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun Sheet(title: String, onClose: () -> Unit,
+    onDone: (() -> Unit)? = null, doneEnabled: Boolean = true,
+    content: @Composable ColumnScope.() -> Unit) {
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onClose,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
@@ -128,7 +142,7 @@ fun Sheet(title: String, onClose: () -> Unit, content: @Composable ColumnScope.(
             modifier = Modifier.fillMaxWidth().padding(12.dp).heightIn(max = 760.dp),
         ) {
             Column(
-                Modifier.padding(20.dp).verticalScroll(rememberScrollState()),
+                Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(
@@ -137,13 +151,20 @@ fun Sheet(title: String, onClose: () -> Unit, content: @Composable ColumnScope.(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(title, style = MaterialTheme.typography.titleLarge)
-                    IconButton(onClose) { Icon(Icons.Outlined.Close, "关闭") }
+                    Row {
+                        TextButton(onClose) { Text(if (onDone != null) "收起" else "关闭") }
+                        if (onDone != null) TextButton(onDone, enabled = doneEnabled) { Text("完成", maxLines = 1) }
+                    }
                 }
-                content()
+                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
             }
         }
     }
 }
+
+val LocalUndoHost = staticCompositionLocalOf { SnackbarHostState() }
+val LocalUndoScope = staticCompositionLocalOf<CoroutineScope> { error("JourneyApp scope required") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -167,8 +188,12 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
         if (s.user != null && !initialInvite.isNullOrBlank()) modal = "join"
     }
     val trip = s.snapshot?.o("trip")
+    val undoHost = remember { SnackbarHostState() }
+    val undoScope = rememberCoroutineScope()
+    CompositionLocalProvider(LocalUndoHost provides undoHost, LocalUndoScope provides undoScope) {
     JourneyBackdrop {
         Scaffold(
+            snackbarHost = { SnackbarHost(undoHost) },
             containerColor = Color.Transparent,
             topBar = {
                 TopAppBar(
@@ -184,6 +209,13 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
                             IconButton({ s.home() }) { Icon(Icons.Outlined.ArrowBack, "返回旅程列表") }
                     },
                     actions = {
+                        if (s.user != null) {
+                            IconButton({ s.action { s.retry() } }) {
+                                Icon(if (s.status == "已同步") Icons.Outlined.CloudDone else Icons.Outlined.CloudOff,
+                                    s.status + "，点按同步")
+                            }
+                            if (s.status != "已同步") Text(s.status, style = MaterialTheme.typography.labelSmall)
+                        }
                         if (s.user != null)
                             IconButton({ modal = "profile" }) {
                                 Icon(Icons.Outlined.AccountCircle, "个人设置")
@@ -209,7 +241,7 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
                                 "行程" to Icons.Outlined.EventNote,
                                 "地图" to Icons.Outlined.Map,
                                 "费用" to Icons.Outlined.Payments,
-                                "管理" to Icons.Outlined.Group,
+                                "管理" to Icons.Outlined.Settings,
                             ).forEach { (name, icon) ->
                                 NavigationBarItem(
                                     selected = s.page == name,
@@ -230,19 +262,10 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
                 }
             },
         ) { padding ->
-            Column(Modifier.fillMaxSize().padding(padding)) {
-                if (s.user != null)
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            s.status + (if (s.pending.isNotEmpty()) " · ${s.pending.size} 项" else ""),
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                        TextButton({ s.action { s.retry() } }) { Text("刷新") }
-                    }
+            PullToRefreshBox(isRefreshing = s.user != null && s.busy,
+                onRefresh = { if (s.user != null) s.action { s.retry() } },
+                modifier = Modifier.fillMaxSize().padding(padding)) {
+            Column(Modifier.fillMaxSize()) {
                 when {
                     !s.ready ->
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -254,7 +277,7 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
                             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-                            Heading("下一站，和谁一起？", "一起安排，把旅途留给彼此。")
+                            Heading("我的旅程")
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 SecondaryButton({ modal = "create" }) { Text("创建旅程") }
                                 SecondaryButton({ modal = "join" }) { Text("加入旅程") }
@@ -350,6 +373,7 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
             }
         }
     }
+    }
     if (s.error != null)
         AlertDialog(
             onDismissRequest = { s.error = null },
@@ -367,6 +391,7 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
         "invites" -> InvitesSheet(s) { modal = "" }
         "rename" -> RenameSheet(s) { modal = "" }
         "route" -> routeTo?.let { RouteSheet(s, routeFrom, it, routeObject) { modal = "" } }
+    }
     }
 }
 
@@ -553,7 +578,7 @@ fun ItineraryScreen(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Heading("一起走过的每一天")
+        Heading("行程")
         IconButton(onSchedule) { Icon(Icons.Outlined.DateRange, "调整日期") }
     }
     Row(
@@ -580,19 +605,51 @@ fun ItineraryScreen(
         Icon(Icons.Outlined.Add, null)
         Text("添加活动")
     }
+    var sorting by remember(id) { mutableStateOf(false) }
+    val positions = remember(id) { mutableMapOf<String, Float>() }
+    var dragging by remember(id) { mutableStateOf<String?>(null) }
+    Row {
+        TextButton({ sorting = !sorting }) { Text(if (sorting) "完成排序" else "排序") }
+        if (sorting) Text("长按拖动", style = MaterialTheme.typography.bodySmall)
+    }
     val rows = orderedActivities(s.objects(), id.orEmpty())
+    val currentRows by rememberUpdatedState(rows)
     if (rows.isEmpty()) Panel { Text("这一天还没有安排，添上第一站吧。") }
     rows.forEachIndexed { i, o ->
         val p = o.o("payload")
-        RouteLink(s, rows.getOrNull(i - 1), o, onRoute)
-        Panel {
+        RouteLink(s, rows.getOrNull(i - 1), o, onRoute, showEmpty = sorting)
+        key(o.s("id")) {
+        var distance by remember { mutableFloatStateOf(0f) }
+        var startY by remember { mutableFloatStateOf(0f) }
+        Panel(Modifier.onGloballyPositioned { positions[o.s("id")] = it.positionInRoot().y }
+            .zIndex(if (dragging == o.s("id")) 1f else 0f)
+            .graphicsLayer { translationY = if (dragging == o.s("id")) distance else 0f }
+            .pointerInput(sorting, o.s("id"), p.o("time").s("mode")) {
+                if (sorting && o.o("payload").o("time").s("mode") != "precise") detectDragGesturesAfterLongPress(
+                    onDragStart = { distance = 0f; startY = positions[o.s("id")] ?: 0f; dragging = o.s("id") },
+                    onDrag = { change, delta -> change.consume(); distance += delta.y },
+                    onDragCancel = { dragging = null },
+                    onDragEnd = {
+                        val from = currentRows.indexOfFirst { it.s("id") == o.s("id") }
+                        val target = currentRows.indices.minByOrNull { index ->
+                            abs((positions[currentRows[index].s("id")] ?: startY) - (startY + distance))
+                        } ?: from
+                        if (from >= 0 && target != from) s.action { s.moveActivity(o.s("id"), target - from) }
+                        dragging = null
+                    },
+                )
+            }) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                if (sorting) {
+                    if (p.o("time").s("mode") == "precise") Text("按时间排序", style = MaterialTheme.typography.labelSmall)
+                    else Icon(Icons.Outlined.DragHandle, "长按拖动排序")
+                }
                 Text(
                     "${i+1}  ${p.s("title")}",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
-                IconButton({ onEdit(o) }) { Icon(Icons.Outlined.Edit, "编辑活动") }
+
             }
             val t = p.o("time")
             Text(
@@ -605,7 +662,7 @@ fun ItineraryScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
             if (p.o("place").s("name").isNotEmpty()) Text("⌖ " + p.o("place").s("name"))
-            if (p.s("notes").isNotEmpty()) Text(p.s("notes"))
+            if (p.s("notes").isNotEmpty()) Text(p.s("notes"), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             if (p.s("url").isNotEmpty()) {
                 val ctx = LocalContext.current
                 TextButton({
@@ -614,18 +671,9 @@ fun ItineraryScreen(
                     Text("打开相关链接")
                 }
             }
-            Row {
-                TextButton({ s.action { s.moveActivity(o.s("id"), -1) } }, enabled = i > 0) {
-                    Text("上移")
-                }
-                TextButton(
-                    { s.action { s.moveActivity(o.s("id"), 1) } },
-                    enabled = i < rows.lastIndex,
-                ) {
-                    Text("下移")
-                }
-            }
-            ObjectActions(s, o)
+            if (dragging == o.s("id")) Text("拖动到新的位置", color = MaterialTheme.colorScheme.primary)
+            ObjectActions(s, o, onEdit = { onEdit(o) }, onMap = if (p.o("place").s("name").isNotBlank()) ({ s.page = "地图" }) else null)
+        }
         }
     }
     val deleted =
@@ -644,67 +692,67 @@ fun ItineraryScreen(
 }
 
 @Composable
-fun ObjectActions(s: JourneyStore, o: JSONObject) {
+fun ObjectActions(s: JourneyStore, o: JSONObject, onEdit: (() -> Unit)? = null, onMap: (() -> Unit)? = null) {
     val expressions = o.a("expressions").rows()
     val own = expressions.find { it.s("userId") == s.user?.s("id") }
     val deleted = o.s("state") == "deleted"
     val trip = s.snapshot?.o("trip") ?: return
     val me = s.snapshot?.a("members")?.rows()?.find { it.s("userId") == s.user?.s("id") }
-    val canDelete =
-        trip.s("ownerId") == s.user?.s("id") ||
-            (trip.s("teamMode") == "admin" && me?.optBoolean("isAdmin") == true)
+    val canDelete = trip.s("ownerId") == s.user?.s("id") ||
+        (trip.s("teamMode") == "admin" && me?.optBoolean("isAdmin") == true)
     val canRestore = trip.s("ownerId") == s.user?.s("id") || me?.optBoolean("isAdmin") == true
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (!deleted && o.s("kind") == "activity")
-            SecondaryButton({
-                s.action {
-                    s.mutate(
-                        "express",
-                        o.s("id"),
-                        generation = o.optInt("generation"),
-                        expression =
-                            obj(
-                                "notParticipating" to
-                                    !(own?.optBoolean("notParticipating") ?: false)
-                            ),
-                    )
-                }
-            }) {
-                Text(if (own?.optBoolean("notParticipating") == true) "重新参加" else "不参加")
-            }
-        val field = if (deleted) "wishRestore" else "wishDelete"
-        SecondaryButton({
-            s.action {
-                s.mutate(
-                    "express",
-                    o.s("id"),
-                    generation = o.optInt("generation"),
-                    expression = obj(field to !(own?.optBoolean(field) ?: false)),
-                )
-            }
-        }) {
-            Text(
-                (if (own?.optBoolean(field) == true) "取消" else "") +
-                    (if (deleted) "支持恢复" else "希望删除") +
-                    " ${expressions.count{it.optBoolean(field)}}"
-            )
+    var expanded by remember { mutableStateOf(false) }
+    val scope = LocalUndoScope.current
+    val host = LocalUndoHost.current
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            val absent = expressions.count { it.optBoolean("notParticipating") }
+            val wishes = expressions.count { it.optBoolean(if (deleted) "wishRestore" else "wishDelete") }
+            if (absent > 0) Text("$absent 人不参加", style = MaterialTheme.typography.labelSmall)
+            if (wishes > 0) Text("$wishes 人" + if (deleted) "支持恢复" else "希望删除", style = MaterialTheme.typography.labelSmall)
         }
-        if (if (deleted) canRestore else canDelete)
-            SecondaryButton({
-                s.action {
-                    s.mutate(
-                        if (deleted) "restore" else "delete",
-                        o.s("id"),
-                        generation = o.optInt("generation"),
-                    )
+        Box {
+            IconButton({ expanded = true }) { Icon(Icons.Outlined.MoreVert, "更多操作") }
+            DropdownMenu(expanded, { expanded = false }) {
+                if (!deleted && onEdit != null) DropdownMenuItem(text = { Text("编辑") },
+                    leadingIcon = { Icon(Icons.Outlined.Edit, null) }, onClick = { expanded = false; onEdit() })
+                if (!deleted && onMap != null) DropdownMenuItem(text = { Text("在地图查看") },
+                    leadingIcon = { Icon(Icons.Outlined.Map, null) }, onClick = { expanded = false; onMap() })
+                if (!deleted && o.s("kind") == "activity") DropdownMenuItem(
+                    text = { Text(if (own?.optBoolean("notParticipating") == true) "重新参加" else "不参加") },
+                    onClick = {
+                        expanded = false
+                        s.action { s.mutate("express", o.s("id"), generation = o.optInt("generation"),
+                            expression = obj("notParticipating" to !(own?.optBoolean("notParticipating") ?: false))) }
+                    })
+                val field = if (deleted) "wishRestore" else "wishDelete"
+                DropdownMenuItem(text = { Text((if (own?.optBoolean(field) == true) "取消" else "") +
+                    if (deleted) "支持恢复" else "希望删除") }, onClick = {
+                    expanded = false
+                    s.action { s.mutate("express", o.s("id"), generation = o.optInt("generation"),
+                        expression = obj(field to !(own?.optBoolean(field) ?: false))) }
+                })
+                if (if (deleted) canRestore else canDelete) {
+                    HorizontalDivider()
+                    DropdownMenuItem(text = { Text(if (deleted) "恢复" else "删除",
+                        color = if (deleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) },
+                        leadingIcon = { Icon(if (deleted) Icons.Outlined.Restore else Icons.Outlined.Delete, null) },
+                        onClick = {
+                            expanded = false
+                            s.action {
+                                s.mutate(if (deleted) "restore" else "delete", o.s("id"), generation = o.optInt("generation"))
+                                if (!deleted) {
+                                    val undoGeneration = s.objects().find { it.s("id") == o.s("id") }?.optInt("generation")
+                                        ?: s.snapshot?.o("trip")?.optInt("generation") ?: o.optInt("generation") + 1
+                                    scope.launch {
+                                        if (host.showSnackbar("已删除", "撤销", duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed)
+                                            s.action { s.mutate("restore", o.s("id"), generation = undoGeneration) }
+                                    }
+                                }
+                            }
+                        })
                 }
-            }) {
-                Text(
-                    if (deleted) "恢复" else "删除",
-                    color =
-                        if (deleted) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.error,
-                )
             }
+        }
     }
 }

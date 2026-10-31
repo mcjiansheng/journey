@@ -15,18 +15,18 @@ enum Palette {
           alpha: traits.userInterfaceStyle == .dark ? darkAlpha : lightAlpha)
       })
   }
-  static let background = adaptive(0xEEF2EC, 0x0F1613)
-  static let surface = adaptive(0xFFFFFF, 0xFFFFFF, lightAlpha: 0.68, darkAlpha: 0.06)
-  static let surfaceSolid = adaptive(0xFAFCF9, 0x1D2521)
-  static let secondarySurface = adaptive(0xFFFFFF, 0xFFFFFF, lightAlpha: 0.85, darkAlpha: 0.08)
+  static let background = DesignTokens.page
+  static let surface = DesignTokens.surface
+  static let surfaceSolid = DesignTokens.surface
+  static let secondarySurface = DesignTokens.surface
   static let border = adaptive(0xB5C6BB, 0xFFFFFF, lightAlpha: 0.30, darkAlpha: 0.08)
   static let iconBackground = adaptive(0xD9E4D2, 0x22302A)
-  static let text = adaptive(0x22332B, 0xE6EEE9)
-  static let muted = adaptive(0x6B7A72, 0x93A39B)
-  static let accent = adaptive(0x3A6B5A, 0x7FCBA5)
-  static let onAccent = adaptive(0xFFFFFF, 0x0E1F17)
+  static let text = DesignTokens.text
+  static let muted = DesignTokens.muted
+  static let accent = DesignTokens.primary
+  static let onAccent = DesignTokens.onPrimary
   static let selected = adaptive(0xFFFFFF, 0x7FCBA5, darkAlpha: 0.16)
-  static let danger = adaptive(0xC9594F, 0xE5857D)
+  static let danger = DesignTokens.danger
   static let mint = adaptive(0xDCEEE5, 0x14261C, lightAlpha: 0.65, darkAlpha: 0.60)
   static let sky = adaptive(0xDCEBF7, 0x14201F, lightAlpha: 0.63)
   static let warm = adaptive(0xFFF8E7, 0x1A1D14, lightAlpha: 0.60)
@@ -53,10 +53,10 @@ struct JourneyBackground: View {
 struct JourneyCard: View {
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   var body: some View {
-    RoundedRectangle(cornerRadius: 22, style: .continuous)
-      .fill(reduceTransparency ? Palette.surfaceSolid : Palette.surface)
+    RoundedRectangle(cornerRadius: DesignTokens.radiusLg, style: .continuous)
+      .fill(Palette.surfaceSolid)
       .overlay {
-        RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(
+        RoundedRectangle(cornerRadius: DesignTokens.radiusLg, style: .continuous).strokeBorder(
           Palette.border, lineWidth: 0.5)
       }
       .shadow(color: Palette.shadow, radius: 12, y: 4)
@@ -142,7 +142,7 @@ struct JourneyTabBar: View {
   @Binding var selection: String
   private let tabs = [
     ("itinerary", "行程", "list.bullet.rectangle"), ("map", "地图", "map"),
-    ("ledger", "费用", "creditcard"), ("settings", "管理", "slider.horizontal.3"),
+    ("ledger", "费用", "creditcard"), ("settings", "管理", "gearshape"),
   ]
   var body: some View {
     HStack(spacing: 4) {
@@ -170,5 +170,20 @@ struct JourneyTabBar: View {
     } else {
       Capsule().fill(Palette.surfaceSolid).overlay { Capsule().strokeBorder(Palette.border) }
     }
+  }
+}
+
+struct EditorSaveStatus: View {
+  var draftKey = ""
+  @EnvironmentObject var store: JourneyStore
+  var body: some View {
+    let queued = store.cache.queue.contains { $0.tripID == store.selectedTrip }
+    let local = queued || !store.draft(draftKey).isNull
+    let syncing = queued && store.status == "正在上传…"
+    Label(
+      syncing ? "正在同步" : local ? "已保存到此设备" : "已同步",
+      systemImage: local ? "internaldrive" : "checkmark.icloud"
+    )
+    .font(.caption).foregroundStyle(Palette.muted)
   }
 }

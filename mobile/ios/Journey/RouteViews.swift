@@ -134,6 +134,17 @@ struct RouteEditor: View {
   @State private var estimating = false
   @State private var account = ""
   @State private var tripID = ""
+  @State private var createdID = UUID().uuidString
+  @State private var initialized = false
+  @State private var savedValue: JSON = .null
+  var draftKey: String { "\(tripID):route:\(object?.id ?? to.id)" }
+  var draftValue: JSON {
+    .object([
+      "mode": .string(mode), "minutes": .string(minutes), "originPlace": originPlace,
+      "estimate": estimate, "manual": .bool(manual),
+    ])
+  }
+
   var currentFrom: JSON {
     if let from { return store.objects.first(where: { $0.id == from.id }) ?? from }
     return .object(["id": .string("origin"), "payload": .object(["place": originPlace])])
@@ -142,6 +153,7 @@ struct RouteEditor: View {
   var body: some View {
     NavigationStack {
       JourneyForm {
+        EditorSaveStatus(draftKey: draftKey)
         Section("前往下一站") {
           Text(
             (from == nil
@@ -199,60 +211,100 @@ struct RouteEditor: View {
         }
         if let object { Section { LifecycleActions(object: object) } }
       }.navigationTitle("路程").toolbar {
-        ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+        ToolbarItem(placement: .cancellationAction) {
+          Button("收起") { save(close: true, reportErrors: false) }
+        }
         ToolbarItem(placement: .confirmationAction) {
-          Button("保存") {
-            store.perform {
-              let time = minutes.trimmingCharacters(in: .whitespaces)
-              guard
-                time.isEmpty
-                  || (Double(time) != nil && Double(time)!.isFinite && Double(time)! >= 0)
-              else { throw APIError(message: "请填写非负路程时间") }
-              guard from != nil || !originPlace["name"].string.isEmpty else {
-                throw APIError(message: "请选择出发地点")
-              }
-              let signature = try RouteSignature.signature(
-                from: currentFrom, to: currentTo, mode: mode)
-              let patch: JSON = .object([
-                "fromId": from.map { .string($0.id) } ?? .null,
-                "fromPlace": from == nil ? originPlace : .null, "toId": .string(to.id),
-                "mode": .string(mode), "minutes": Double(time).map(JSON.number) ?? .null,
-                "manual": .bool(manual), "inputSignature": .string(signature),
-                "path": estimate["path"].isNull ? .array([]) : estimate["path"],
-                "distance": estimate["distance"],
-              ])
-              try await store.mutate(
-                object: object, kind: object == nil ? "create" : "patch",
-                type: object == nil ? "route" : nil, patch: patch, expectedTrip: tripID,
-                expectedAccount: account)
-              dismiss()
+          Button("完成") { save(close: true) }.lineLimit(1).fixedSize().disabled(estimating)
+        }
+      }.onChange(of: draftValue) { _, value in
+        guard initialized, value != savedValue else { return }
+        do {
+          try store.setDraft(draftKey, .object(["form": value, "objectId": .string(createdID)]))
+        } catch { store.error = error.localizedDescription }
+      }.task(id: draftValue) {
+        guard initialized, draftValue != savedValue else { return }
+        do { try await Task.sleep(for: .milliseconds(450)) } catch { return }
+        await persist(reportErrors: false)
+      }.onDisappear { save(close: false, reportErrors: false) }
+        .onAppear {
+          guard !initialized else { return }
+          account = store.user.id
+          tripID = store.selectedTrip ?? ""
+          if let object {
+            let p = object["payload"]
+            mode = p["mode"].string
+            originPlace = p["fromPlace"]
+            manual = p["manual"].bool
+            if p["inputSignature"].string
+              == (try? RouteSignature.signature(from: currentFrom, to: currentTo, mode: mode))
+            {
+              minutes = p["minutes"].isNull ? "" : String(p["minutes"].number)
+              estimate = p
             }
-          }.journeyButton(prominent: true).disabled(store.busy || estimating)
-        }.journeyOwnGlass()
-      }.onAppear {
-        account = store.user.id
-        tripID = store.selectedTrip ?? ""
-        if let object {
-          let p = object["payload"]
-          mode = p["mode"].string
-          originPlace = p["fromPlace"]
-          manual = p["manual"].bool
-          if p["inputSignature"].string
-            == (try? RouteSignature.signature(from: currentFrom, to: currentTo, mode: mode))
-          {
-            minutes = p["minutes"].isNull ? "" : String(p["minutes"].number)
-            estimate = p
+          }
+          savedValue = draftValue
+          let draft = store.draft(draftKey)
+          if !draft.isNull {
+            let value = draft["form"]
+            mode = value["mode"].string
+            minutes = value["minutes"].string
+            originPlace = value["originPlace"]
+            estimate = value["estimate"]
+            manual = value["manual"].bool
+            if !draft["objectId"].string.isEmpty { createdID = draft["objectId"].string }
+          }
+          initialized = true
+        }.sheet(isPresented: $searching) {
+          PlacePicker {
+            originPlace = $0
+            estimate = .null
+            minutes = ""
           }
         }
-      }.sheet(isPresented: $searching) {
-        PlacePicker {
-          originPlace = $0
-          estimate = .null
-          minutes = ""
-        }
-      }
     }
   }
+  func save(close: Bool, reportErrors: Bool = true) {
+    Task {
+      let saved = await persist(reportErrors: reportErrors)
+      if close && (!reportErrors || saved) { dismiss() }
+    }
+  }
+  @discardableResult func persist(reportErrors: Bool) async -> Bool {
+    guard initialized, draftValue != savedValue else { return true }
+    do {
+      let time = minutes.trimmingCharacters(in: .whitespaces)
+      guard time.isEmpty || (Double(time) != nil && Double(time)!.isFinite && Double(time)! >= 0)
+      else { throw APIError(message: "请填写非负路程时间") }
+      guard from != nil || !originPlace["name"].string.isEmpty else {
+        throw APIError(message: "请选择出发地点")
+      }
+      guard object != nil || !time.isEmpty || !originPlace.isNull else { return true }
+      let signature = try RouteSignature.signature(from: currentFrom, to: currentTo, mode: mode)
+      let patch: JSON = .object([
+        "fromId": from.map { .string($0.id) } ?? .null,
+        "fromPlace": from == nil ? originPlace : .null, "toId": .string(to.id),
+        "mode": .string(mode), "minutes": Double(time).map(JSON.number) ?? .null,
+        "manual": .bool(manual), "inputSignature": .string(signature),
+        "path": estimate["path"].isNull ? .array([]) : estimate["path"],
+        "distance": estimate["distance"],
+      ])
+      let target = store.objects.first { $0.id == (object?.id ?? createdID) } ?? object
+      try await store.mutate(
+        object: target, kind: target == nil ? "create" : "patch",
+        type: target == nil ? "route" : nil, patch: patch,
+        id: target == nil ? createdID : nil, expectedTrip: tripID, expectedAccount: account)
+      savedValue = draftValue
+      try store.removeDraft(draftKey)
+      return true
+    } catch {
+      if reportErrors || !(error is APIError) || (error as? APIError)?.code == "LOCAL_STORAGE" {
+        store.error = error.localizedDescription
+      }
+      return false
+    }
+  }
+
 }
 struct RouteSelection: Identifiable {
   let id = UUID()

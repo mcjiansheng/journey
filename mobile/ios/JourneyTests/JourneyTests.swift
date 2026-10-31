@@ -345,3 +345,64 @@ extension JourneyTests {
     XCTAssertEqual(try Data(contentsOf: file), corrupt)
   }
 }
+
+extension JourneyTests {
+  @MainActor func testTripDeletionUndoUsesDeletedGeneration() async throws {
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [JourneyMockProtocol.self]
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    JourneyMockProtocol.handler = { request in
+      switch request.url!.path {
+      case "/api/auth/login":
+        return (
+          200,
+          .object(["user": .object(["id": .string("undo-user")]), "csrfToken": .string("token")])
+        )
+      case "/api/trips": return (200, .object(["trips": .array([])]))
+      case "/api/clock":
+        return (
+          200,
+          .object([
+            "leaseId": .string("lease"), "serverTime": .number(Date().timeIntervalSince1970 * 1000),
+            "expiresAt": .number(Date().timeIntervalSince1970 * 1000 + 86_400_000),
+          ])
+        )
+      default: return (503, .object(["error": .object(["message": .string("offline")])]))
+      }
+    }
+    let store = JourneyStore(
+      urlSession: URLSession(configuration: config), serverURL: "https://journey-undo-test.invalid",
+      storageDirectory: directory)
+    defer {
+      store.stopPolling()
+      JourneyMockProtocol.handler = nil
+      try? FileManager.default.removeItem(at: directory)
+    }
+    try await store.login(identifier: "undo", password: "password", name: "", register: false)
+    store.selectedTrip = "trip"
+    store.accept(
+      .object([
+        "trip": .object([
+          "id": .string("trip"), "state": .string("active"), "generation": .integer(2),
+        ]),
+        "objects": .array([]), "members": .array([]), "epoch": .integer(1), "cursor": .integer(1),
+      ]))
+    store.deleteWithUndo(store.trip)
+    for _ in 0..<100 {
+      if store.undoDeletion != nil { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(store.trip["state"].string, "deleted")
+    XCTAssertEqual(store.trip["generation"], .integer(3))
+    store.undoDelete()
+    for _ in 0..<100 {
+      if store.cache.queue.count == 2 { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(store.cache.queue.count, 2)
+    XCTAssertEqual(store.cache.queue.last?.body["kind"].string, "restore")
+    XCTAssertEqual(store.cache.queue.last?.body["generation"], .integer(3))
+    XCTAssertEqual(store.trip["state"].string, "active")
+    XCTAssertNil(store.undoDeletion)
+  }
+}

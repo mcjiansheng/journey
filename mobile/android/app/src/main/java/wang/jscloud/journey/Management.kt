@@ -140,25 +140,28 @@ fun ManagementScreen(s: JourneyStore, onInvite: () -> Unit, onRename: () -> Unit
 @Composable
 fun RenameSheet(s: JourneyStore, close: () -> Unit) {
     val trip = s.snapshot?.o("trip") ?: return
-    var name by remember { mutableStateOf(trip.s("name")) }
-    var destination by remember { mutableStateOf(trip.s("destination")) }
-    Sheet("编辑旅程", close) {
-        Field("旅程名称", name, { name = it })
-        Field("目的地", destination, { destination = it })
-        Button(
-            {
-                s.action {
-                    val patch = JSONObject()
-                    if (name != trip.s("name")) patch.put("name", name)
-                    if (destination != trip.s("destination")) patch.put("destination", destination)
-                    if (patch.length() > 0) s.mutate("patch", trip.s("id"), patch = patch)
-                    close()
-                }
-            },
-            enabled = name.isNotBlank(),
-        ) {
-            Text("保存")
+    val key = "trip-info"
+    val draft = remember { s.draft(key) }
+    var name by remember { mutableStateOf(draft?.o("payload")?.s("name") ?: trip.s("name")) }
+    var destination by remember { mutableStateOf(draft?.o("payload")?.s("destination") ?: trip.s("destination")) }
+    val session = remember { EditorSession(s, key, "trip", obj("id" to trip.s("id"),
+        "payload" to obj("name" to trip.s("name"), "destination" to trip.s("destination"))), draft) }
+    val payload = obj("name" to name, "destination" to destination)
+    val changed = remember { mutableStateListOf<String>() }
+    fun persist(done: (() -> Unit)? = null) = session.save(obj("payload" to payload),
+        if (name.isNotBlank() && destination.isNotBlank()) payload else null, changed.toList(), done)
+    LaunchedEffect(name, destination) {
+        if (changed.isNotEmpty()) {
+            session.save(obj("payload" to payload), null, changed.toList())
+            kotlinx.coroutines.delay(500)
+            persist()
         }
+    }
+    Sheet("编辑旅程", { persist(close) }, onDone = { persist(close) },
+        doneEnabled = name.isNotBlank() && destination.isNotBlank()) {
+        EditorSaveStatus(s, name.isNotBlank() && destination.isNotBlank())
+        Field("旅程名称", name, { name = it; if ("name" !in changed) changed.add("name") })
+        Field("目的地", destination, { destination = it; if ("destination" !in changed) changed.add("destination") })
     }
 }
 

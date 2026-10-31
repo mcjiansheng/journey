@@ -64,19 +64,44 @@ final class JourneyUITests: XCTestCase {
     editorShot.name = theme + "-activity-editor"
     editorShot.lifetime = .keepAlways
     add(editorShot)
+    // An incomplete activity stays a draft and reopens without creating a blank row.
+    let notes = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields["备注"]
+    notes.tap()
+    notes.typeText("收起后保留的输入")
+    app.navigationBars.buttons["收起"].tap()
+    XCTAssertTrue(app.buttons["添加活动"].waitForExistence(timeout: 10))
+    app.buttons["添加活动"].tap()
+    XCTAssertTrue(app.buttons["恢复输入"].waitForExistence(timeout: 5))
+    app.buttons["恢复输入"].tap()
+    XCTAssertEqual(notes.value as? String, "收起后保留的输入")
+    let stamp = String(Int(Date().timeIntervalSince1970))
+    let firstTitle = "原生 UI 活动 A " + stamp
+    let secondTitle = "原生 UI 活动 B " + stamp
     title.tap()
-    title.typeText("原生 UI 活动 " + String(Int(Date().timeIntervalSince1970)))
+    title.typeText(firstTitle)
+    sleep(1)  // Allow automatic creation before leaving an incomplete edit in the draft.
+    title.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: firstTitle.count))
+    app.navigationBars.buttons["收起"].tap()
+    app.buttons["添加活动"].tap()
+    XCTAssertTrue(app.buttons["使用当前内容"].waitForExistence(timeout: 5))
+    app.buttons["使用当前内容"].tap()
+    title.tap()
+    title.typeText(secondTitle)
     app.buttons["activity.save"].tap()
     XCTAssertTrue(title.waitForNonExistence(timeout: 10))
     XCTAssertTrue(app.buttons["添加活动"].waitForExistence(timeout: 10))
-    let routes = app.buttons.matching(NSPredicate(format: "label == %@", "前往这一站"))
+    app.swipeUp()
+    XCTAssertTrue(app.buttons.containing(.staticText, identifier: firstTitle).firstMatch.exists)
+    XCTAssertTrue(app.buttons.containing(.staticText, identifier: secondTitle).firstMatch.exists)
+    app.buttons["排序"].tap()
+    let routes = app.buttons.matching(NSPredicate(format: "label == %@", "添加路程"))
     if routes.count > 1 {
       routes.element(boundBy: 1).tap()
       let routeMinutes = app.textFields["路程时间（分钟）"]
       XCTAssertTrue(routeMinutes.waitForExistence(timeout: 5))
       routeMinutes.tap()
       routeMinutes.typeText("12")
-      app.navigationBars.buttons["保存"].tap()
+      app.navigationBars.buttons["完成"].tap()
       XCTAssertTrue(routeMinutes.waitForNonExistence(timeout: 10))
     }
     app.buttons["tab.ledger"].tap()
@@ -89,7 +114,7 @@ final class JourneyUITests: XCTestCase {
     let amount = app.textFields["金额"]
     amount.tap()
     amount.typeText("23.50")
-    app.navigationBars.buttons["保存"].tap()
+    app.navigationBars.buttons["完成"].tap()
     XCTAssertTrue(app.buttons["添加费用"].waitForExistence(timeout: 10))
     let shot = XCTAttachment(screenshot: app.screenshot())
     shot.name = "native-itinerary"

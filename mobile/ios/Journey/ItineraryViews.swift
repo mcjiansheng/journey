@@ -10,7 +10,7 @@ struct ItineraryView: View {
   var activities: [JSON] { ActivityOrder.ordered(store.objects, dayID: dayID) }
   var body: some View {
     JourneyList {
-      Section {
+      Section(store.trip["name"].string) {
         Picker("计划日", selection: $dayID) {
           ForEach(store.days) { day in Text(dayTitle(day, trip: store.trip)).tag(day.id) }
         }.pickerStyle(.menu)
@@ -26,58 +26,60 @@ struct ItineraryView: View {
           "这一天还很自由", systemImage: "sun.horizon", description: Text("添加想去的地方和想做的事。"))
       }
       ForEach(activities) { activity in
-        VStack(alignment: .leading, spacing: 9) {
-          Button {
-            editing = activity
-          } label: {
-            VStack(alignment: .leading, spacing: 7) {
-              let p = activity["payload"]
-              Text(
-                p["time"]["mode"].string == "precise"
-                  ? [p["time"]["start"].string, p["time"]["end"].string].filter { !$0.isEmpty }
-                    .joined(separator: " – ")
-                  : p["time"]["period"].string.isEmpty ? "时间灵活" : p["time"]["period"].string
-              ).font(.caption).foregroundStyle(Palette.accent)
-              Text(p["title"].string).font(.headline).foregroundStyle(Palette.text)
-              if !p["place"]["name"].string.isEmpty {
-                Label(p["place"]["name"].string, systemImage: "mappin").font(.subheadline)
-                  .foregroundStyle(Palette.muted)
+        VStack(alignment: .leading, spacing: 12) {
+          if let route = routeFor(activity) {
+            Button {
+              openRoute(activity)
+            } label: {
+              Label(
+                RouteSignature.description(route, objects: store.objects),
+                systemImage: "point.topleft.down.curvedto.point.bottomright.up"
+              )
+              .font(.caption).foregroundStyle(Palette.muted)
+            }.buttonStyle(.plain).listRowBackground(Color.clear)
+          } else if editMode == .active {
+            Button("添加路程") { openRoute(activity) }.listRowBackground(Color.clear)
+          }
+          VStack(alignment: .leading, spacing: 9) {
+            Button {
+              editing = activity
+            } label: {
+              VStack(alignment: .leading, spacing: 7) {
+                let p = activity["payload"]
+                Text(
+                  p["time"]["mode"].string == "precise"
+                    ? [p["time"]["start"].string, p["time"]["end"].string].filter { !$0.isEmpty }
+                      .joined(separator: " – ")
+                    : p["time"]["period"].string.isEmpty ? "时间灵活" : p["time"]["period"].string
+                ).font(.caption).foregroundStyle(Palette.accent)
+                Text(p["title"].string).font(.headline).foregroundStyle(Palette.text)
+                if !p["place"]["name"].string.isEmpty {
+                  Label(p["place"]["name"].string, systemImage: "mappin").font(.subheadline)
+                    .foregroundStyle(Palette.muted)
+                }
+                if !p["notes"].string.isEmpty {
+                  Text(p["notes"].string).font(.subheadline).foregroundStyle(Palette.muted)
+                    .lineLimit(
+                      1)
+                }
+                if let url = URL(string: p["url"].string),
+                  ["https", "http"].contains(url.scheme ?? "")
+                {
+                  Link("查看链接", destination: url).font(.caption)
+                }
               }
-              if !p["notes"].string.isEmpty {
-                Text(p["notes"].string).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(
-                  3)
-              }
-              if let url = URL(string: p["url"].string),
-                ["https", "http"].contains(url.scheme ?? "")
-              {
-                Link("查看链接", destination: url).font(.caption)
-              }
+            }.buttonStyle(.plain)
+            LifecycleActions(
+              object: activity, edit: { editing = activity }, route: { openRoute(activity) })
+          }.contextMenu {
+            LifecycleMenu(
+              object: activity, edit: { editing = activity }, route: { openRoute(activity) })
+          }.swipeActions {
+            if store.canManage {
+              Button("删除", role: .destructive) { store.deleteWithUndo(activity) }
             }
-          }.buttonStyle(.plain)
-          LifecycleActions(object: activity)
-          Button {
-            let route = store.objects.first {
-              $0["kind"].string == "route" && $0["state"].string == "active"
-                && $0["payload"]["toId"].string == activity.id
-            }
-            let index = activities.firstIndex { $0.id == activity.id } ?? 0
-            let previous =
-              route == nil
-              ? (index > 0 ? activities[index - 1] : nil)
-              : store.objects.first { $0.id == route!["payload"]["fromId"].string }
-            routeSelection = RouteSelection(object: route, from: previous, to: activity)
-          } label: {
-            let route = store.objects.first {
-              $0["kind"].string == "route" && $0["state"].string == "active"
-                && $0["payload"]["toId"].string == activity.id
-            }
-            Label(
-              route.map { RouteSignature.description($0, objects: store.objects) } ?? "前往这一站",
-              systemImage: "point.topleft.down.curvedto.point.bottomright.up"
-            )
-            .font(.caption).foregroundStyle(Palette.accent)
-          }.journeyButton()
-        }.padding(.vertical, 2)
+          }.padding(16).background(JourneyCard())
+        }.listRowBackground(Color.clear)
       }.onMove { offsets, dest in
         var items = activities
         items.move(fromOffsets: offsets, toOffset: dest)
@@ -100,8 +102,8 @@ struct ItineraryView: View {
         }
       }
     }.navigationTitle(
-      store.trip["name"].string
-    ).navigationBarTitleDisplayMode(.inline).toolbar {
+      "行程"
+    ).navigationBarTitleDisplayMode(.large).toolbar {
       ToolbarItem(placement: .topBarLeading) {
         Button {
           store.selectedTrip = nil
@@ -119,8 +121,8 @@ struct ItineraryView: View {
           adding = true
         } label: {
           Label("添加活动", systemImage: "plus")
-        }.journeyButton(prominent: true).disabled(dayID.isEmpty).accessibilityLabel("添加活动")
-      }.journeyOwnGlass()
+        }.tint(Palette.accent).disabled(dayID.isEmpty).accessibilityLabel("添加活动")
+      }
     }.sheet(item: $routeSelection) { selection in
       RouteEditor(object: selection.object, from: selection.from, to: selection.to)
     }.environment(\.editMode, $editMode).onAppear { selectDay() }.onChange(of: store.days.map(\.id))
@@ -131,6 +133,21 @@ struct ItineraryView: View {
     }.refreshable {
       do { try await store.refresh() } catch { store.error = error.localizedDescription }
     }
+  }
+  func routeFor(_ activity: JSON) -> JSON? {
+    store.objects.first {
+      $0["kind"].string == "route" && $0["state"].string == "active"
+        && $0["payload"]["toId"].string == activity.id
+    }
+  }
+  func openRoute(_ activity: JSON) {
+    let route = routeFor(activity)
+    let index = activities.firstIndex { $0.id == activity.id } ?? 0
+    let previous =
+      route == nil
+      ? (index > 0 ? activities[index - 1] : nil)
+      : store.objects.first { $0.id == route!["payload"]["fromId"].string }
+    routeSelection = RouteSelection(object: route, from: previous, to: activity)
   }
   func selectDay() {
     if !store.days.contains(where: { $0.id == dayID }) { dayID = store.days.first?.id ?? "" }
@@ -146,52 +163,66 @@ func dayTitle(_ day: JSON, trip: JSON = .null) -> String {
     ).day ?? 0) + 1 : Int(day["payload"]["ordinal"].number)
   return "第 \(ordinal) 天" + (date.isEmpty ? "" : " · \(date)")
 }
+struct LifecycleMenu: View {
+  @EnvironmentObject var store: JourneyStore
+  let object: JSON
+  var edit: (() -> Void)? = nil
+  var route: (() -> Void)? = nil
+  var body: some View {
+    if let edit { Button("编辑", systemImage: "pencil", action: edit) }
+    if let place = object["payload"]["place"].isNull ? nil : object["payload"]["place"],
+      let url = URL(
+        string: "http://maps.apple.com/?q=" + place["name"].string.addingPercentEncoding(
+          withAllowedCharacters: .urlQueryAllowed)!)
+    {
+      Link(destination: url) { Label("在地图查看", systemImage: "map") }
+    }
+    if let route {
+      Button("编辑路程", systemImage: "arrow.triangle.turn.up.right.diamond", action: route)
+    }
+    if object["kind"].string == "activity" { expression("notParticipating", "我不参加") }
+    expression(
+      object["state"].string == "deleted" ? "wishRestore" : "wishDelete",
+      object["state"].string == "deleted" ? "希望恢复" : "希望删除")
+    if store.canManage {
+      Divider()
+      if object["state"].string == "deleted" {
+        Button("恢复", systemImage: "arrow.uturn.backward") {
+          store.perform { try await store.mutate(object: object, kind: "restore") }
+        }
+      } else {
+        Button("删除", systemImage: "trash", role: .destructive) { store.deleteWithUndo(object) }
+      }
+    }
+  }
+  func expression(_ key: String, _ title: String) -> some View {
+    let active =
+      object["expressions"].array.first { $0["userId"].string == store.user.id }?[key].bool ?? false
+    return Button(active ? "取消\(title)" : title) {
+      store.perform {
+        try await store.mutate(
+          object: object, kind: "express", expression: .object([key: .bool(!active)]))
+      }
+    }
+  }
+}
 struct LifecycleActions: View {
   @EnvironmentObject var store: JourneyStore
   let object: JSON
-  var expressionChoices: [(String, String)] {
-    var choices: [(String, String)] = []
-    if object["kind"].string == "activity" { choices.append(("notParticipating", "不参与")) }
-    choices.append(
-      object["state"].string == "deleted" ? ("wishRestore", "希望恢复") : ("wishDelete", "希望删除"))
-    return choices
-  }
+  var edit: (() -> Void)? = nil
+  var route: (() -> Void)? = nil
   var body: some View {
-    HStack(spacing: 10) {
-      if store.canManage {
-        Menu {
-          Button(
-            object["state"].string == "deleted" ? "恢复" : "删除",
-            role: object["state"].string == "deleted" ? nil : .destructive
-          ) {
-            store.perform {
-              try await store.mutate(
-                object: object, kind: object["state"].string == "deleted" ? "restore" : "delete")
-            }
-          }
-        } label: {
-          Image(systemName: "ellipsis").frame(minWidth: 28, minHeight: 28)
-        }.accessibilityLabel("更多操作").journeyButton()
-      }
+    HStack {
+      let absent = object["expressions"].array.filter { $0["notParticipating"].bool }.count
+      let wishes = object["expressions"].array.filter { $0["wishDelete"].bool }.count
+      if absent > 0 { Text("\(absent) 人不参加").foregroundStyle(Palette.muted) }
+      if wishes > 0 { Text("\(wishes) 人希望删除").foregroundStyle(Palette.muted) }
+      Spacer()
       Menu {
-        ForEach(expressionChoices, id: \.0) { key, title in
-          let active =
-            object["expressions"].array.first { $0["userId"].string == store.user.id }?[key].bool
-            ?? false
-          Button(active ? "取消\(title)" : title) {
-            store.perform {
-              try await store.mutate(
-                object: object, kind: "express", expression: .object([key: .bool(!active)]))
-            }
-          }
-        }
+        LifecycleMenu(object: object, edit: edit, route: route)
       } label: {
-        Label("表态", systemImage: "bubble.left").frame(minHeight: 28)
-      }.journeyButton()
-      let count = object["expressions"].array.filter {
-        $0["wishDelete"].bool || $0["wishRestore"].bool || $0["notParticipating"].bool
-      }.count
-      if count > 0 { Text("\(count) 位同伴已表态").foregroundStyle(Palette.muted) }
+        Image(systemName: "ellipsis").frame(minWidth: 44, minHeight: 44)
+      }.accessibilityLabel("更多操作").buttonStyle(.plain).foregroundStyle(Palette.accent)
     }.font(.caption)
   }
 }
@@ -211,6 +242,7 @@ struct ActivityEditor: View {
   @State private var search = false
   @State private var initialized = false
   @State private var finished = false
+  @State private var createdID = UUID().uuidString
   func text(_ key: String) -> Binding<String> {
     Binding(
       get: { form[key].string },
@@ -233,21 +265,30 @@ struct ActivityEditor: View {
     do {
       try store.setDraft(
         draftKey,
-        .object(["form": form, "baseline": baseline, "dirty": .array(dirty.map(JSON.string))]))
+        .object([
+          "form": form, "baseline": baseline, "objectId": .string(createdID),
+          "dirty": .array(dirty.map(JSON.string)),
+        ]))
     } catch { store.error = error.localizedDescription }
   }
   var body: some View {
     NavigationStack {
       JourneyForm {
+        EditorSaveStatus(draftKey: draftKey)
         if !restore.isNull {
           Section {
             Text("有上次未完成的输入")
             Button("恢复输入") {
-              form = restore["form"]
               dirty = Set(restore["dirty"].array.map(\.string))
+              let current =
+                store.objects.first { $0.id == (object?.id ?? createdID) }?["payload"] ?? form
+              form = current
+              for key in dirty { form[key] = restore["form"][key] }
               restore = .null
             }
             Button("使用当前内容") {
+              if object == nil { createdID = UUID().uuidString }
+              dirty.removeAll()
               restore = .null
               try? store.removeDraft(draftKey)
             }
@@ -306,24 +347,31 @@ struct ActivityEditor: View {
           ).autocorrectionDisabled()
         }
       }.navigationTitle(object == nil ? "添加活动" : "编辑活动").toolbar {
-        ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+        ToolbarItem(placement: .cancellationAction) {
+          Button("收起") { save(close: true, reportErrors: false) }
+        }
         ToolbarItem(placement: .confirmationAction) {
-          Button("保存") { save() }.disabled(
+          Button("完成") { save(close: true) }.lineLimit(1).fixedSize().disabled(
             form["title"].string.trimmingCharacters(in: .whitespaces).isEmpty || store.busy
               || !restore.isNull
-          ).journeyButton(prominent: true).accessibilityIdentifier("activity.save")
-        }.journeyOwnGlass()
-      }.onAppear { initialize() }.onChange(of: store.objects) { _, objects in
-        guard let obj = objects.first(where: { $0.id == object?.id }) else { return }
-        for (key, value) in obj["payload"].dictionary where !dirty.contains(key) {
-          form[key] = value
+          ).accessibilityIdentifier("activity.save")
         }
-      }.sheet(isPresented: $search) {
-        PlacePicker { place in
-          form["place"] = place
-          changed("place")
+      }.task(id: form) {
+        guard initialized, !finished, restore.isNull, !dirty.isEmpty else { return }
+        do { try await Task.sleep(for: .milliseconds(450)) } catch { return }
+        await persist(reportErrors: false)
+      }.onDisappear { save(close: false, reportErrors: false) }
+        .onAppear { initialize() }.onChange(of: store.objects) { _, objects in
+          guard let obj = objects.first(where: { $0.id == object?.id }) else { return }
+          for (key, value) in obj["payload"].dictionary where !dirty.contains(key) {
+            form[key] = value
+          }
+        }.sheet(isPresented: $search) {
+          PlacePicker { place in
+            form["place"] = place
+            changed("place")
+          }
         }
-      }
     }
   }
   func buffer(_ key: String, _ label: String) -> some View {
@@ -359,37 +407,70 @@ struct ActivityEditor: View {
       ])
     baseline = form
     let saved = store.draft(draftKey)
-    if !saved.isNull { restore = saved }
+    if saved.isNull && object == nil && !initialPlace.isNull { changed("place") }
+    if !saved.isNull {
+      restore = saved
+      if !saved["objectId"].string.isEmpty { createdID = saved["objectId"].string }
+    }
   }
-  func save() {
-    store.perform {
-      if form["time"]["mode"].string == "precise" {
+  func save(close: Bool, reportErrors: Bool = true) {
+    Task {
+      await persist(reportErrors: reportErrors)
+      if close
+        && (!reportErrors
+          || form["title"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            && dirty.isEmpty)
+      {
+        finished = true
+        dismiss()
+      }
+    }
+  }
+  func persist(reportErrors: Bool) async {
+    if initialized, object == nil, initialPlace.isNull, form == baseline,
+      !store.objects.contains(where: { $0.id == createdID }), restore.isNull
+    {
+      do {
+        try store.removeDraft(draftKey)
+        dirty.removeAll()
+      } catch { store.error = error.localizedDescription }
+      return
+    }
+    guard initialized, !finished, restore.isNull, !dirty.isEmpty,
+      !form["title"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    else { return }
+    do {
+      var payload = form
+      if payload["time"]["mode"].string == "precise" {
         let pattern = #"^([01]\d|2[0-3]):[0-5]\d$"#
-        guard form["time"]["start"].string.range(of: pattern, options: .regularExpression) != nil
+        guard payload["time"]["start"].string.range(of: pattern, options: .regularExpression) != nil
         else { throw APIError(message: "开始时间请填写 HH:mm") }
-        if !form["time"]["end"].string.isEmpty,
-          form["time"]["end"].string.range(of: pattern, options: .regularExpression) == nil
+        if !payload["time"]["end"].string.isEmpty,
+          payload["time"]["end"].string.range(of: pattern, options: .regularExpression) == nil
         {
           throw APIError(message: "结束时间请填写 HH:mm")
         }
+      } else {
+        payload["time"]["start"] = .null
+        payload["time"]["end"] = .null
       }
-      if form["time"]["mode"].string == "flexible" {
-        form["time"]["start"] = .null
-        form["time"]["end"] = .null
+      for key in ["start", "end"] where payload["time"][key].string.isEmpty {
+        payload["time"][key] = .null
       }
-      for key in ["start", "end"] where form["time"][key].string.isEmpty {
-        form["time"][key] = .null
-      }
-      let patch = object == nil ? form : .object(form.dictionary.filter { dirty.contains($0.key) })
-      if object == nil || !patch.dictionary.isEmpty {
-        try await store.mutate(
-          object: object, kind: object == nil ? "create" : "patch",
-          type: object == nil ? "activity" : nil, patch: patch, expectedTrip: tripID,
-          expectedAccount: account)
-      }
-      finished = true
+      let target = store.objects.first { $0.id == (object?.id ?? createdID) } ?? object
+      let patch =
+        target == nil ? payload : .object(payload.dictionary.filter { dirty.contains($0.key) })
+      try await store.mutate(
+        object: target, kind: target == nil ? "create" : "patch",
+        type: target == nil ? "activity" : nil,
+        patch: patch, id: target == nil ? createdID : nil, expectedTrip: tripID,
+        expectedAccount: account)
+      dirty.removeAll()
       try store.removeDraft(draftKey)
-      dismiss()
+    } catch {
+      if reportErrors || !(error is APIError) || (error as? APIError)?.code == "LOCAL_STORAGE" {
+        store.error = error.localizedDescription
+      }
     }
   }
 }

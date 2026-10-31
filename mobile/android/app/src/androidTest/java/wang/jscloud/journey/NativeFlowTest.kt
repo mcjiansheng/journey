@@ -50,7 +50,7 @@ class NativeFlowTest {
         waitText(trip!!)
         capture("android-home")
         compose.onNodeWithText(trip).performClick()
-        waitText("一起走过的每一天")
+        waitText("添加活动")
         capture("android-itinerary")
         compose.onNodeWithText("地图", substring = false).performClick()
         waitText("我的收藏")
@@ -66,7 +66,7 @@ class NativeFlowTest {
         val title = "原生验收费用-${System.currentTimeMillis()}"
         compose.onNodeWithText("费用名称（可不填）").performTextInput(title)
         compose.onNodeWithText("金额", substring = false).performTextInput("12.50")
-        compose.onNodeWithText("保存费用").performScrollTo().performClick()
+        compose.onNodeWithText("完成", substring = false).performClick()
         waitText(title)
         compose.onNodeWithText("管理", substring = false).performClick()
         waitText("旅程管理")
@@ -78,7 +78,7 @@ class NativeFlowTest {
         val activity = "原生验收活动-${System.currentTimeMillis()}"
         compose.onNodeWithText("活动名称").performTextInput(activity)
         capture("android-activity-editor")
-        compose.onNodeWithText("保存活动").performScrollTo().performClick()
+        compose.onNodeWithText("完成", substring = false).performClick()
         compose.waitUntil(30000) {
             compose
                 .onAllNodesWithText(activity, substring = true)

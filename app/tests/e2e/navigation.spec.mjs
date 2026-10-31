@@ -93,6 +93,7 @@ test('navigation indicator moves across pages and rapid reversals return home cl
 });
 
 test('map collapses its sidebar while navigation icons stay stable',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('journey.appearance',JSON.stringify({autoCollapseMapSidebar:true})));
  await page.setViewportSize({width:1440,height:900});await register(page);await createTrip(page);
  await screenshot(page,'itinerary-desktop');
  const title=page.locator('.trip-title>span');const before=await page.evaluate(()=>{
@@ -139,7 +140,7 @@ test('day content crossfades in place with smooth height changes and rapid rever
   const content=await page.evaluate(async targetDay=>{
    const target=document.querySelector('.day-content'),stage=target.parentElement;
    const measure=()=>{
-    const heading=target.querySelector('.day-heading h2').getBoundingClientRect(),list=target.querySelector('.activity-list').getBoundingClientRect();
+    const heading=document.querySelector('.itinerary-toolbar').getBoundingClientRect(),list=target.querySelector('.activity-list').getBoundingClientRect();
     return{headingX:heading.x,headingY:heading.y,listX:list.x,listY:list.y,height:stage.getBoundingClientRect().height,opacity:Number(getComputedStyle(target).opacity),outgoing:[...stage.querySelectorAll('.day-content-outgoing')].map(node=>({inert:node.inert,hidden:node.getAttribute('aria-hidden'),text:node.textContent,opacity:Number(getComputedStyle(node).opacity)}))};
    };
    const before=measure(),frames=[],start=performance.now();document.querySelectorAll('.day-tabs [role="tab"]')[targetDay].click();
@@ -177,7 +178,7 @@ test('day content crossfades in place with smooth height changes and rapid rever
  const interruptedResize=await page.evaluate(async()=>{
   const content=document.querySelector('.day-content'),stage=content.parentElement,frames=[],start=performance.now();
   document.querySelectorAll('.day-tabs [role="tab"]')[1].click();await new Promise(resolve=>setTimeout(resolve,65));
-  content.querySelector('[aria-label="当天操作"]').click();
+  document.querySelector('[aria-label="当天操作"]').click();
   while(performance.now()-start<430){await new Promise(requestAnimationFrame);frames.push({height:stage.getBoundingClientRect().height,contentHeight:content.getBoundingClientRect().height})}
   return frames;
  });
@@ -206,7 +207,7 @@ test('mobile widths, reduced motion, and WebKit keep navigation reachable',async
  }))).toBe(true);
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();
  await page.getByLabel('当前计划日').selectOption({index:1});
- await expect(page.locator('.day-content h2')).toContainText('第2天');await expect(page.locator('.day-content-outgoing')).toHaveCount(0);
+ await expect(page.getByLabel('当前计划日').locator('option:checked')).toContainText('第2天');await expect(page.locator('.day-content-outgoing')).toHaveCount(0);
  expect(await page.locator('.day-content-stage').evaluate(stage=>({animations:stage.getAnimations({subtree:true}).length,opacity:getComputedStyle(stage.querySelector('.day-content')).opacity}))).toEqual({animations:0,opacity:'1'});
  const browser=await launchWebKit();
  try{

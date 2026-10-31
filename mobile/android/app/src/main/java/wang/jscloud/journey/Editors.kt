@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.UUID
@@ -44,14 +45,17 @@ fun ActivitySheet(
             )
     }
     var data by remember { mutableStateOf(initial.copyJson()) }
-    val dirty = remember { mutableStateListOf<String>() }
+    val dirty = remember { mutableStateListOf<String>().apply {
+        if (existing == null && initialPlace != null) add("place")
+    } }
     var oldDraft by remember { mutableStateOf(s.draft(key)) }
     var draftReady by remember { mutableStateOf(oldDraft == null) }
     fun set(group: String, value: Any?) {
         data = data.copyJson().put(group, value ?: JSONObject.NULL)
         if (group !in dirty) dirty.add(group)
     }
-    val latest = s.objects("activity").find { it.s("id") == existing?.s("id") }
+    var session by remember { mutableStateOf(EditorSession(s, key, "activity", existing, oldDraft)) }
+    val latest = s.objects("activity").find { it.s("id") == session.objectId }
     LaunchedEffect(latest?.toString()) {
         latest?.o("payload")?.let { p ->
             val n = data.copyJson()
@@ -59,29 +63,54 @@ fun ActivitySheet(
             data = n
         }
     }
+    val valid = data.s("title").isNotBlank() && data.s("title").trim().length <= 240 && data.s("dayId").isNotBlank() &&
+        listOf("before", "after").all { data.o("buffers").isNull(it) || data.o("buffers").optDouble(it) >= 0 } &&
+        (data.s("url").isBlank() || runCatching { java.net.URI(data.s("url")).let {
+            it.isAbsolute && it.scheme.lowercase() in listOf("https", "http") && !it.host.isNullOrBlank()
+        } }.getOrDefault(false)) &&
+        (data.o("time").s("end").isBlank() || data.o("time").optInt("endDayOffset") > 0 ||
+            data.o("time").s("end") >= data.o("time").s("start")) &&
+        (data.o("time").s("mode") != "precise" ||
+            runCatching { java.time.LocalTime.parse(data.o("time").s("start")) }.isSuccess) &&
+        (data.o("time").s("end").isBlank() ||
+            runCatching { java.time.LocalTime.parse(data.o("time").s("end")) }.isSuccess)
+    fun persist(done: (() -> Unit)? = null) {
+        if (draftReady) session.save(obj("payload" to data.copyJson()),
+            if (valid) data.copyJson() else null, dirty.toList(), done) { savedDraft, fields ->
+                fields.forEach { field ->
+                    if (data.opt(field)?.toString() == savedDraft.o("payload").opt(field)?.toString()) dirty.remove(field)
+                }
+            } else done?.invoke()
+    }
     LaunchedEffect(data.toString(), draftReady) {
-        if (draftReady) {
-            delay(300)
-            val payload = data.copyJson()
-            s.launch { s.saveDraft(key, obj("payload" to payload), tripId, uid) }
+        if (draftReady && dirty.isNotEmpty()) {
+            // Draft persistence is immediate; publishing waits until typing pauses.
+            session.save(obj("payload" to data.copyJson()), null, dirty.toList())
+            delay(500)
+            persist()
         }
     }
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    Sheet(if (existing == null) "添加活动" else "编辑活动", close) {
+    Sheet(if (existing == null) "添加活动" else "编辑活动", { persist(close) },
+        onDone = { persist(close) }, doneEnabled = draftReady && valid) {
+        EditorSaveStatus(s, valid)
         if (oldDraft != null)
             Panel {
                 Text("发现上次未完成的输入")
                 Row {
                     TextButton({
-                        data = oldDraft!!.o("payload").copyJson()
-                        data.keys().forEach { if (it !in dirty) dirty.add(it) }
+                        val restoredFields = editorDraftFields(oldDraft!!)
+                        data = restoreEditorDraft(data, oldDraft!!)
+                        restoredFields.forEach { if (it !in dirty) dirty.add(it) }
                         oldDraft = null
                         draftReady = true
                     }) {
                         Text("恢复输入")
                     }
                     TextButton({
+                        session = EditorSession(s, key, "activity", existing, null)
+                        s.launch { s.clearEditorDraft(key) }
                         oldDraft = null
                         draftReady = true
                     }) {
@@ -113,17 +142,21 @@ fun ActivitySheet(
             )
         }
         if (t.s("mode") == "flexible")
-            Field("时段，如 上午", t.s("period"), { set("time", t.copyJson().put("period", it)) })
+            Choice("时段", t.s("period").ifBlank { "暂不设置" },
+                listOf("暂不设置", "清晨", "上午", "中午", "下午", "晚上", "深夜")) {
+                set("time", t.copyJson().put("period", if (it == "暂不设置") "" else it))
+            }
         else {
-            Field(
-                "开始 HH:mm",
+            TimeField(
+                "开始时间",
                 t.s("start"),
                 { set("time", t.copyJson().put("start", it.ifBlank { null } ?: JSONObject.NULL)) },
             )
-            Field(
-                "结束 HH:mm（可不填）",
+            TimeField(
+                "结束时间",
                 t.s("end"),
                 { set("time", t.copyJson().put("end", it.ifBlank { null } ?: JSONObject.NULL)) },
+                optional = true,
             )
             Choice("结束日期", t.optInt("endDayOffset").toString(), (0..7).map { it.toString() }) {
                 set("time", t.copyJson().put("endDayOffset", it.toInt()))
@@ -136,16 +169,8 @@ fun ActivitySheet(
                 Text(place.s("address"))
                 TextButton({ set("place", null) }) { Text("移除地点") }
             }
-        Field("搜索地点", query, { query = it })
-        SecondaryButton(
-            {
-                s.action {
-                    results = s.api.search(query, s.snapshot?.o("trip")?.s("destination").orEmpty())
-                }
-            },
-            enabled = query.isNotBlank(),
-        ) {
-            Text("搜索")
+        PlaceSearchField(query, { query = it }) {
+            s.action { results = s.api.search(query, s.snapshot?.o("trip")?.s("destination").orEmpty()) }
         }
         results.take(6).forEach { p ->
             TextButton({
@@ -181,37 +206,7 @@ fun ActivitySheet(
         )
         Field("备注", data.s("notes"), { set("notes", it) }, single = false)
         Field("相关链接", data.s("url"), { set("url", it) })
-        Button(
-            {
-                val captured = data.copyJson()
-                s.action {
-                    require(s.tripId == tripId && s.user?.s("id") == uid) { "当前旅程已变化，请重新打开编辑" }
-                    val patch =
-                        if (existing == null) captured
-                        else JSONObject().apply { dirty.forEach { g -> put(g, captured.get(g)) } }
-                    if (existing != null && patch.length() == 0) {
-                        close()
-                        return@action
-                    }
-                    s.mutate(
-                        if (existing == null) "create" else "patch",
-                        existing?.s("id") ?: UUID.randomUUID().toString(),
-                        if (existing == null) "activity" else null,
-                        patch,
-                        clearDraft = key,
-                    )
-                    close()
-                }
-            },
-            enabled =
-                !s.busy &&
-                    draftReady &&
-                    data.s("title").isNotBlank() &&
-                    data.s("dayId").isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("保存活动")
-        }
+
     }
 }
 
@@ -256,7 +251,8 @@ fun ExpenseSheet(s: JourneyStore, existing: JSONObject?, close: () -> Unit) {
         data = data.copyJson().put(group, value ?: JSONObject.NULL)
         if (group !in dirty) dirty.add(group)
     }
-    val latest = s.objects("expense").find { it.s("id") == existing?.s("id") }
+    var session by remember { mutableStateOf(EditorSession(s, key, "expense", existing, oldDraft)) }
+    val latest = s.objects("expense").find { it.s("id") == session.objectId }
     LaunchedEffect(latest?.toString()) {
         latest?.o("payload")?.let { p ->
             val n = data.copyJson()
@@ -275,28 +271,52 @@ fun ExpenseSheet(s: JourneyStore, existing: JSONObject?, close: () -> Unit) {
                     }
         }
     }
+    val payload = runCatching {
+        data.copyJson().apply {
+            val payment = o("payment")
+            val minor = parseMinor(amount, payment.s("currency"))
+            require(payment.s("status") != "paid" || minor != null)
+            payment.put("amountMinor", minor ?: JSONObject.NULL)
+            if (s("date").isNotBlank()) LocalDate.parse(s("date"))
+        }
+    }.getOrNull()
+    val valid = expenseCanPublish(payload, session.hasObject, amount)
+    fun persist(done: (() -> Unit)? = null) {
+        if (draftReady) session.save(obj("payload" to data.copyJson(), "amountText" to amount),
+            if (valid) payload else null, dirty.toList(), done) { savedDraft, fields ->
+                fields.forEach { field ->
+                    if (data.opt(field)?.toString() == savedDraft.o("payload").opt(field)?.toString() &&
+                        (field != "payment" || amount == savedDraft.s("amountText"))) dirty.remove(field)
+                }
+            } else done?.invoke()
+    }
     LaunchedEffect(data.toString(), amount, draftReady) {
-        if (draftReady) {
-            delay(300)
-            val captured = obj("payload" to data.copyJson(), "amountText" to amount)
-            s.launch { s.saveDraft(key, captured, tripId, uid) }
+        if (draftReady && dirty.isNotEmpty()) {
+            session.save(obj("payload" to data.copyJson(), "amountText" to amount), null, dirty.toList())
+            delay(500)
+            persist()
         }
     }
-    Sheet(if (existing == null) "添加费用" else "编辑费用", close) {
+    Sheet(if (existing == null) "添加费用" else "编辑费用", { persist(close) },
+        onDone = { persist(close) }, doneEnabled = draftReady && valid) {
+        EditorSaveStatus(s, valid)
         if (oldDraft != null)
             Panel {
                 Text("发现上次未完成的输入")
                 Row {
                     TextButton({
-                        data = oldDraft!!.o("payload").copyJson()
-                        amount = oldDraft!!.s("amountText")
-                        data.keys().forEach { if (it !in dirty) dirty.add(it) }
+                        val restoredFields = editorDraftFields(oldDraft!!)
+                        data = restoreEditorDraft(data, oldDraft!!)
+                        restoredFields.forEach { if (it !in dirty) dirty.add(it) }
+                        if ("payment" in restoredFields) amount = oldDraft!!.s("amountText")
                         oldDraft = null
                         draftReady = true
                     }) {
                         Text("恢复输入")
                     }
                     TextButton({
+                        session = EditorSession(s, key, "expense", existing, null)
+                        s.launch { s.clearEditorDraft(key) }
                         oldDraft = null
                         draftReady = true
                     }) {
@@ -325,7 +345,7 @@ fun ExpenseSheet(s: JourneyStore, existing: JSONObject?, close: () -> Unit) {
             payment.s("currency"),
             { set("payment", payment.copyJson().put("currency", it.uppercase())) },
         )
-        Field("日期 YYYY-MM-DD（可不填）", data.s("date"), { set("date", it.ifBlank { null }) })
+        DateField("日期", data.s("date"), { set("date", it.ifBlank { null }) }, optional = true)
         Field("备注", data.s("notes"), { set("notes", it) }, single = false)
         val activities =
             s.objects("activity").associate { it.s("id") to it.o("payload").s("title") }
@@ -339,45 +359,13 @@ fun ExpenseSheet(s: JourneyStore, existing: JSONObject?, close: () -> Unit) {
                 if (v == "不关联") null else activities.entries.first { it.value == v }.key,
             )
         }
-        Button(
-            {
-                val captured = data.copyJson()
-                val text = amount
-                s.action {
-                    require(s.tripId == tripId && s.user?.s("id") == uid) { "当前旅程已变化，请重新打开编辑" }
-                    val p = captured.o("payment")
-                    val minor = parseMinor(text, p.s("currency"))
-                    require(p.s("status") != "paid" || minor != null) { "请填写已支付金额" }
-                    p.put("amountMinor", minor ?: JSONObject.NULL)
-                    if (captured.s("date").isNotEmpty()) LocalDate.parse(captured.s("date"))
-                    val patch =
-                        if (existing == null) captured
-                        else JSONObject().apply { dirty.forEach { g -> put(g, captured.get(g)) } }
-                    if (existing != null && patch.length() == 0) {
-                        close()
-                        return@action
-                    }
-                    s.mutate(
-                        if (existing == null) "create" else "patch",
-                        existing?.s("id") ?: UUID.randomUUID().toString(),
-                        if (existing == null) "expense" else null,
-                        patch,
-                        clearDraft = key,
-                    )
-                    close()
-                }
-            },
-            enabled = !s.busy && draftReady,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("保存费用")
-        }
+
     }
 }
 
 @Composable
 fun LedgerScreen(s: JourneyStore, edit: (JSONObject?) -> Unit) {
-    Heading("旅途花费", "每一笔，一起记。")
+    Heading("费用")
     val rows = s.objects("expense")
     val active = rows.filter { it.s("state") == "active" }
     active
@@ -391,31 +379,37 @@ fun LedgerScreen(s: JourneyStore, edit: (JSONObject?) -> Unit) {
                 items
                     .filter { it.o("payload").o("payment").s("status") == "estimated" }
                     .sumOf { it.o("payload").o("payment").optLong("amountMinor") }
-            Panel {
-                Text("已支付  " + money(paid, code), style = MaterialTheme.typography.headlineSmall)
-                Text("预计  " + money(estimated, code))
+            if (paid != 0L || estimated != 0L) Panel {
+                if (paid != 0L) Text("已支付  " + money(paid, code), style = MaterialTheme.typography.headlineSmall)
+                if (estimated != 0L) Text("预计  " + money(estimated, code))
                 val missing = items.count { it.o("payload").o("payment").isNull("amountMinor") }
                 if (missing > 0) Text("$missing 笔待定金额")
             }
         }
     Button({ edit(null) }) { Text("添加费用") }
     if (rows.isEmpty()) Panel { Text("还没有费用记录") }
-    rows.forEach { o ->
+    var previousDate: String? = null
+    rows.sortedBy { it.o("payload").s("date").ifBlank { "9999" } }.forEach { o ->
         val p = o.o("payload")
+        val date = p.s("date").ifBlank { "日期未记录" }
+        if (date != previousDate) Text(date, style = MaterialTheme.typography.titleSmall)
+        previousDate = date
         val payment = p.o("payment")
         Panel {
-            Text(p.s("title").ifBlank { "未命名费用" }, style = MaterialTheme.typography.titleMedium)
-            Text(
-                if (payment.isNull("amountMinor")) "金额待定"
-                else money(payment.optLong("amountMinor"), payment.s("currency"))
-            )
-            Text((if (payment.s("status") == "paid") "已支付" else "预计") + "  " + p.s("date"))
-            if (p.s("notes").isNotBlank()) Text(p.s("notes"))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(p.s("title").ifBlank { "未命名费用" }, style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f))
+                Text(if (payment.isNull("amountMinor")) "金额待定"
+                    else money(payment.optLong("amountMinor"), payment.s("currency")),
+                    style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"))
+            }
+            Text(if (payment.s("status") == "paid") "已支付" else "预计",
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (p.s("notes").isNotBlank()) Text(p.s("notes"), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             s.objects("activity")
                 .find { it.s("id") == p.s("activityId") }
                 ?.let { Text("关联：" + it.o("payload").s("title")) }
-            TextButton({ edit(o) }) { Text("编辑") }
-            ObjectActions(s, o)
+            ObjectActions(s, o, onEdit = { edit(o) })
         }
     }
 }
@@ -433,8 +427,8 @@ fun ScheduleSheet(s: JourneyStore, close: () -> Unit) {
     }
     var move by remember { mutableStateOf(false) }
     Sheet("调整旅程日期", close) {
-        Field("开始 YYYY-MM-DD", start, { start = it })
-        Field("结束 YYYY-MM-DD", end, { end = it })
+        DateField("开始日期", start, { start = it })
+        DateField("结束日期", end, { end = it })
         Row {
             Checkbox(move, { move = it })
             Text("活动跟随原来的第几天移动")

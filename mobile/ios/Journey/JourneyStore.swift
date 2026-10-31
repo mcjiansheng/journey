@@ -7,6 +7,9 @@ import SwiftUI
   @Published var cache = AccountCache()
   @Published var selectedTrip: String?
   @Published var error: String?
+  @Published var undoDeletion: JSON?
+  private var undoTrip = ""
+  private var undoAccount = ""
   @Published var status = "正在连接…"
   @Published var ready = false
   @Published var busy = false
@@ -72,7 +75,9 @@ import SwiftUI
   }
   init(urlSession: URLSession? = nil, serverURL: String? = nil, storageDirectory: URL? = nil) {
     self.storageDirectory = storageDirectory
-    baseURL = serverURL ?? ProcessInfo.processInfo.environment["JOURNEY_SERVER_URL"] ?? "https://journey.jscloud.wang"
+    baseURL =
+      serverURL ?? ProcessInfo.processInfo.environment["JOURNEY_SERVER_URL"]
+      ?? "https://journey.jscloud.wang"
     deviceID = UserDefaults.standard.string(forKey: "journey.device") ?? UUID().uuidString
     UserDefaults.standard.set(deviceID, forKey: "journey.device")
     let c = URLSessionConfiguration.default
@@ -450,6 +455,28 @@ import SwiftUI
     try await refresh()
     try await refreshTrips()
   }
+  func deleteWithUndo(_ object: JSON) {
+    let tripID = selectedTrip ?? ""
+    let account = user.id
+    perform {
+      try await self.mutate(
+        object: object, kind: "delete", expectedTrip: tripID, expectedAccount: account)
+      self.undoDeletion = object
+      self.undoTrip = tripID
+      self.undoAccount = account
+    }
+  }
+  func undoDelete() {
+    guard let object = undoDeletion else { return }
+    perform {
+      let current =
+        object.id == self.trip.id ? self.trip : self.objects.first { $0.id == object.id } ?? object
+      try await self.mutate(
+        object: current, kind: "restore", expectedTrip: self.undoTrip,
+        expectedAccount: self.undoAccount)
+      self.undoDeletion = nil
+    }
+  }
   func perform(_ action: @escaping () async throws -> Void) {
     Task {
       busy = true
@@ -481,7 +508,8 @@ import SwiftUI
     guard pollTask == nil else { return }
     pollTask = Task { [weak self] in
       if let self, self.ready, !self.user.isNull,
-         self.csrf.isEmpty || self.lease == nil || self.lease!.clock()["uncertain"].bool {
+        self.csrf.isEmpty || self.lease == nil || self.lease!.clock()["uncertain"].bool
+      {
         await self.pollCycle()
       }
       while !Task.isCancelled {

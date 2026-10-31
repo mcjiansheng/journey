@@ -49,7 +49,7 @@ test('continuation skips management while retaining day and draft, sync opens di
   await expect(mobile.getByLabel('当前计划日').locator('option:checked')).toContainText('第2天');
   const saved=await mobile.evaluate(async tripId=>(await fetch('/api/trips').then(r=>r.json())).navigation.contexts[tripId],credentials.tripId);
   expect(saved.drafts.review.title).toBe('待续草稿');
-  await second.setOffline(true);await mobile.reload();await mobile.getByRole('button',{name:/继续旅程/}).click();
+  await mobile.evaluate(()=>navigator.serviceWorker.ready);await expect.poll(()=>mobile.evaluate(()=>!!navigator.serviceWorker.controller)).toBe(true);await second.setOffline(true);await mobile.reload();await mobile.getByRole('button',{name:/继续旅程/}).click();
   await expect(mobile.locator('.sync-status.offline span')).toBeVisible();
   await mobile.screenshot({path:'../.local/evidence/frontend-review/mobile-offline.png'});
  }finally{await second.close()}

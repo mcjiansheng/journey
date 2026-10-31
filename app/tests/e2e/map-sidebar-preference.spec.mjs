@@ -47,8 +47,8 @@ async function checkPreference(page,viewport){
  await page.setViewportSize(viewport);await seed(page);
  const full={width:viewport.width<=1100?180:200,height:viewport.height-28};
  await expectSidebar(page,full);
- await nav(page,'地图').click();await expectSidebar(page,{width:72,height:342,compact:true});
- const toggle=await openPreferences(page);await expect(toggle).toBeChecked();await toggle.uncheck();
+ await nav(page,'地图').click();await expectSidebar(page,full);
+ const toggle=await openPreferences(page);await expect(toggle).not.toBeChecked();await toggle.check();await toggle.uncheck();
  await expect(page.locator('html')).toHaveAttribute('data-map-sidebar-collapse','false');
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('journey.appearance')).autoCollapseMapSidebar)).toBe(false);
  await page.keyboard.press('Escape');await expectSidebar(page,full);
@@ -65,8 +65,8 @@ async function checkPreference(page,viewport){
  await expect(page.locator('.sidebar')).toBeHidden();
  const mobileNav=page.getByRole('navigation',{name:'手机主导航',exact:true});await expect(mobileNav).toBeVisible();
  const before=await mobileNav.boundingBox();
- await page.getByRole('button',{name:'个人设置',exact:true}).click();
- await page.getByRole('switch',{name:'地图自动收起侧栏',exact:true}).uncheck();await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'返回我的旅程',exact:true}).click();await page.locator('.profile-button').click();
+ await page.getByRole('switch',{name:'地图自动收起侧栏',exact:true}).uncheck();await page.keyboard.press('Escape');await page.getByRole('button',{name:/继续旅程/}).click();
  await expect(page.locator('.sidebar')).toBeHidden();await expect(mobileNav).toBeVisible();
  const after=await mobileNav.boundingBox();
  for(const key of ['x','y','width','height'])expect(after[key]).toBeCloseTo(before[key]);

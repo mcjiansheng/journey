@@ -146,6 +146,9 @@ struct TripMapView: View {
   }
   var body: some View {
     VStack(spacing: 0) {
+      Text(store.trip["name"].string).font(.subheadline).foregroundStyle(Palette.muted).frame(
+        maxWidth: .infinity, alignment: .leading
+      ).padding(.horizontal).padding(.bottom, 8)
       Map(position: $camera) {
         ForEach(
           store.objects.filter {
@@ -201,7 +204,7 @@ struct TripMapView: View {
         }
       }.frame(maxHeight: 250)
     }.onAppear { fitInitialCamera() }.onChange(of: pins.map(\.id)) { _, _ in fitInitialCamera() }
-      .navigationTitle("沿途地图").navigationBarTitleDisplayMode(.inline).toolbar {
+      .navigationTitle("地图").navigationBarTitleDisplayMode(.large).toolbar {
         Button {
           searching = true
         } label: {

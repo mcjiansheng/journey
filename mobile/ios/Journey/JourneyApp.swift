@@ -33,14 +33,30 @@ struct RootView: View {
       } else {
         HomeView()
       }
-    }.alert(
-      "未能完成",
-      isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })
-    ) {
-      Button("好") { store.error = nil }
-    } message: {
-      Text(store.error ?? "")
-    }
+    }.onChange(of: store.selectedTrip) { _, _ in store.undoDeletion = nil }
+      .onChange(of: store.user.id) { _, _ in store.undoDeletion = nil }
+      .overlay(alignment: .bottom) {
+        if store.undoDeletion != nil {
+          HStack {
+            Text("已删除")
+            Spacer()
+            Button("撤销") { store.undoDelete() }
+            Button {
+              store.undoDeletion = nil
+            } label: {
+              Image(systemName: "xmark")
+            }.accessibilityLabel("收起")
+          }.padding().background(Palette.surfaceSolid, in: RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal).padding(.bottom, store.selectedTrip == nil ? 12 : 88)
+        }
+      }.alert(
+        "未能完成",
+        isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })
+      ) {
+        Button("好") { store.error = nil }
+      } message: {
+        Text(store.error ?? "")
+      }
   }
 }
 struct LoginView: View {
@@ -146,8 +162,10 @@ struct HomeView: View {
             }.buttonStyle(.plain).accessibilityIdentifier("trip.open." + trip.id)
           }
         }
-        Text(store.status).font(.caption).foregroundStyle(Palette.muted).listRowBackground(
-          Color.clear)
+        if store.status != "已同步" && store.cache.queue.isEmpty {
+          Text(store.status).font(.caption).foregroundStyle(Palette.muted).listRowBackground(
+            Color.clear)
+        }
       }.navigationTitle("").toolbar {
         Button {
           sheet = "profile"

@@ -8,27 +8,27 @@ struct ManageView: View {
   @State private var profile = false
   @State private var leave = false
   @State private var purge = false
+  @FocusState private var focused: String?
+  @State private var saved = false
+  @State private var tripID = ""
+  @State private var account = ""
+  @State private var baselineInfo: JSON = .null
+  @State private var dirtyInfo = Set<String>()
+  var infoDraftKey: String { "\(tripID):trip-info" }
+  var info: JSON {
+    .object(["name": .string(name), "destination": .string(destination), "timezone": .string(zone)])
+  }
   var body: some View {
     JourneyForm {
-      Section("当前旅程") {
-        TextField("旅程名称", text: $name)
-        TextField("目的地", text: $destination)
+      Section(store.trip["name"].string) {
+        TextField("旅程名称", text: $name).focused($focused, equals: "name")
+        TextField("目的地", text: $destination).focused($focused, equals: "destination")
         Picker("旅程时区", selection: $zone) {
           ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0).tag($0) }
         }
-        Button("保存旅程信息") {
-          store.perform {
-            var patch: [String: JSON] = [:]
-            if name != store.trip["name"].string { patch["name"] = .string(name) }
-            if destination != store.trip["destination"].string {
-              patch["destination"] = .string(destination)
-            }
-            if zone != store.trip["timezone"].string { patch["timezone"] = .string(zone) }
-            if !patch.isEmpty {
-              try await store.mutate(object: store.trip, kind: "patch", patch: .object(patch))
-            }
-          }
-        }.journeyButton(prominent: true).disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+        if saved {
+          Label("已保存", systemImage: "checkmark").font(.caption).foregroundStyle(Palette.muted)
+        }
         NavigationLink("日期与计划天数") { RescheduleView() }
         NavigationLink("成员与邀请") { TeamView() }
         NavigationLink("已删除的内容") { DeletedView() }
@@ -72,11 +72,37 @@ struct ManageView: View {
         NavigationLink("保存与同步") { SyncView() }
         Button("返回我的旅程") { store.selectedTrip = nil }
       }
-    }.navigationTitle("旅程管理")
+    }.navigationTitle("管理").navigationBarTitleDisplayMode(.large)
+      .onChange(of: info) { _, value in
+        guard !tripID.isEmpty else { return }
+        for key in ["name", "destination", "timezone"] where value[key] != baselineInfo[key] {
+          dirtyInfo.insert(key)
+        }
+        do {
+          try store.setDraft(
+            infoDraftKey, .object(["form": value, "dirty": .array(dirtyInfo.map(JSON.string))]))
+        } catch {
+          store.error = error.localizedDescription
+        }
+        saved = false
+      }
+      .onChange(of: focused) { old, _ in if old != nil { saveInfo() } }
+      .onChange(of: zone) { old, _ in if !old.isEmpty { saveInfo() } }
+      .onDisappear { saveInfo() }
       .onAppear {
         name = store.trip["name"].string
         destination = store.trip["destination"].string
         zone = store.trip["timezone"].string
+        baselineInfo = info
+        tripID = store.trip.id
+        account = store.user.id
+        let draft = store.draft(infoDraftKey)
+        if !draft.isNull {
+          dirtyInfo = Set(draft["dirty"].array.map(\.string))
+          if dirtyInfo.contains("name") { name = draft["form"]["name"].string }
+          if dirtyInfo.contains("destination") { destination = draft["form"]["destination"].string }
+          if dirtyInfo.contains("timezone") { zone = draft["form"]["timezone"].string }
+        }
       }.sheet(isPresented: $profile) { ProfileView() }.sheet(isPresented: $leave) {
         NavigationStack {
           JourneyForm {
@@ -100,6 +126,32 @@ struct ManageView: View {
         }
       }
   }
+  func saveInfo() {
+    guard store.selectedTrip == tripID else { return }
+    guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    var patch: [String: JSON] = [:]
+    if dirtyInfo.contains("name"), name != store.trip["name"].string {
+      patch["name"] = .string(name)
+    }
+    if dirtyInfo.contains("destination"), destination != store.trip["destination"].string {
+      patch["destination"] = .string(destination)
+    }
+    if dirtyInfo.contains("timezone"), zone != store.trip["timezone"].string {
+      patch["timezone"] = .string(zone)
+    }
+    guard !patch.isEmpty else { return }
+    let trip = store.trip
+    store.perform {
+      try await store.mutate(
+        object: trip, kind: "patch", patch: .object(patch), expectedTrip: tripID,
+        expectedAccount: account)
+      try store.removeDraft(infoDraftKey)
+      baselineInfo = info
+      dirtyInfo.removeAll()
+      saved = true
+    }
+  }
+
 }
 struct DeletedView: View {
   @EnvironmentObject var store: JourneyStore

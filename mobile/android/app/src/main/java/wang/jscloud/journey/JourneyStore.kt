@@ -505,9 +505,7 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
         val from = rows.indexOfFirst { it.s("id") == objectId }
         val to = from + direction
         if (to !in rows.indices) return
-        val other = rows[to]
-        rows[to] = rows[from]
-        rows[from] = other
+        rows.add(to, rows.removeAt(from))
         rows.forEachIndexed { index, activity ->
             val rank = index * 1024.0
             if (activity.o("payload").optDouble("order") != rank)
@@ -534,6 +532,11 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
 
     fun draft(key: String): JSONObject? =
         tripId?.let { account.o("drafts").o(it).optJSONObject(key)?.copyJson() }
+
+    suspend fun clearEditorDraft(key: String) {
+        tripId?.let { account.o("drafts").o(it).remove(key) }
+        persist()
+    }
 
     suspend fun saveDraft(
         key: String,

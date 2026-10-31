@@ -57,14 +57,14 @@ for(const width of [1440,390])test(`completion remains right-aligned before blur
  await title.fill('');await page.keyboard.press('Escape');
  await expect(dialog).toHaveCount(0);await edit(page,savedTitle);await expect(title).toHaveValue('');
  expect(await position()).toEqual(before);
- await complete(page).click();await expect(dialog.getByRole('alert')).toHaveText('请填写活动名称。');
+ await expect(complete(page)).toBeDisabled();await expect(dialog.getByRole('status')).toHaveText('填写名称后保存');
  expect(await position()).toEqual(before);
  await title.fill(`恢复后完成${width}`);await expect(title).toBeFocused();await finish(page);
  await expect(page.getByRole('heading',{name:`恢复后完成${width}`,exact:true})).toBeVisible();
 });
 
 test('completion validates the entire draft and retains invalid input',async({page})=>{
- await setup(page);await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('请填写活动名称。');
+ await setup(page);await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await expect(complete(page)).toBeDisabled();await expect(page.getByRole('dialog').getByRole('status')).toHaveText('填写名称后保存');
  await page.getByLabel('活动名称').fill('校验活动');await page.getByRole('button',{name:'具体时间',exact:true}).click();await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('请填写开始时间');
  await page.getByLabel('开始时间',{exact:true}).fill('10:00');await page.getByLabel('结束时间 · 选填').fill('09:00');await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('结束时间早于开始时间');
  await page.getByLabel('结束时间 · 选填').fill('11:00');await page.getByText('备注与链接',{exact:true}).click();await page.getByLabel('链接',{exact:true}).fill('bad-link');await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('请输入完整链接。');
@@ -179,7 +179,7 @@ test('WebKit touch completes new and existing activities with one real tap',asyn
  try{const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true});const page=await context.newPage();await setup(page);
   for(let n=0;n<2;n++){await page.getByRole('button',{name:'添加活动',exact:true}).first().tap();await page.getByLabel('活动名称').fill(`触屏活动${n}`);await expect(page.getByLabel('活动名称')).toBeFocused();await complete(page).tap();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.getByRole('heading',{name:`触屏活动${n}`,exact:true})).toBeVisible()}
   await page.getByRole('heading',{name:'触屏活动0',exact:true}).tap();await page.getByLabel('活动名称').fill('触屏修改后');await complete(page).tap();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.getByRole('heading',{name:'触屏修改后',exact:true})).toBeVisible();await page.getByRole('heading',{name:'触屏修改后',exact:true}).tap();await page.getByRole('combobox',{name:/地点/}).fill('南京站');await expect(page.locator('.activity-place-status').first()).toBeVisible();await complete(page).tap();await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.getByRole('heading',{name:'触屏修改后',exact:true}).tap();await page.getByLabel('活动名称').fill('');await complete(page).tap();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('请填写活动名称');
+  await page.getByRole('heading',{name:'触屏修改后',exact:true}).tap();await page.getByLabel('活动名称').fill('');await expect(complete(page)).toBeDisabled();await expect(page.getByRole('dialog').getByRole('status')).toHaveText('填写名称后保存');
   await page.getByLabel('活动名称').fill('触屏校验后完成');await complete(page).tap();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.getByRole('heading',{name:'触屏校验后完成',exact:true})).toBeVisible();await context.close();
  }finally{await browser.close()}
 });
@@ -238,8 +238,8 @@ test('existing activity editor exposes deletion and undo restores its card',asyn
  await page.getByRole('dialog').getByRole('button',{name:'删除',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.activity-card')).toHaveCount(0);await page.getByRole('button',{name:'撤销',exact:true}).click();await expect(page.locator('.activity-card h3')).toHaveText('编辑页删除');
 });
 test('mobile later action closes an empty activity and restores unfinished input',async({page})=>{
- await page.setViewportSize({width:390,height:844});await setup(page);await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await page.getByRole('button',{name:'稍后继续',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.activity-card')).toHaveCount(0);
- await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await page.getByRole('button',{name:'具体时间',exact:true}).click();await expect(page.getByLabel('开始时间',{exact:true})).toBeVisible();await page.getByLabel('活动名称').fill('待定时间的活动');await page.getByRole('button',{name:'稍后继续',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.activity-card')).toHaveCount(0);
+ await page.setViewportSize({width:390,height:844});await setup(page);await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await page.getByRole('button',{name:'先收起，草稿会保留',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.activity-card')).toHaveCount(0);
+ await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await page.getByRole('button',{name:'具体时间',exact:true}).click();await expect(page.getByLabel('开始时间',{exact:true})).toBeVisible();await page.getByLabel('活动名称').fill('待定时间的活动');await page.getByRole('button',{name:'先收起，草稿会保留',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.activity-card')).toHaveCount(0);
  await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await expect(page.getByLabel('活动名称')).toHaveValue('待定时间的活动');await expect(page.getByLabel('开始时间',{exact:true})).toHaveValue('');await page.getByLabel('开始时间',{exact:true}).fill('10:00');await finish(page);await expect(page.locator('.activity-card h3')).toHaveText('待定时间的活动');
 });
 test('a queued activity save remains scoped to its original trip after closing',async({page})=>{
@@ -257,9 +257,18 @@ test('a queued activity save remains scoped to its original trip after closing',
  await expect(page.getByLabel('活动名称')).toHaveValue('原旅程活动');await page.getByLabel('活动名称').fill('已进入保存的名称');
  await page.evaluate(()=>{window.originalPut=IDBObjectStore.prototype.put;window.holdWrite=true;window.heldWriteStarted=false;IDBObjectStore.prototype.put=function(value,key){const request=window.originalPut.call(this,value,key);if(this.name==='kv'&&String(key).startsWith('account:')&&window.holdWrite&&value.queue.some(op=>op.patch?.title==='已进入保存的名称')){window.heldWriteStarted=true;const store=this;const ping=()=>{if(window.holdWrite){const request=store.get(key);request.onsuccess=ping}};ping()}return request}});
  const sent=[];page.on('request',request=>{if(request.method()==='POST'&&/\/operations$/.test(request.url()))sent.push({url:request.url(),operation:request.postDataJSON()})});
- await page.getByLabel('活动名称').press('Tab');await expect.poll(()=>page.evaluate(()=>window.heldWriteStarted)).toBe(true);await page.getByLabel('活动名称').fill('仍在原旅程的草稿');await page.getByRole('button',{name:'稍后继续',exact:true}).click();
+ await page.getByLabel('活动名称').press('Tab');await expect.poll(()=>page.evaluate(()=>window.heldWriteStarted)).toBe(true);await page.getByLabel('活动名称').fill('仍在原旅程的草稿');await page.getByRole('button',{name:'先收起，草稿会保留',exact:true}).click();
  await page.evaluate(()=>{window.switchActivityTrip=window.activityTestJourney.openTrip(window.otherActivityTrip)});await expect(page.locator('.trip-title')).toHaveText('另一旅程');
  await page.evaluate(()=>{window.holdWrite=false;IDBObjectStore.prototype.put=window.originalPut});await page.evaluate(()=>window.switchActivityTrip);await expect(page.locator('.sync-status.synced')).toBeVisible();
  const otherId=await page.evaluate(()=>window.otherActivityTrip);expect(sent.filter(entry=>entry.url.endsWith(`/api/trips/${otherId}/operations`))).toHaveLength(0);await expect(page.locator('.activity-card')).toHaveCount(0);
  await page.evaluate(()=>window.activityTestJourney.openTrip(window.originalActivityTrip));await edit(page,'已进入保存的名称');await expect(page.getByLabel('活动名称')).toHaveValue('仍在原旅程的草稿');await finish(page);await expect(page.locator('.activity-card h3')).toHaveText('仍在原旅程的草稿');
+});
+
+test('mobile activity name takes the full row and blank completion stays disabled',async({page})=>{
+ await page.setViewportSize({width:390,height:844});await setup(page);
+ await page.getByRole('button',{name:'添加活动',exact:true}).click();
+ await expect(complete(page)).toBeDisabled();
+ const name=await page.getByLabel('活动名称').boundingBox(),day=await page.getByLabel('所在日').boundingBox();
+ expect(name.width).toBeGreaterThan(300);expect(day.y).toBeGreaterThan(name.y+name.height);
+ await expect(page.getByRole('button',{name:'先收起，草稿会保留',exact:true})).toBeVisible();
 });
