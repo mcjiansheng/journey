@@ -22,6 +22,11 @@ class NativeFlowTest {
     private fun capture(name: String) {
         compose.waitForIdle()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
+        // Compose can be idle before a closing Android dialog reaches the display buffer.
+        instrumentation.waitForIdleSync()
+        android.os.SystemClock.sleep(500)
+        compose.waitForIdle()
+        instrumentation.waitForIdleSync()
         val directory =
             java.io
                 .File(instrumentation.targetContext.getExternalFilesDir(null), "acceptance")
@@ -58,9 +63,13 @@ class NativeFlowTest {
             compose.onNodeWithText("外观").performClick()
             compose.onAllNodesWithText(choice).onLast().performClick()
             compose.onNodeWithText("保存设置").performClick()
-            compose.waitUntil(10000) { compose.onAllNodesWithText("保存设置").fetchSemanticsNodes().isEmpty() }
+            compose.waitUntil(10000) { compose.onAllNodes(isDialog()).fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithText("我的旅程").assertExists()
             capture("android-$theme-home")
+            if (args.getString("homeOnly") == "true") continue
             compose.onNodeWithText(trip).performClick()
+            waitText("行程")
+            compose.onNode(hasText("行程", substring = false) and hasClickAction()).performClick()
             waitText("添加活动")
             capture("android-$theme-itinerary")
             compose.onNodeWithText("添加活动").performScrollTo().performClick()
