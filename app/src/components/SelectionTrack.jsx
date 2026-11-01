@@ -1,14 +1,29 @@
-import React, {useLayoutEffect, useRef} from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 
 // One persistent surface moves behind the selected button, including when a
 // second selection reverses an in-flight transition or tabs scroll horizontally.
-export default function SelectionTrack({as: Element = 'div', activeKey, className = '', children, ...props}) {
+export default function SelectionTrack({
+  as: Element = 'div',
+  activeKey,
+  layoutKey,
+  className = '',
+  children,
+  ...props
+}) {
   const track = useRef(null);
   const indicator = useRef(null);
+  const previousLayout = useRef(layoutKey);
 
   useLayoutEffect(() => {
     const element = track.current;
     const surface = indicator.current;
+    // A map/sidebar morph already provides the navigation motion. Retarget its
+    // selection immediately instead of layering a second, lagging transition.
+    if (previousLayout.current !== layoutKey) {
+      delete surface.dataset.ready;
+      surface.getBoundingClientRect();
+      previousLayout.current = layoutKey;
+    }
     function measure() {
       const selected = element.querySelector(':scope > button.selected');
       if (!selected || !selected.offsetWidth) return;
@@ -18,15 +33,22 @@ export default function SelectionTrack({as: Element = 'div', activeKey, classNam
     }
     measure();
     // The initial selection is already in place on the first painted frame.
-    const frame = requestAnimationFrame(() => { surface.dataset.ready = ''; });
+    const frame = requestAnimationFrame(() => {
+      surface.dataset.ready = '';
+    });
     const observer = new ResizeObserver(measure);
     observer.observe(element);
-    element.querySelectorAll(':scope > button').forEach(button => observer.observe(button));
-    return () => { cancelAnimationFrame(frame); observer.disconnect(); };
-  }, [activeKey, children]);
+    element.querySelectorAll(':scope > button').forEach((button) => observer.observe(button));
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [activeKey, children, layoutKey]);
 
-  return <Element {...props} ref={track} className={`${className} selection-track`}>
-    <span ref={indicator} className="selection-indicator" aria-hidden="true"/>
-    {children}
-  </Element>;
+  return (
+    <Element {...props} ref={track} className={`${className} selection-track`}>
+      <span ref={indicator} className="selection-indicator" aria-hidden="true" />
+      {children}
+    </Element>
+  );
 }

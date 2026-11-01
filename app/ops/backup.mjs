@@ -1,7 +1,7 @@
 import { DatabaseSync, backup } from 'node:sqlite';
 import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
-import { access, chmod, mkdir, mkdtemp, readFile, rename, rm, stat, readdir, writeFile } from 'node:fs/promises';
+import { constants, createReadStream, createWriteStream } from 'node:fs';
+import { access, chmod, copyFile, mkdir, mkdtemp, readFile, rename, rm, stat, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { tmpdir } from 'node:os';
@@ -60,6 +60,48 @@ export async function createBackup({ mainPath, securityPath, keyPath, backupDir 
   } catch (error) { await rm(work,{recursive:true,force:true}); throw error; }
   finally { await rm(plain,{recursive:true,force:true}); }
 }
+export async function migrateSecurityLedger(sourcePath, targetPath) {
+  if (resolve(sourcePath) === resolve(targetPath)) throw new Error('INDEPENDENT_LEDGER_REQUIRED');
+  for (const suffix of ['', '-wal', '-shm']) {
+    if (await stat(targetPath + suffix).catch(e => { if (e.code === 'ENOENT') return null; throw e; })) {
+      throw new Error('TARGET_LEDGER_ALREADY_EXISTS');
+    }
+  }
+  checkDatabase(sourcePath, true);
+  await mkdir(dirname(targetPath), { recursive: true, mode: 0o700 });
+  const temp = `${targetPath}.migrate-${Date.now()}-${randomBytes(4).toString('hex')}`;
+  try {
+    await snapshot(sourcePath, temp);
+    checkDatabase(temp, true);
+    for (const suffix of ['', '-wal', '-shm']) {
+      if (await stat(targetPath + suffix).catch(e => { if (e.code === 'ENOENT') return null; throw e; })) {
+        throw new Error('TARGET_LEDGER_ALREADY_EXISTS');
+      }
+    }
+    try {
+      await copyFile(temp, targetPath, constants.COPYFILE_EXCL);
+    } catch (error) {
+      if (error.code === 'EEXIST') throw new Error('TARGET_LEDGER_ALREADY_EXISTS');
+      throw error;
+    }
+    await chmod(targetPath, 0o600);
+    return targetPath;
+  } finally {
+    await rm(temp, { force: true });
+  }
+}
+export function verifyServiceStopMode(flag, exec = execFileSync) {
+  if (flag === '--offline' || flag === '--service-stopped-offline') return true;
+  if (flag !== '--service-stopped') return false;
+  let state;
+  try {
+    state = exec('systemctl', ['show', 'journey.service', '--property=ActiveState', '--property=MainPID'], { encoding: 'utf8' });
+  } catch {
+    throw new Error('SERVICE_STILL_RUNNING');
+  }
+  if (!/^ActiveState=(inactive|failed)$/m.test(state) || !/^MainPID=0$/m.test(state)) throw new Error('SERVICE_STILL_RUNNING');
+  return true;
+}
 export async function restoreBackup({ backupPath, mainPath, securityPath, keyPath, serviceStopped = false }) {
   if (!serviceStopped) throw new Error('SERVICE_STOP_REQUIRED: explicitly stop journey.service before restoring');
   if (resolve(mainPath) === resolve(securityPath)) throw new Error('INDEPENDENT_LEDGER_REQUIRED');
@@ -70,7 +112,8 @@ export async function restoreBackup({ backupPath, mainPath, securityPath, keyPat
   await mkdir(dirname(mainPath),{recursive:true,mode:0o700});
   const work = await mkdtemp(join(dirname(mainPath),'.restore-'));
   try {
-    // Authenticate both copies, but never install the historical security copy.
+    // Authenticate both copies; only the business database is installed so the
+    // live security ledger can replay purges, removals, and revocations on boot.
     for (const name of ['main','security']) await decrypt(join(backupPath,`${name}.enc`),join(work,name),key,name,metadata.files?.[name]);
     checkDatabase(join(work,'main')); checkDatabase(join(work,'security'),true);
     const rollback = `${mainPath}.bak-${Date.now()}-${randomBytes(4).toString('hex')}`;
@@ -99,10 +142,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const options = { mainPath:process.env.DATABASE_PATH||'/var/lib/journey/journey.sqlite', securityPath:process.env.SECURITY_DATABASE_PATH||'/var/lib/journey/security.sqlite', keyPath:process.env.BACKUP_KEY_PATH||'/etc/journey/backup.key', backupDir:process.env.BACKUP_DIR||'/var/backups/journey' };
   try {
     if (process.argv[2]==='backup') { console.log(await createBackup(options)); await retainBackups(options.backupDir); }
-    else if (process.argv[2]==='restore' && process.argv[3] && process.argv[4]==='--service-stopped') {
-      const state=execFileSync('systemctl',['show','journey.service','--property=ActiveState','--property=MainPID'],{encoding:'utf8'});
-      if (!/^ActiveState=(inactive|failed)$/m.test(state)||!/^MainPID=0$/m.test(state)) throw new Error('SERVICE_STILL_RUNNING');
+    else if (process.argv[2]==='restore' && process.argv[3] && verifyServiceStopMode(process.argv[4])) {
       console.log(await restoreBackup({...options,backupPath:resolve(process.argv[3]),serviceStopped:true}));
-    } else throw new Error('Usage: node ops/backup.mjs backup | restore <backup-directory> --service-stopped');
+    } else throw new Error('Usage: node ops/backup.mjs backup | restore <backup-directory> (--service-stopped | --offline)');
   } catch(error) { console.error(error.message); process.exitCode=1; }
 }

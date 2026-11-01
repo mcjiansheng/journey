@@ -97,7 +97,7 @@ test('trip and day recovery, settings shared with home, and draft return',async(
 });
 test('offline date change allows immediate activity creation and uploads stable references',async({page,context})=>{
  await register(page,'离线改期验收');await createTrip(page,'离线新日期');await page.evaluate(()=>navigator.serviceWorker.ready);
- await context.setOffline(true);await page.getByRole('button',{name:'调整日期',exact:true}).click();await page.getByLabel('开始日期',{exact:true}).fill('2026-11-10');await page.getByLabel('计划天数').fill('2');await page.getByRole('dialog').getByRole('button',{name:'调整日期',exact:true}).click();
+ await context.setOffline(true);await page.getByRole('button',{name:'当天操作',exact:true}).click();await page.getByRole('button',{name:'调整日期与天数…',exact:true}).click();await page.getByLabel('开始日期',{exact:true}).fill('2026-11-10');await page.getByLabel('计划天数').fill('2');await page.getByRole('dialog').getByRole('button',{name:'调整日期',exact:true}).click();
  await expect(page.getByRole('tab',{name:/第2天/})).toBeVisible();await page.getByRole('button',{name:'添加活动',exact:true}).click();await page.getByLabel('活动名称').fill('新日期上的离线活动');await page.getByLabel('所在日').selectOption({label:'第2天 11/11'});await page.getByRole('dialog').getByRole('button',{name:'完成',exact:true}).click();await page.getByRole('tab',{name:/第2天/}).click();await expect(page.locator('h3',{hasText:'新日期上的离线活动'})).toBeVisible();
  await context.setOffline(false);await expect(page.locator('.sync-status.synced')).toBeVisible();const trips=(await readApi(page,'api/trips')).data.trips;const snap=(await readApi(page,`api/trips/${trips[0].id}`)).data;const act=snap.objects.find(o=>o.kind==='activity');expect(snap.objects.find(o=>o.id===act.payload.dayId).payload.date).toBe('2026-11-11');
 });
@@ -108,7 +108,7 @@ test('date targets auto-select, flexible activities reorder, and route lifecycle
  await expect(cards.nth(0).locator('h3')).toHaveText('第二站');await expect(page.locator('.sync-status.synced')).toBeVisible();
  await page.screenshot({path:'../.local/evidence/itinerary-drag-order.png',fullPage:true,scale:'css'});
  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'../.local/evidence/itinerary-drag-order-mobile.png',fullPage:true,scale:'css'});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();await page.setViewportSize({width:1280,height:720});
- await page.getByRole('button',{name:'调整日期',exact:true}).click();await page.getByLabel('计划天数').fill('2');await page.getByLabel('第二站移动到哪一天').selectOption('2');
+ await page.getByRole('button',{name:'当天操作',exact:true}).click();await page.getByRole('button',{name:'调整日期与天数…',exact:true}).click();await page.getByLabel('计划天数').fill('2');await page.getByLabel('第二站移动到哪一天').selectOption('2');
  await expect(page.getByLabel('第二站移动到哪一天').locator('..').getByRole('checkbox')).toBeChecked();await closeDialog(page);
  await page.locator('.route-row').first().click();await page.getByLabel('预计耗时（分钟）').fill('15');await page.getByRole('dialog').getByRole('button',{name:'完成',exact:true}).click();
  await expect(page.locator('.sync-status.synced')).toBeVisible();await page.locator('.route-row').first().click();
@@ -122,8 +122,8 @@ test('iOS WebKit touch layout, real editor and shared feedback settings',async()
  const browser=await launchWebKit();const context=await browser.newContext({...devices['iPhone 15'],baseURL:process.env.E2E_URL||'http://127.0.0.1:4177/'});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  try{
  await register(page,'iOS验收');await createTrip(page,'iOS旅程');await addActivity(page,'手机编辑活动');await expect(page.getByRole('navigation',{name:'手机主导航'})).toBeVisible();
- await page.getByRole('button',{name:'个人设置',exact:true}).click();await page.getByLabel('轻提示音',{exact:true}).check();await expect(page.getByLabel('轻提示音',{exact:true})).toBeChecked();await page.getByLabel('减少动态效果').selectOption('true');
- await page.screenshot({path:'../.local/evidence/ios-settings.png',fullPage:true,scale:'css'});await closeDialog(page);await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();await page.locator('.activity-card .activity-main').click();await page.getByLabel('活动名称').fill('iOS修改完成');await page.getByRole('dialog').getByRole('button',{name:'完成',exact:true}).click();await expect(page.locator('h3',{hasText:'iOS修改完成'})).toBeVisible();await expect(page.locator('.sync-status.synced')).toBeVisible();await expect(page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'费用',exact:true})).toBeVisible();await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await page.screenshot({path:'../.local/evidence/ios-itinerary.png',fullPage:true,scale:'css'});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();expect(errors).toEqual([]);
+ await page.getByRole('button',{name:'返回我的旅程',exact:true}).click();await page.locator('.profile-button').click();await page.getByLabel('轻提示音',{exact:true}).check();await expect(page.getByLabel('轻提示音',{exact:true})).toBeChecked();await page.getByLabel('减少动态效果').selectOption('true');
+ await page.screenshot({path:'../.local/evidence/ios-settings.png',fullPage:true,scale:'css'});await closeDialog(page);await page.getByRole('button',{name:/继续旅程/}).click();await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();await page.locator('.activity-card .activity-main').click();await page.getByLabel('活动名称').fill('iOS修改完成');await page.getByRole('dialog').getByRole('button',{name:'完成',exact:true}).click();await expect(page.locator('h3',{hasText:'iOS修改完成'})).toBeVisible();await expect(page.locator('.sync-status.synced')).toBeVisible();await expect(page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'费用',exact:true})).toBeVisible();await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await page.screenshot({path:'../.local/evidence/ios-itinerary.png',fullPage:true,scale:'css'});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();expect(errors).toEqual([]);
  }finally{await cleanup(page);await context.close();await browser.close();}
 });
 
@@ -132,7 +132,7 @@ test('stock Android Chrome touch feedback and small screen editor',async({browse
  const context=await browser.newContext({...devices['Pixel 7'],baseURL:process.env.E2E_URL||'http://127.0.0.1:4177/'});const page=await context.newPage();
  try{
  await register(page,'Android验收');await createTrip(page,'Android旅程');await addActivity(page,'触屏行程');
- await page.getByRole('button',{name:'个人设置',exact:true}).click();
+ await page.getByRole('button',{name:'返回我的旅程',exact:true}).click();await page.locator('.profile-button').click();
  await expect(page.getByLabel('触感反馈',{exact:true})).toBeChecked();await page.getByLabel('触感反馈',{exact:true}).uncheck();await page.getByLabel('轻提示音',{exact:true}).check();
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('journey.appearance')).interactionHaptics)).toBe(false);
  await page.getByLabel('减少透明效果').selectOption('true');await expect(page.locator('html')).toHaveAttribute('data-transparency','true');

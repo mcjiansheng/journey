@@ -1,13 +1,18 @@
 const STORAGE_KEY = 'journey.appearance';
-const SURFACES = '.activity-card,.trip-card,.continue-card,.primary,.day-tabs button,.sidebar nav button,.bottom-nav button,[data-pointer-glow]';
-const ACTIONS = 'button,a[href],summary,input[type="checkbox"],input[type="radio"],[role="button"],[role="tab"]';
+const SURFACES =
+  '.activity-card,.trip-card,.continue-card,.primary,.day-tabs button,.sidebar nav button,.bottom-nav button,[data-pointer-glow]';
+const ACTIONS =
+  'button,a[href],summary,input[type="checkbox"],input[type="radio"],[role="button"],[role="tab"]';
 let installedCleanup = null;
 let audioContext = null;
 let lastFeedbackAt = -Infinity;
 
 function storedAppearance() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; }
-  catch { return {}; }
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
 }
 export function getFeedbackPreferences() {
   const value = storedAppearance();
@@ -21,15 +26,22 @@ export function setFeedbackPreferences(patch) {
   return getFeedbackPreferences();
 }
 export function supportsHaptics() {
-  return typeof window !== 'undefined' && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function'
-    && (navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches);
+  return (
+    typeof window !== 'undefined' &&
+    typeof navigator !== 'undefined' &&
+    typeof navigator.vibrate === 'function' &&
+    (navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches)
+  );
 }
 export function supportsNativeSwitch() {
   return typeof document !== 'undefined' && 'switch' in document.createElement('input');
 }
 function reducedMotion() {
   const value = document.documentElement.dataset.motion;
-  return value === 'true' || (value !== 'false' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  return (
+    value === 'true' ||
+    (value !== 'false' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  );
 }
 function clickTone() {
   const Audio = window.AudioContext || window.webkitAudioContext;
@@ -38,24 +50,31 @@ function clickTone() {
     audioContext ||= new Audio();
     // Resume is invoked directly from a trusted user interaction.
     const ready = audioContext.state === 'suspended' ? audioContext.resume() : Promise.resolve();
-    void ready.then(() => {
-      if (audioContext?.state !== 'running' || !getFeedbackPreferences().sound) return;
-      const time = audioContext.currentTime;
-      const oscillator = audioContext.createOscillator();
-      const gain = audioContext.createGain();
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(250, time);
-      oscillator.frequency.exponentialRampToValueAtTime(180, time + 0.035);
-      gain.gain.setValueAtTime(0.0001, time);
-      gain.gain.exponentialRampToValueAtTime(0.018, time + 0.005);
-      gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.04);
-      oscillator.connect(gain);
-      gain.connect(audioContext.destination);
-      oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
-      oscillator.start(time);
-      oscillator.stop(time + 0.045);
-    }).catch(() => {});
-  } catch { /* Device audio availability does not block an interaction. */ }
+    void ready
+      .then(() => {
+        if (audioContext?.state !== 'running' || !getFeedbackPreferences().sound) return;
+        const time = audioContext.currentTime;
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(250, time);
+        oscillator.frequency.exponentialRampToValueAtTime(180, time + 0.035);
+        gain.gain.setValueAtTime(0.0001, time);
+        gain.gain.exponentialRampToValueAtTime(0.018, time + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.04);
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.onended = () => {
+          oscillator.disconnect();
+          gain.disconnect();
+        };
+        oscillator.start(time);
+        oscillator.stop(time + 0.045);
+      })
+      .catch(() => {});
+  } catch {
+    /* Device audio availability does not block an interaction. */
+  }
 }
 export function installFeedback() {
   if (installedCleanup) return installedCleanup;
@@ -84,7 +103,11 @@ export function installFeedback() {
       return;
     }
     const element = event.target instanceof Element ? event.target.closest(SURFACES) : null;
-    if (!element || element.closest('[inert]') || element.matches(':disabled,[aria-disabled="true"]')) {
+    if (
+      !element ||
+      element.closest('[inert]') ||
+      element.matches(':disabled,[aria-disabled="true"]')
+    ) {
       clearSurface();
       return;
     }
@@ -92,9 +115,16 @@ export function installFeedback() {
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
-      if (disposed || !latestPoint?.element.isConnected || reducedMotion()) { clearSurface(); return; }
+      if (disposed || !latestPoint?.element.isConnected || reducedMotion()) {
+        clearSurface();
+        return;
+      }
       const { element: next, x, y } = latestPoint;
-      if (surface !== next) { clearSurface(); surface = next; surface.setAttribute('data-pointer-active', ''); }
+      if (surface !== next) {
+        clearSurface();
+        surface = next;
+        surface.setAttribute('data-pointer-active', '');
+      }
       const bounds = next.getBoundingClientRect();
       next.style.setProperty('--pointer-x', `${x - bounds.left}px`);
       next.style.setProperty('--pointer-y', `${y - bounds.top}px`);
@@ -102,13 +132,19 @@ export function installFeedback() {
   }
   function pointerOut(event) {
     if (!surface) return;
-    const next = event.relatedTarget instanceof Element ? event.relatedTarget.closest(SURFACES) : null;
+    const next =
+      event.relatedTarget instanceof Element ? event.relatedTarget.closest(SURFACES) : null;
     if (next !== surface) clearSurface();
   }
   function clicked(event) {
     if (!event.isTrusted || event.defaultPrevented) return;
     const control = event.target instanceof Element ? event.target.closest(ACTIONS) : null;
-    if (!control || control.matches(':disabled,[aria-disabled="true"]') || control.closest('[inert]')) return;
+    if (
+      !control ||
+      control.matches(':disabled,[aria-disabled="true"]') ||
+      control.closest('[inert]')
+    )
+      return;
     const at = performance.now();
     if (at - lastFeedbackAt < 70) return;
     lastFeedbackAt = at;
@@ -117,7 +153,11 @@ export function installFeedback() {
     // Native Safari switches own their system haptic; there is no synthetic iOS vibration path.
     const nativeSwitch = control.matches('input[switch]') && supportsNativeSwitch();
     if (preferences.haptics && supportsHaptics() && !nativeSwitch) {
-      try { navigator.vibrate(10); } catch { /* Hardware may reject vibration. */ }
+      try {
+        navigator.vibrate(10);
+      } catch {
+        /* Hardware may reject vibration. */
+      }
     }
   }
   function updateViewport() {
@@ -133,7 +173,9 @@ export function installFeedback() {
       root.style.setProperty('--visual-height', `${Math.round(height)}px`);
       root.style.setProperty('--visual-top', `${Math.round(top)}px`);
       root.style.setProperty('--keyboard-inset', `${Math.round(inset)}px`);
-      const editing = document.activeElement?.matches('input:not([type="checkbox"]):not([type="radio"]),textarea,[contenteditable="true"]');
+      const editing = document.activeElement?.matches(
+        'input:not([type="checkbox"]):not([type="radio"]),textarea,[contenteditable="true"]',
+      );
       root.dataset.keyboard = editing && window.innerHeight - height > 140 ? 'open' : 'closed';
     });
   }
@@ -164,7 +206,13 @@ export function installFeedback() {
     window.removeEventListener('resize', updateViewport);
     window.visualViewport?.removeEventListener('resize', updateViewport);
     window.visualViewport?.removeEventListener('scroll', updateViewport);
-    for (const key of ['--visual-viewport-height','--visual-height','--visual-top','--keyboard-inset']) root.style.removeProperty(key);
+    for (const key of [
+      '--visual-viewport-height',
+      '--visual-height',
+      '--visual-top',
+      '--keyboard-inset',
+    ])
+      root.style.removeProperty(key);
     delete root.dataset.keyboard;
     void audioContext?.close().catch(() => {});
     audioContext = null;

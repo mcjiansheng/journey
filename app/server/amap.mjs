@@ -1,7 +1,8 @@
 import express from 'express';
 
-const allowedPaths=new Set(['/v3/log/init','/v3/place/text','/v3/place/around','/v3/place/detail','/v3/assistant/inputtips','/v3/geocode/geo','/v3/geocode/regeo','/v3/direction/walking','/v3/direction/driving','/v3/direction/transit/integrated','/v4/direction/bicycling','/v5/direction/walking','/v5/direction/driving','/v5/direction/bicycling','/v5/direction/transit/integrated','/v3/assistant/coordinate/convert']);
-const allowedParams=new Set(['type','language','type_','antiCrab','datatype','label','value','eventId','product','t','resolution','mob','vt','dpr','scale','key','s','r','platform','logversion','sdkversion','appname','csid','output','callback','keywords','city','citylimit','types','offset','page','extensions','children','id','location','radius','sortrule','batch','address','poitype','roadlevel','homeorcorp','origin','destination','originid','destinationid','originlat','destinationlat','waypoints','avoidpolygons','avoidroad','strategy','ferry','province','number','cartype','cityd','date','time','nightflag','show_fields','originpoi','destinationpoi','ad1','ad2','multiexport','multipath','coordsys','locations']);
+const allowedPaths=new Set(['/v3/log/init','/v3/place/text','/v3/place/around','/v3/place/detail','/v5/place/text','/v5/place/around','/v5/place/detail','/v3/assistant/inputtips','/v3/geocode/geo','/v3/geocode/regeo','/v3/config/district','/v3/direction/walking','/v3/direction/driving','/v3/direction/transit/integrated','/v4/direction/bicycling','/v5/direction/walking','/v5/direction/driving','/v5/direction/bicycling','/v5/direction/transit/integrated','/v3/assistant/coordinate/convert']);
+const safeParamName=/^[a-zA-Z][a-zA-Z0-9_]{0,49}$/;
+const blockedParams=new Set(['jscode','securityJsCode','sig','signature','secret','token','auth','url','uri','href','src','redirect','target','domain','host','hostname','origin_url','callback_url','webhook','__proto__','constructor','prototype']);
 export function createAmapRouter(config) {
  const router=express.Router(),hits=new Map();
  router.get(/.*/,async(req,res)=>{
@@ -18,8 +19,8 @@ export function createAmapRouter(config) {
    for(const[k,raw]of Object.entries(req.query)){
      // JSAPI repeats the identical s=... SDK parameter on some service calls.
      const v=Array.isArray(raw)&&raw.every(x=>x===raw[0])?raw[0]:raw;
-     if(!allowedParams.has(k)||typeof v!=='string'||v.length>3000)return res.status(400).json({error:{code:'MAP_PARAMETERS',message:'地图查询参数无效'}});
-     if(k==='callback'&&!/^[\w.$]+$/.test(v))return res.status(400).end();
+     if(!safeParamName.test(k)||blockedParams.has(k)||typeof v!=='string'||v.length>3000||/[\0\r\n]/.test(v))return res.status(400).json({error:{code:'MAP_PARAMETERS',message:'地图查询参数无效'}});
+     if(k==='callback'&&!/^[A-Za-z_$][0-9A-Za-z_$.]{0,127}$/.test(v))return res.status(400).end();
      if(k!=='key')target.searchParams.set(k,v);
    }
    target.searchParams.set('key',key);target.searchParams.set('jscode',secret);

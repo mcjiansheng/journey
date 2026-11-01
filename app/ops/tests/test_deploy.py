@@ -127,12 +127,46 @@ class DeployTests(unittest.TestCase):
         self.assertEqual(control.call_count, 1)
         self.assertEqual((d.base / 'current').readlink(), Path('releases/old'))
 
-    def test_protected_service_change_rolls_back(self):
+    def test_protected_service_change_does_not_roll_back(self):
         d = self.prepare_activation()
-        with patch.object(d, 'control'), patch.object(d, 'protected', side_effect=[{'l4d2': 'old'}, {'l4d2': 'new'}, {'l4d2': 'new'}]), patch.object(d, 'health'):
-            self.assertEqual(d.activate(), 1)
-        self.assertEqual(d.data['status'], 'rolled_back')
+        with patch.object(d, 'control'), patch.object(d, 'protected', side_effect=[{'l4d2': 'old'}, {'l4d2': 'new'}]), patch.object(d, 'health'):
+            self.assertEqual(d.activate(), 0)
+        self.assertEqual(d.data['status'], 'success')
+        self.assertEqual((d.base / 'current').readlink(), Path('releases/new'))
         self.assertTrue(d.data['protectedServicesChanged'])
+        self.assertEqual(d.data['protectedServicesBefore'], {'l4d2': 'old'})
+        self.assertEqual(d.data['protectedServicesAfter'], {'l4d2': 'new'})
+
+    def test_protected_inspection_failure_does_not_block_deployment(self):
+        d = self.prepare_activation()
+        with patch.object(d, 'control'), patch.object(d, 'protected', side_effect=RuntimeError('systemctl failed')), patch.object(d, 'health'):
+            self.assertEqual(d.activate(), 0)
+        self.assertEqual(d.data['status'], 'success')
+        self.assertTrue(d.data['protectedServicesChanged'])
+        self.assertIn('inspectionError', d.data['protectedServicesBefore'])
+
+    def test_admin_manual_recover_and_deploy_user_restriction(self):
+        d = self.prepare_activation()
+        d.save('activating', stopAttempted=True, previousRelease='old', previousBuildId='old-build', protectedServicesBefore={})
+        (d.base / 'releases/new').mkdir()
+        d.switch('releases/new')
+        with patch.object(deploy, 'BASE', d.base), patch.object(deploy, 'STATE', d.state), \
+             patch.object(deploy.os, 'geteuid', return_value=0), \
+             patch.dict(deploy.os.environ, {'SUDO_USER': 'ops-admin'}, clear=True), \
+             patch.object(deploy.sys, 'argv', ['deploy', 'recover', 'new']), \
+             patch.object(deploy.Deployment, 'control'), patch.object(deploy.Deployment, 'health'), \
+             patch.object(deploy.Deployment, 'protected', return_value={}):
+            self.assertEqual(deploy.main(), 1)
+        self.assertEqual(json.loads(d.path.read_text())['status'], 'rolled_back')
+        with patch.object(deploy.os, 'geteuid', return_value=0), \
+             patch.dict(deploy.os.environ, {'SUDO_USER': 'journey-deploy'}, clear=True), \
+             patch.object(deploy.sys, 'argv', ['deploy', 'recover', 'new']):
+            with self.assertRaises(ValueError):
+                deploy.main()
+        with patch.object(deploy.os, 'geteuid', return_value=1000), \
+             patch.object(deploy.sys, 'argv', ['deploy', 'recover', 'new']):
+            with self.assertRaises(PermissionError):
+                deploy.main()
 
     def test_rollback_failure_reported(self):
         d = self.prepare_activation()

@@ -73,8 +73,8 @@ for(const width of [1440,390])test(`compact activity controls and mobile sorting
  const handle=card.getByRole('button',{name:'拖动排序：灵活活动'});
  const more=card.locator('.activity-more>summary');
  await card.scrollIntoViewIfNeeded();
- await expect(card.getByRole('button',{name:'编辑',exact:true})).toHaveCount(0);
- if(width===390){await expect(handle).toBeHidden();await page.getByRole('button',{name:'排序',exact:true}).click()}
+ await expect(card.getByRole('button',{name:'编辑',exact:true})).toBeHidden();
+ if(width===390){await expect(handle).toBeHidden();await page.getByRole('button',{name:'排序',exact:true}).click();await expect(page.locator('.activity-time-lock')).toHaveCount(2)}
  const [dragBox,moreBox]=await Promise.all([handle.boundingBox(),more.boundingBox()]);
  expect(dragBox.width).toBe(44);expect(moreBox.width).toBe(44);
  expect(dragBox.height).toBe(44);expect(moreBox.height).toBe(44);

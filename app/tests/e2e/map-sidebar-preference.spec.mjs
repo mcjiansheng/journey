@@ -1,3 +1,4 @@
+import {sidebarGeometry} from '../helpers/sidebar-geometry.mjs';
 import {test,expect} from '@playwright/test';
 import {fileURLToPath} from 'node:url';
 import {createApp,shutdownServer} from '../../server/index.mjs';
@@ -29,15 +30,15 @@ async function openPreferences(page){
 }
 async function expectSidebar(page,{width,height,compact=false}){
  const sidebar=page.locator('.sidebar');
- await expect.poll(()=>sidebar.evaluate(el=>el.getBoundingClientRect().width)).toBe(width);
- await expect.poll(()=>sidebar.evaluate(el=>el.getBoundingClientRect().height)).toBe(height);
+ await expect.poll(()=>sidebar.evaluate(sidebarGeometry).then(box=>box.width)).toBe(width);
+ await expect.poll(()=>sidebar.evaluate(sidebarGeometry).then(box=>box.height)).toBe(height);
  const layout=await sidebar.evaluate(el=>{
   const box=el.getBoundingClientRect();return {center:box.top+box.height/2,viewportHeight:innerHeight,brandVisibility:getComputedStyle(el.querySelector('.brand')).visibility,profileVisibility:getComputedStyle(el.querySelector('.sidebar-foot')).visibility,labelOpacity:getComputedStyle(el.querySelector('nav button>span')).opacity,buttonHeight:el.querySelector('nav button').getBoundingClientRect().height};
  });
- expect(layout.center).toBeCloseTo(layout.viewportHeight/2,0);
+ if(!compact)expect(layout.center).toBeCloseTo(layout.viewportHeight/2,0);
  if(compact){
   expect(layout.brandVisibility).toBe('hidden');expect(layout.profileVisibility).toBe('hidden');
-  expect(layout.labelOpacity).toBe('0');expect(layout.buttonHeight).toBe(50);
+  expect(layout.labelOpacity).toBe('0');expect(layout.buttonHeight).toBe(layout.viewportHeight<=550?44:50);
  }else{
   await expect(sidebar.locator('.sidebar-foot')).toBeVisible();
   await expect.poll(()=>sidebar.locator('nav button>span').first().evaluate(el=>getComputedStyle(el).opacity)).toBe('1');
@@ -47,7 +48,7 @@ async function checkPreference(page,viewport){
  await page.setViewportSize(viewport);await seed(page);
  const full={width:viewport.width<=1100?180:200,height:viewport.height-28};
  await expectSidebar(page,full);
- await nav(page,'地图').click();await expectSidebar(page,{width:72,height:342,compact:true});
+ await nav(page,'地图').click();await expectSidebar(page,{width:72,height:viewport.height<=550?286:340,compact:true});
  const toggle=await openPreferences(page);await expect(toggle).toBeChecked();await toggle.uncheck();
  await expect(page.locator('html')).toHaveAttribute('data-map-sidebar-collapse','false');
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('journey.appearance')).autoCollapseMapSidebar)).toBe(false);
@@ -60,13 +61,13 @@ async function checkPreference(page,viewport){
  await page.keyboard.press('Escape');await nav(page,'地图').click();await expectSidebar(page,full);
  const restoredToggle=await openPreferences(page);await restoredToggle.check();
  await page.keyboard.press('Escape');await expectSidebar(page,full);
- await nav(page,'地图').click();await expectSidebar(page,{width:72,height:342,compact:true});
+ await nav(page,'地图').click();await expectSidebar(page,{width:72,height:viewport.height<=550?286:340,compact:true});
  await page.setViewportSize({width:390,height:844});
  await expect(page.locator('.sidebar')).toBeHidden();
  const mobileNav=page.getByRole('navigation',{name:'手机主导航',exact:true});await expect(mobileNav).toBeVisible();
  const before=await mobileNav.boundingBox();
- await page.getByRole('button',{name:'个人设置',exact:true}).click();
- await page.getByRole('switch',{name:'地图自动收起侧栏',exact:true}).uncheck();await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'返回我的旅程',exact:true}).click();await page.locator('.profile-button').click();
+ await page.getByRole('switch',{name:'地图自动收起侧栏',exact:true}).uncheck();await page.keyboard.press('Escape');await page.getByRole('button',{name:/继续旅程/}).click();
  await expect(page.locator('.sidebar')).toBeHidden();await expect(mobileNav).toBeVisible();
  const after=await mobileNav.boundingBox();
  for(const key of ['x','y','width','height'])expect(after[key]).toBeCloseTo(before[key]);

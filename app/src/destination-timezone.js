@@ -1,13 +1,44 @@
+import destinationTimezones from '../../shared/destination-timezones.json' with { type: 'json' };
+
 // AMap's six-digit domestic administrative code identifies the destination's civil time.
 // Mainland China uses Beijing time, including destinations in Xinjiang.
 const MAINLAND_PREFIXES = new Set([
-  '11','12','13','14','15','21','22','23','31','32','33','34','35','36','37',
-  '41','42','43','44','45','46','50','51','52','53','54','61','62','63','64','65',
+  '11',
+  '12',
+  '13',
+  '14',
+  '15',
+  '21',
+  '22',
+  '23',
+  '31',
+  '32',
+  '33',
+  '34',
+  '35',
+  '36',
+  '37',
+  '41',
+  '42',
+  '43',
+  '44',
+  '45',
+  '46',
+  '50',
+  '51',
+  '52',
+  '53',
+  '54',
+  '61',
+  '62',
+  '63',
+  '64',
+  '65',
 ]);
-const OTHER_ZONES = {'71':'Asia/Taipei','81':'Asia/Hong_Kong','82':'Asia/Macau'};
+const OTHER_ZONES = { 71: 'Asia/Taipei', 81: 'Asia/Hong_Kong', 82: 'Asia/Macau' };
 export function timezoneFromAdcode(adcode) {
   if (typeof adcode !== 'string' || !/^\d{6}$/.test(adcode)) return null;
-  const province = adcode.slice(0,2);
+  const province = adcode.slice(0, 2);
   return MAINLAND_PREFIXES.has(province) ? 'Asia/Shanghai' : OTHER_ZONES[province] || null;
 }
 export function timezoneFromGeocodes(geocodes) {
@@ -21,11 +52,42 @@ export function migrateTimezoneChoice(draft) {
 }
 export function validTimezone(zone) {
   if (typeof zone !== 'string' || !zone) return false;
-  try { new Intl.DateTimeFormat('zh-CN',{timeZone:zone}); return true; }
-  catch { return false; }
+  try {
+    new Intl.DateTimeFormat('zh-CN', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
 }
-export function timezoneLabel(zone,reference) {
-  const name=zone==='Asia/Shanghai' ? '北京时间' : new Intl.DateTimeFormat('zh-CN',{timeZone:zone,timeZoneName:'long'}).formatToParts(reference).find(p=>p.type==='timeZoneName').value;
-  const offset=new Intl.DateTimeFormat('en',{timeZone:zone,timeZoneName:'longOffset'}).formatToParts(reference).find(p=>p.type==='timeZoneName').value.replace('GMT','UTC');
+export function timezoneLabel(zone, reference) {
+  const name =
+    zone === 'Asia/Shanghai'
+      ? '北京时间'
+      : new Intl.DateTimeFormat('zh-CN', { timeZone: zone, timeZoneName: 'long' })
+          .formatToParts(reference)
+          .find((p) => p.type === 'timeZoneName').value;
+  const offset = new Intl.DateTimeFormat('en', { timeZone: zone, timeZoneName: 'longOffset' })
+    .formatToParts(reference)
+    .find((p) => p.type === 'timeZoneName')
+    .value.replace('GMT', 'UTC');
   return `${name}（${offset}）`;
+}
+const destinationAliases = new Map(
+  Object.entries(destinationTimezones).flatMap(([zone, names]) =>
+    names.map((name) => [name.replace(/\s/g, '').toLowerCase(), zone]),
+  ),
+);
+function singleDestinationTimezone(text) {
+  if (destinationAliases.has(text)) return destinationAliases.get(text);
+  if (text.startsWith('中国') && text.length > 2) return singleDestinationTimezone(text.slice(2));
+  return /[市省]$/.test(text) ? destinationAliases.get(text.slice(0, -1)) || null : null;
+}
+export function knownDestinationTimezone(query) {
+  const text = query.replace(/\s/g, '').toLowerCase();
+  const direct = singleDestinationTimezone(text);
+  if (direct) return direct;
+  const parts = text.split(/[、,，;；/|·]/);
+  if (parts.length < 2) return null;
+  const first = singleDestinationTimezone(parts[0]);
+  return first && parts.every((part) => singleDestinationTimezone(part) === first) ? first : null;
 }

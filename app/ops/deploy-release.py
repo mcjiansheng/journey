@@ -100,6 +100,7 @@ def unpack(archive, destination, release, commit):
                 resolved = os.path.normpath(str(PurePosixPath(name).parent / target))
                 if resolved == '..' or resolved.startswith('../') or resolved not in members:
                     raise ValueError('Escaping or dangling symbolic link: ' + name)
+        digests = {}
         # Regular files first; symlinks cannot affect writes.
         for name, member in members.items():
             path = destination / name
@@ -107,8 +108,12 @@ def unpack(archive, destination, release, commit):
             if member.isdir():
                 path.mkdir(exist_ok=True, mode=0o755)
             elif member.isfile():
+                checksum = hashlib.sha256()
                 with tar.extractfile(member) as source, path.open('xb') as output:
-                    shutil.copyfileobj(source, output)
+                    for chunk in iter(lambda: source.read(1024 * 1024), b''):
+                        output.write(chunk)
+                        checksum.update(chunk)
+                digests[name] = checksum.hexdigest()
                 path.chmod(0o755 if member.mode & 0o111 else 0o644)
         for name, member in members.items():
             if member.issym():
@@ -143,11 +148,7 @@ def unpack(archive, destination, release, commit):
         if set(inventory) != actual:
             raise ValueError('Manifest inventory mismatch')
         for name, expected in inventory.items():
-            checksum = hashlib.sha256()
-            with (destination / name).open('rb') as source:
-                for chunk in iter(lambda: source.read(1024 * 1024), b''):
-                    checksum.update(chunk)
-            if checksum.hexdigest() != expected:
+            if digests.get(name) != expected:
                 raise ValueError('Manifest digest mismatch: ' + name)
         for name in ('server/index.mjs', 'dist/index.html', 'dist/build.json', 'package.json',
                      'package-lock.json', 'src/domain.js'):
@@ -162,9 +163,11 @@ def unpack(archive, destination, release, commit):
 
 
 class Deployment:
-    def __init__(self, release, base=BASE, state=STATE):
+    def __init__(self, release, base=None, state=None):
         if not ID.fullmatch(release):
             raise ValueError('Invalid release id')
+        base = BASE if base is None else base
+        state = STATE if state is None else state
         self.release, self.base, self.state = release, base, state
         self.path = state / (release + '.json')
         self.data = {}
@@ -240,6 +243,12 @@ class Deployment:
                     '--property=ActiveState').strip()
         return snapshot
 
+    def inspect_protected(self):
+        try:
+            return self.protected(), False
+        except BaseException as inspection:
+            return {'inspectionError': str(inspection)}, True
+
     def switch(self, target):
         temp = self.base / ('.current-' + self.release)
         with contextlib.suppress(FileNotFoundError):
@@ -306,7 +315,7 @@ class Deployment:
                         raise RuntimeError('Prior activation recovery failed: ' + prior_id)
                 atomic_json(active, {'release': self.release})
                 self.save('activating')
-                before = self.protected()
+                before, before_error = self.inspect_protected()
                 require_space(self.base / 'releases')
                 stage = Path(tempfile.mkdtemp(prefix='.stage-', dir=self.base / 'releases'))
                 try:
@@ -340,9 +349,11 @@ class Deployment:
                 self.switch('releases/' + self.release)
                 self.control('start', 'journey.service')
                 self.health(self.data['buildId'])
-                if self.protected() != before:
-                    raise RuntimeError('Protected service state changed during deployment')
-                self.save('success', exitCode=0)
+                after, after_error = self.inspect_protected()
+                protected_changed = before_error or after_error or after != before
+                self.save('success', exitCode=0,
+                          protectedServicesChanged=protected_changed,
+                          protectedServicesBefore=before, protectedServicesAfter=after)
             except BaseException as error:
                 # Further coordinator TERM signals must not interrupt rollback.
                 for signum in previous_handlers:
@@ -359,11 +370,11 @@ class Deployment:
                         self.health(old_build)
                     except BaseException as rollback:
                         rollback_error = str(rollback)
-                try:
-                    after = self.protected() if before is not None else None
-                    protected_changed = before is not None and after != before
-                except BaseException as inspection:
-                    after, protected_changed = {'inspectionError': str(inspection)}, True
+                if before is not None:
+                    after, after_error = self.inspect_protected()
+                    protected_changed = before_error or after_error or after != before
+                else:
+                    after, protected_changed = None, False
                 self.save('rollback_failed' if rollback_error else ('rolled_back' if stopped else 'failed'),
                           error=str(error), rollbackError=rollback_error, exitCode=1,
                           protectedServicesChanged=protected_changed,
@@ -404,10 +415,10 @@ class Deployment:
             self.switch('releases/' + old)
             self.control('start', 'journey.service')
             self.health(self.data['previousBuildId'])
-            after = self.protected()
+            after, after_error = self.inspect_protected()
             self.save('rolled_back', error=error, rollbackError=None, exitCode=1,
                       protectedServicesAfter=after,
-                      protectedServicesChanged=after != self.data.get('protectedServicesBefore'))
+                      protectedServicesChanged=after_error or after != self.data.get('protectedServicesBefore'))
         except BaseException as rollback:
             self.save('rollback_failed', error=error, rollbackError=str(rollback), exitCode=1)
         # Keep failed recovery ownership durable so the next worker refuses it.
@@ -454,9 +465,10 @@ def main():
                 data = json.loads(deployment.path.read_text())
         print(json.dumps(data))
         return TERMINAL.get(data['status'], 2)
-    if len(args) == 2 and args[0] in ('activate', 'recover') and not os.environ.get('SUDO_USER') and os.environ.get('INVOCATION_ID'):
+    deploy_user = os.environ.get('DEPLOY_USER', 'journey-deploy')
+    if len(args) == 2 and args[0] in ('activate', 'recover') and os.environ.get('SUDO_USER') != deploy_user:
         return getattr(Deployment(args[1]), args[0])()
-    raise ValueError('Expected receive ID SHA256 COMMIT or status ID')
+    raise ValueError('Expected receive ID SHA256 COMMIT, status ID, or admin activate/recover ID')
 
 
 if __name__ == '__main__':

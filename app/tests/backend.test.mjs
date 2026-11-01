@@ -64,3 +64,29 @@ test('trip timezone can be corrected after creation without changing dates or ac
  assert.equal(result.data.snapshot.objects.find(o=>o.id===activity).payload.time.start,'09:30');
  assert.equal((await f.op(a,tid,{objectId:tid,kind:'patch',patch:{timezone:'invalid/timezone'}})).status,422);
 });
+test('operations occurring within lease window are accepted when delivered after lease expiry while events past lease expiry are rejected',async t=>{
+ const f=await fixture(t),a=await f.account('lease-expiry'),s=await f.trip(a),tid=s.trip.id,lease=await f.clock(a);
+ f.advance(8*86400000);
+ const ok=await f.op(a,tid,{objectId:tid,kind:'patch',patch:{name:'租期内发生租期后补传'}},{lease,elapsed:1000});
+ assert.equal(ok.status,200);assert.equal(ok.data.snapshot.trip.name,'租期内发生租期后补传');
+ const expired=await f.op(a,tid,{objectId:tid,kind:'patch',patch:{name:'超租期发生'}},{lease,elapsed:7*86400000+1});
+ assert.equal(expired.status,409);assert.equal(expired.data.error.code,'CLOCK_INVALID');
+});
+test('bounded password hash queue absorbs bursts and rejects overflow or shutdown without leaking slots',async t=>{
+ let active=0,maxObserved=0,hold=true;const gates=[];
+ const app=createApp({databasePath:':memory:',config:{appOrigin:origin,basePath:'/journey/'},maxPasswordJobs:4,maxPasswordQueue:2,hashPassword:async(password,salt)=>{active++;maxObserved=Math.max(maxObserved,active);if(hold)await new Promise(resolveGate=>gates.push(resolveGate));active--;return Buffer.from(password+':'+salt);}});
+ const listener=app.listen(0,'127.0.0.1');await new Promise(r=>listener.once('listening',r));const url=`http://127.0.0.1:${listener.address().port}/journey`;
+ try{
+  const post=i=>fetch(url+'/api/auth/register',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({identifier:`burst${i}@example.com`,password:'long-test-password'})});
+  const pending=Array.from({length:6},(_,i)=>post(i));
+  while(gates.length<4)await new Promise(r=>setTimeout(r,5));
+  await new Promise(r=>setTimeout(r,20));
+  const overflow=await post(99);
+  assert.equal(overflow.status,503);assert.equal((await overflow.json()).error.code,'AUTH_BUSY');
+  hold=false;
+  while(gates.length)gates.shift()();
+  const responses=await Promise.all(pending);
+  assert.equal(maxObserved,4);
+  assert.deepEqual(responses.map(r=>r.status),[201,201,201,201,201,201]);
+ }finally{app.locals.drainStreams();listener.closeAllConnections();await new Promise(r=>listener.close(r));app.locals.close();}
+});

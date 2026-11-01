@@ -126,12 +126,12 @@ test('durable local completion preserves blocked sync errors and clears recovere
 });
 
 function recoveryFixture(queue, options={}) {
-  const posts=[],storage=new Map();let handler=options.handler,failStorage=false;
+  const posts=[],storage=new Map();let handler=options.handler,failStorage=false,putCount=0;
   const snapshot=id=>({trip:{id,name:id},objects:id==='t'?(options.objects||[]):[],cursor:1,epoch:1});
   const ok=data=>({ok:true,json:async()=>structuredClone(data)});
   const sandbox={structuredClone,performance:options.performance||performance,crypto:{randomUUID},previewReschedule,navigator:{onLine:true},
     window:{addEventListener(){}},document:{addEventListener(){},visibilityState:'hidden'},setTimeout,clearTimeout,setInterval(){},useSyncExternalStore(){},
-    openDB:async()=>({put:async(_,value,key)=>{if(options.beforePut)await options.beforePut();if(failStorage)throw new Error('full');storage.set(key,structuredClone(value));},delete:async(_,key)=>storage.delete(key)}),
+    openDB:async()=>({put:async(_,value,key)=>{putCount++;if(options.beforePut)await options.beforePut();if(failStorage)throw new Error('full');storage.set(key,structuredClone(value));},delete:async(_,key)=>storage.delete(key)}),
     fetch:async(url,request)=>{
       const path=url.replace('/journey','');
       if(path==='/api/auth/logout')return ok({ok:true});
@@ -144,10 +144,10 @@ function recoveryFixture(queue, options={}) {
   const subject=new Script(`(function(){${controllerSource}
     account={user:{id:'A',preferences:{}},trips:[{id:'t',name:'Trip'},{id:'other',name:'Other'}],snapshots:{t:${JSON.stringify(snapshot('t'))}},contexts:{},queue:${JSON.stringify(queue)}};
     csrf='csrf';selected='t';connection='current';lease={leaseId:'lease',uncertaintyMs:2,serverTime:Date.now(),expiresAt:Date.now()+100000};leasePerformance=performance.now();leaseWall=Date.now();renderAccount();
-    return {flush,logout,getRecoveryPaused:()=>recoveryPaused,reapplyPending,discardPending,retryPending,clearError,mutate,captureScope,setContext,updateDrafts,persistLocal,
-      withLocal:job=>serializeLocal(job),select:id=>{selected=id;renderAccount();},getState:()=>state,getQueue:()=>clone(account.queue),add:op=>{account.queue.push(op);renderAccount();},switchAccount:(queue=[])=>{authEpoch++;account=emptyAccount({id:'B'});account.queue=clone(queue);selected=null;renderAccount();}};
+    return {flush,logout,ensureClock,getRecoveryPaused:()=>recoveryPaused,reapplyPending,discardPending,retryPending,clearError,mutate,captureScope,setContext,updateDrafts,persistLocal,
+      expireLease:()=>{lease.expiresAt=lease.serverTime-1;},withLocal:job=>serializeLocal(job),select:id=>{selected=id;renderAccount();},getState:()=>state,getQueue:()=>clone(account.queue),add:op=>{account.queue.push(op);renderAccount();},switchAccount:(queue=[])=>{authEpoch++;account=emptyAccount({id:'B'});account.queue=clone(queue);selected=null;renderAccount();}};
   })()`).runInNewContext(sandbox);
-  return {subject,posts,storage,setHandler:fn=>handler=fn,failStorage:()=>{failStorage=true;},restoreStorage:()=>{failStorage=false;}};
+  return {subject,posts,storage,getPutCount:()=>putCount,setHandler:fn=>handler=fn,failStorage:()=>{failStorage=true;},restoreStorage:()=>{failStorage=false;}};
 }
 const queued=(id,tripId='t',extra={})=>({id,tripId,objectId:tripId,kind:'patch',patch:{name:id},generation:0,clock:{leaseId:'lease',elapsedMs:0,uncertaintyMs:2},...extra});
 const failed=(code,status=409)=>({ok:false,status,json:async()=>({error:{code,message:code}})});
@@ -341,4 +341,45 @@ test('an old account recovery cannot release a new account recovery lock after l
   assert.equal(f.subject.getRecoveryPaused(),true);
   f.setHandler(null);releaseClock({leaseId:'new-lease',serverTime:Date.now(),expiresAt:Date.now()+100000});
   await newRecovery;assert.equal(f.subject.getState().recoveryBusy,false);
+});
+
+test('proactive lease renewal updates subsequent edits without rewriting existing queued or unknown-receipt operations',async()=>{
+  const existing=queued('existing','t',{receiptUnknown:true,clock:{leaseId:'old-lease',elapsedMs:42,uncertaintyMs:3}});
+  const f=recoveryFixture([existing],{clock:async()=>({leaseId:'renewed-lease',serverTime:Date.now(),expiresAt:Date.now()+100000})});
+  f.subject.expireLease();
+  await f.subject.ensureClock();
+  const preserved=f.subject.getQueue()[0];
+  assert.equal(preserved.id,'existing');
+  assert.deepEqual(preserved.clock,{leaseId:'old-lease',elapsedMs:42,uncertaintyMs:3});
+  const created=await f.subject.mutate({objectId:'t',kind:'patch',patch:{name:'fresh edit'}});
+  assert.equal(created.clock.leaseId,'renewed-lease');
+  assert.equal(created.clock.uncertain,undefined);
+});
+
+test('consecutive draft updates coalesce pending persistence writes and avoid replaying snapshot projections',async()=>{
+  const f=recoveryFixture([]);
+  const beforeSnapshot=f.subject.getState().snapshot;
+  const scope=f.subject.captureScope();
+  for(let i=0;i<20;i++)f.subject.updateDrafts(drafts=>({...drafts,activity:{title:`draft-${i}`}}),scope);
+  assert.equal(f.subject.getState().context.drafts.activity.title,'draft-19');
+  assert.equal(f.subject.getState().snapshot,beforeSnapshot);
+  await f.subject.persistLocal(scope);
+  assert.equal(f.storage.get('account:A').contexts.t.drafts.activity.title,'draft-19');
+  assert.ok(f.getPutCount()<=2,`expected coalesced writes, got ${f.getPutCount()}`);
+});
+
+test('pending draft writes preserve the originating account during a slow write and account change',async()=>{
+  let release,begin,count=0;
+  const begun=new Promise(resolve=>begin=resolve),gate=new Promise(resolve=>release=resolve);
+  const f=recoveryFixture([],{beforePut:async()=>{if(++count===1){begin();await gate;}}});
+  f.subject.setContext({drafts:{title:'A-first'}});
+  await begun;
+  f.subject.setContext({drafts:{title:'A-latest'}});
+  f.subject.switchAccount();
+  f.subject.select('t');
+  f.subject.setContext({drafts:{title:'B-latest'}});
+  release();
+  await f.subject.persistLocal();
+  assert.equal(f.storage.get('account:B').contexts.t.drafts.title,'B-latest');
+  assert.equal(f.storage.get('account:A').contexts.t.drafts.title,'A-latest');
 });
