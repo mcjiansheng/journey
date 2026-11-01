@@ -60,7 +60,8 @@ test('trip creation proceeds during a pending destination lookup using device ti
  let requested=false;await page.route('**/api/config',async route=>{requested=true;await new Promise(resolve=>setTimeout(resolve,3500));await route.fulfill({json:{amapKey:''}}).catch(()=>{})});
  await page.getByRole('button',{name:'创建旅程',exact:true}).click();
  await expect(page.getByLabel('旅程名称')).toBeFocused();
- await page.getByLabel('旅程名称').fill('慢网也能开始');await page.getByLabel('目的地',{exact:true}).fill('南京');
+ // An unknown destination exercises the async lookup; 南京 now resolves locally.
+ await page.getByLabel('旅程名称').fill('慢网也能开始');await page.getByLabel('目的地',{exact:true}).fill('还没定下的小镇');
  await page.getByLabel('出发日期',{exact:true}).fill('2026-11-01');await page.getByLabel('结束日期',{exact:true}).fill('2026-11-03');
  await expect.poll(()=>requested).toBe(true);
  const zone=await page.evaluate(()=>Intl.DateTimeFormat().resolvedOptions().timeZone);

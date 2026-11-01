@@ -39,6 +39,8 @@ async function shot(page,name){await page.screenshot({path:`${evidence}/${name}.
 
 test('sidebar morph keeps every icon fixed across five trips, reversal and reduced motion',async({page})=>{
  await page.setViewportSize({width:1440,height:900});await seed(page);await page.locator('.continue-card').click();
+ await expect(page.locator('.sidebar nav .selection-indicator')).toBeVisible();
+ await page.evaluate(()=>document.fonts.ready);
  await page.evaluate(fn=>{window.sidebarGeometry=eval(`(${fn})`)},sidebarGeometry.toString());
  const samples=await page.evaluate(async()=>{
   const sidebar=document.querySelector('.sidebar');

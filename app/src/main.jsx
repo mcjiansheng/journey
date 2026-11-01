@@ -5,6 +5,7 @@ import './tokens.css';
 import './styles.css';
 import './navigation.css';
 import './components/login.css';
+import './atlas.css';
 import { installFeedback } from './feedback.js';
 const cleanupFeedback = installFeedback();
 if (import.meta.hot) import.meta.hot.dispose(cleanupFeedback);

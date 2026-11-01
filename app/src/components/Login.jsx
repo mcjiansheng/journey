@@ -12,100 +12,55 @@ function JourneySketch() {
         aria-hidden="true"
         focusable="false"
       >
+        <defs>
+          <pattern id="atlas-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M40 0H0V40" stroke="currentColor" strokeOpacity=".1" />
+          </pattern>
+        </defs>
+        <rect x="16" y="16" width="608" height="428" rx="18" className="atlas-paper" />
+        <rect x="16" y="16" width="608" height="428" rx="18" fill="url(#atlas-grid)" />
         <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-          <g className="sketch-atmosphere" strokeWidth="1">
-            <circle cx="327" cy="231" r="112" />
-            <circle cx="327" cy="231" r="139" />
-            <path d="M48 351c44-5 68-8 102-1m329-183c37-17 64-17 100-8" />
-            <circle cx="134" cy="170" r="5" />
-            <circle cx="510" cy="317" r="8" />
-            <path d="M205 119v12m-6-6h12m247 242v10m-5-5h10" />
+          <g className="atlas-contours" strokeWidth="1.2">
+            <path d="M14 118C106 34 139 69 160 129S232 215 178 268 92 315 16 351" />
+            <path d="M14 142C98 63 117 91 139 149S209 211 155 255 84 291 16 327" />
+            <path d="M14 168C91 95 102 116 118 167S183 215 133 247 65 277 16 303" />
+            <path d="M348 443C296 354 353 300 421 309S501 317 527 251 557 163 624 155" />
+            <path d="M376 443C325 359 370 322 426 332S521 340 550 272 575 187 624 181" />
+            <path d="M404 443C354 369 391 346 441 357S545 360 574 291 595 214 624 211" />
           </g>
           <path
-            className="sketch-route"
-            d="M23 318C100 244 134 289 181 311S258 321 289 265S378 252 420 233S478 170 536 142"
-            strokeWidth="1.6"
-            strokeDasharray="4 10"
+            className="atlas-river"
+            d="M250 16C194 82 337 103 295 171S236 241 291 285 376 360 311 444"
           />
-          <g transform="translate(87 264)">
-            <g className="sketch-parallax sketch-pin">
-              <g className="sketch-float">
-                <ellipse className="sketch-shadow" cy="43" rx="22" ry="5" stroke="none" />
-                <path
-                  className="sketch-paper"
-                  d="M0 24S-19 3-19-9a19 19 0 0 1 38 0C19 3 0 24 0 24Z"
-                  strokeWidth="2"
-                />
-                <circle cy="-9" r="6" strokeWidth="1.8" />
-                <circle className="sketch-tint" cy="-9" r="3" stroke="none" />
-              </g>
-            </g>
+          <path
+            className="sketch-route"
+            d="M131 306C151 214 230 299 281 223S405 277 489 123"
+            strokeWidth="3"
+            strokeDasharray="5 9"
+          />
+          <g transform="translate(131 306)" className="sketch-parallax sketch-pin">
+            <circle r="22" className="atlas-waypoint" />
+            <circle r="7" fill="currentColor" stroke="none" />
           </g>
-          <g transform="translate(183 318)">
-            <g className="sketch-parallax sketch-photo">
-              <g className="sketch-float">
-                <g transform="rotate(13)">
-                  <rect
-                    className="sketch-tint"
-                    x="-22"
-                    y="-22"
-                    width="52"
-                    height="60"
-                    rx="7"
-                    stroke="none"
-                  />
-                  <rect
-                    className="sketch-paper"
-                    x="-29"
-                    y="-32"
-                    width="54"
-                    height="60"
-                    rx="6"
-                    strokeWidth="1.8"
-                  />
-                  <path d="M-20 11-7-6 3 6l7-8 7 13" strokeWidth="1.7" />
-                  <circle className="sketch-tint" cx="9" cy="-18" r="5" stroke="none" />
-                  <path d="M-19 18h34" strokeWidth="1.4" opacity=".35" />
-                </g>
-              </g>
-            </g>
+          <g transform="translate(281 223)" className="sketch-parallax sketch-photo">
+            <circle r="30" className="atlas-waypoint" />
+            <path d="M-12 10V-3L0-13 12-3V10H-12ZM-4 10V1H4V10" strokeWidth="2" />
           </g>
-          <g transform="translate(327 231)">
-            <g className="sketch-parallax sketch-compass">
-              <g className="sketch-float">
-                <circle className="sketch-halo" r="79" stroke="none" />
-                <circle className="sketch-paper" r="58" strokeWidth="1.4" />
-                <circle r="47" strokeWidth="2.2" />
-                <g opacity=".45" strokeWidth="1.5">
-                  <path d="M0-38v5m0 66v5m-38-38h5m66 0h5" />
-                </g>
-                <g className="sketch-needle">
-                  <path className="sketch-tint" d="m20-22-10 32-30 12 10-32Z" strokeWidth="2" />
-                  <path d="m20-22-20 22-10-10Z" fill="currentColor" strokeWidth="1.5" />
-                  <circle r="3" className="sketch-paper" strokeWidth="1.5" />
-                </g>
-              </g>
-            </g>
+          <g transform="translate(489 123)" className="sketch-parallax sketch-plane">
+            <circle r="36" className="atlas-destination" />
+            <path d="M0 19S-13 0-13-8a13 13 0 0 1 26 0C13 0 0 19 0 19Z" strokeWidth="2" />
+            <circle cy="-8" r="4" strokeWidth="2" />
           </g>
-          <g transform="translate(535 143)">
-            <g className="sketch-parallax sketch-plane">
-              <g className="sketch-float">
-                <path
-                  className="sketch-tint"
-                  d="m-28 1 75-27-26 65-15-28Z"
-                  stroke="none"
-                  transform="translate(4 7)"
-                />
-                <path className="sketch-paper" d="m-32-5 76-24-26 65L3 8Z" strokeWidth="1.8" />
-                <path d="M3 8 44-29M3 8l-3 21 12-10" strokeWidth="1.8" />
-                <path className="sketch-wind" d="m-49 11-14 6m27 9-27 12" strokeWidth="1.5" />
-              </g>
+          <g transform="translate(546 363)" className="sketch-parallax sketch-compass">
+            <circle r="37" strokeOpacity=".3" />
+            <g className="sketch-needle">
+              <path d="m0-25 9 25-9 25-9-25Z" strokeWidth="1.4" />
+              <path d="M0-25 9 0H0Z" fill="currentColor" />
             </g>
+            <path d="M-46 0h8m76 0h8M0-46v8m0 76v8" strokeOpacity=".5" />
           </g>
-          <g className="sketch-sparkles" strokeWidth="1.5">
-            <path d="M416 108v12m-6-6h12" />
-            <circle cx="69" cy="186" r="2" fill="currentColor" stroke="none" />
-            <circle cx="439" cy="299" r="3" fill="currentColor" stroke="none" />
+          <g strokeWidth="1.3" strokeOpacity=".55">
+            <path d="M49 46h28m-14-14v28M563 49h28m-14-14v28M49 400h28m-14-14v28" />
           </g>
         </g>
       </svg>

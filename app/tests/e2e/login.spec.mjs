@@ -69,7 +69,7 @@ test('entry layout, pointer feedback, appearance settings and narrow screens',as
  await expect.poll(()=>page.locator('.auth-layout').evaluate(el=>el.style.getPropertyValue('--sketch-x'))).toBe('');
  await page.emulateMedia({reducedMotion:'reduce'});await page.mouse.move(210,280);
  expect(await page.locator('.auth-layout').evaluate(el=>el.style.getPropertyValue('--sketch-x'))).toBe('');
- expect(await page.locator('.sketch-float').first().evaluate(el=>getComputedStyle(el).animationName)).toBe('none');
+ expect(await page.locator('.sketch-route').evaluate(el=>getComputedStyle(el).animationName)).toBe('none');
  await page.evaluate(()=>document.documentElement.dataset.theme='dark');await screenshot(page,'dark');
  await page.evaluate(()=>document.documentElement.dataset.transparency='true');
  expect(await page.locator('.login-card').evaluate(el=>getComputedStyle(el).backdropFilter)).toBe('none');

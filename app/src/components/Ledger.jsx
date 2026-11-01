@@ -603,7 +603,7 @@ export default function Ledger({
     <div className="page ledger-page">
       <div className="page-heading">
         <div>
-          <h1 className="sr-only">费用</h1>
+          <h1 className="workspace-heading">费用</h1>
         </div>
         <button className="primary" onClick={() => edit(j.context.pendingExpenseId || id())}>
           <Plus size={18} />

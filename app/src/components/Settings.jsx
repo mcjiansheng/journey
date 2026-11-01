@@ -563,7 +563,7 @@ export default function Settings({ journey: j, onTeam, onDeleted, onDates }) {
   }
   return (
     <div className="page settings-page">
-      <h1 className="sr-only">旅程管理</h1>
+      <h1 className="workspace-heading">旅程管理</h1>
       <Section title="当前旅程">
         <div className="form-grid">
           <Field label="旅程名称">
