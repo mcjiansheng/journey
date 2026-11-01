@@ -31,14 +31,14 @@ test('continuation skips management while retaining day and draft, sync opens di
  await expect(nav(page,'行程')).toHaveAttribute('aria-current','page');
  await expect(page.getByRole('tab',{name:/第2天/})).toHaveAttribute('aria-selected','true');
  await page.locator('.sync-status').click();
- await expect(page.getByRole('dialog',{name:'保存与同步'})).toBeVisible();
+ await expect(page.getByRole('dialog',{name:'我的设置'})).toBeVisible();
  await expect(page.getByLabel('称呼',{exact:true})).toHaveCount(0);
- await expect(page.getByRole('heading',{name:'保存与同步',exact:true})).toBeFocused();
+ await expect(page.locator('.personal-category > h3')).toBeFocused();
  await page.keyboard.press('Escape');await page.getByRole('button',{name:/查看.*位同行伙伴/}).click();
  await expect(page.getByRole('heading',{name:'同行的伙伴'})).toBeFocused();await page.keyboard.press('Escape');
- await nav(page,'管理').click();await expect(page.getByLabel('旅程名称')).toBeVisible();
+ await nav(page,'旅程设置').click();await expect(page.getByLabel('旅程名称')).toBeVisible();
  await expect(page.getByLabel('称呼',{exact:true})).toHaveCount(0);
- await page.locator('.profile-button').click();await expect(page.getByRole('heading',{name:'个人设置'})).toBeFocused();
+ await page.locator('.sidebar .profile-button').click();await expect(page.getByRole('heading',{name:'我的设置'})).toBeFocused();
  await page.mouse.click(3,3);await expect(page.getByRole('dialog')).toBeVisible();await page.keyboard.press('Escape');
  await expect.poll(()=>page.evaluate(async tripId=>(await fetch('/api/trips').then(r=>r.json())).navigation.contexts[tripId]?.page,credentials.tripId)).toBe('settings');
  const second=await browser.newContext({viewport:{width:390,height:844}});const mobile=await second.newPage();
@@ -68,7 +68,7 @@ test('trip creation proceeds during a pending destination lookup using device ti
  const started=Date.now();await page.getByRole('dialog').getByRole('button',{name:'创建旅程',exact:true}).click();
  await expect(page.getByRole('dialog')).toHaveCount(0);expect(Date.now()-started).toBeLessThan(3000);
  const trip=await page.evaluate(async()=>(await fetch('/api/trips').then(r=>r.json())).trips[0]);expect(trip.timezone).toBe(zone);
- await nav(page,'管理').click();await page.getByLabel('旅程时区').selectOption('Asia/Tokyo');await expect(page.locator('.sync-status.synced')).toBeVisible();
+ await nav(page,'旅程设置').click();await page.getByLabel('旅程时区').selectOption('Asia/Tokyo');await expect(page.locator('.sync-status.synced')).toBeVisible();
  await expect.poll(()=>page.evaluate(async()=>(await fetch('/api/trips').then(r=>r.json())).trips[0].timezone)).toBe('Asia/Tokyo');
 });
 
@@ -79,11 +79,11 @@ test('map can retain full desktop navigation and page columns share an edge',asy
  const before=await page.locator('.sidebar').boundingBox();const itinerary=await page.locator('.itinerary-page').boundingBox();
  await nav(page,'费用').click();const ledger=await page.locator('.ledger-page').boundingBox();expect(ledger.x).toBeCloseTo(itinerary.x);expect(ledger.width).toBeCloseTo(itinerary.width);
  await nav(page,'地图').click();await expect(page.locator('.map-trip-title')).toContainText('南京三日慢游');
- await expect(page.locator('.sidebar-foot')).toBeVisible();await expect(nav(page,'管理').locator('span')).toBeVisible();
+ await expect(page.locator('.sidebar-foot')).toBeVisible();await expect(nav(page,'旅程设置').locator('span')).toBeVisible();
  const map=await page.locator('.sidebar').boundingBox();expect(map.width).toBeCloseTo(before.width);expect(map.height).toBeCloseTo(before.height);
  await page.screenshot({path:'../.local/evidence/frontend-review/desktop-map-shell.png'});
  for(const width of [390,360]){
-  await page.setViewportSize({width,height:844});await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'管理',exact:true}).click();
+  await page.setViewportSize({width,height:844});await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'旅程设置',exact:true}).click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:`../.local/evidence/frontend-review/mobile-management-${width}.png`});
  }

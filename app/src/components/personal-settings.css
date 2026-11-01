@@ -1,0 +1,416 @@
+.modal.personal-settings-modal.wide {
+  width: min(900px, calc(100vw - 48px));
+  max-width: 900px;
+  height: min(640px, calc(100dvh - 48px));
+}
+.personal-settings-modal .modal-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.personal-scope {
+  margin: 0;
+  padding: 0 28px 16px;
+  font-size: 13px;
+}
+.personal-layout {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+.personal-index {
+  padding: 20px 14px;
+  border-right: 1px solid var(--line);
+  background: var(--surface-soft, var(--surface));
+  overflow-y: auto;
+}
+.personal-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 20px;
+  min-width: 0;
+}
+.personal-profile > span:last-child {
+  min-width: 0;
+}
+.personal-profile strong,
+.personal-profile small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.personal-profile small {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 5px;
+}
+.personal-index nav {
+  display: grid;
+  gap: 5px;
+}
+.personal-index nav button {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 11px;
+  padding: 12px;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  color: var(--text);
+  border-radius: 12px;
+}
+.personal-index nav button.selected {
+  background: var(--optical-selected);
+  color: var(--accent);
+}
+.personal-index nav button > span {
+  flex: 1;
+}
+.personal-index nav strong {
+  font-weight: 550;
+  font-size: 14px;
+}
+.personal-index nav small,
+.personal-index nav button > svg:last-child {
+  display: none;
+}
+.personal-logout {
+  margin: 18px 10px 0;
+}
+.personal-category {
+  padding: 20px 28px 28px;
+  overflow-y: auto;
+  min-width: 0;
+}
+.personal-category > h3 {
+  font-size: 21px;
+  margin: 0 0 20px;
+  outline: none;
+}
+.personal-settings-modal .personal-back,
+.personal-mobile-only {
+  display: none;
+}
+.personal-choice-field,
+.personal-segment-setting {
+  border: 0;
+  padding: 0;
+  margin: 0 0 22px;
+  min-width: 0;
+}
+.personal-choice-field legend,
+.personal-segment-setting legend {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.personal-palette-cards,
+.personal-theme-cards {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.personal-theme-cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.personal-choice-field button {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 6px;
+  border-radius: 12px;
+  color: var(--text);
+  min-width: 0;
+}
+.personal-choice-field button[aria-pressed='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.personal-choice-field button > span:last-child {
+  padding: 8px 4px 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.personal-preview {
+  height: 88px;
+  display: flex;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--preview-page);
+  color: var(--preview-text);
+}
+.personal-preview i {
+  font-style: normal;
+}
+.preview-sidebar {
+  background: var(--preview-surface);
+  width: 25%;
+  padding: 16px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.preview-sidebar b {
+  height: 4px;
+  background: var(--preview-text);
+  opacity: 0.2;
+  border-radius: 2px;
+}
+.preview-sidebar b:first-child {
+  background: var(--preview-primary);
+  opacity: 1;
+  height: 10px;
+}
+.preview-content {
+  flex: 1;
+  padding: 14px 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.preview-content b {
+  background: var(--preview-text);
+  width: 60%;
+  height: 5px;
+  grid-column: 1 / -1;
+  border-radius: 2px;
+}
+.preview-content > span {
+  background: var(--preview-surface);
+  border-top: 3px solid var(--preview-primary);
+  border-radius: 4px;
+}
+.personal-theme-cards .personal-preview {
+  height: 65px;
+}
+.preview-system {
+  display: flex;
+  overflow: hidden;
+  border-radius: 7px;
+}
+.preview-system > .personal-preview {
+  width: 50%;
+  border-radius: 0;
+}
+.personal-segment-setting > p {
+  font-size: 12.5px;
+  margin: 0 0 12px;
+}
+.personal-segments {
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--surface-soft, var(--surface));
+  border: 1px solid var(--line);
+}
+.personal-segments button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
+  padding: 9px 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+.personal-segments button[aria-pressed='true'] {
+  background: var(--optical-selected);
+  color: var(--accent);
+}
+.personal-setting-row {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.personal-setting-row > span {
+  display: grid;
+  gap: 5px;
+}
+.personal-setting-row strong {
+  font-size: 14px;
+  font-weight: 550;
+}
+.personal-setting-row small,
+.personal-notification-permission small {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.personal-setting-row input {
+  flex-shrink: 0;
+}
+.personal-notification-permission {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+}
+.personal-error {
+  padding: 8px 24px;
+  margin: 0;
+}
+.personal-settings-modal .settings-section {
+  border-top: 0;
+  padding-top: 0;
+}
+.personal-settings-modal button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.trip-header .my-settings-button {
+  display: none;
+}
+@media (max-width: 760px) {
+  .modal.personal-settings-modal.wide {
+    inset: 0 0 auto;
+    width: 100%;
+    max-width: none;
+    height: var(--visual-height, 100dvh);
+    max-height: var(--visual-height, 100dvh);
+    margin: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+  .personal-settings-modal .modal-head {
+    padding: max(20px, env(safe-area-inset-top)) 20px 16px;
+  }
+  .personal-scope {
+    padding: 0 20px 16px;
+  }
+  .personal-layout {
+    display: block;
+    overflow-y: auto;
+  }
+  .personal-index {
+    border: 0;
+    padding: 16px 20px max(24px, env(safe-area-inset-bottom));
+    min-height: 100%;
+  }
+  .personal-index nav button {
+    padding: 15px 12px;
+    min-height: 62px;
+  }
+  .personal-index nav button.selected {
+    color: var(--text);
+    background: transparent;
+  }
+  .personal-index nav small {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 5px;
+  }
+  .personal-index nav button > svg:last-child {
+    display: block;
+  }
+  .personal-index nav button:nth-last-child(2) {
+    margin-top: 18px;
+  }
+  .personal-settings-modal .personal-desktop-only {
+    display: none;
+  }
+  .personal-category {
+    display: none;
+    padding: 8px 20px 28px;
+    overflow: visible;
+  }
+  .personal-settings-modal.has-category .personal-index {
+    display: none;
+  }
+  .personal-settings-modal.has-category .personal-category {
+    display: block;
+  }
+  .personal-settings-modal .personal-back {
+    display: inline-flex;
+    margin-bottom: 20px;
+  }
+  .personal-mobile-only {
+    display: block;
+  }
+  .personal-theme-cards {
+    gap: 7px;
+  }
+  .personal-theme-cards .preview-sidebar {
+    padding: 14px 4px;
+  }
+  .personal-theme-cards .preview-content {
+    padding: 14px 6px;
+  }
+  .trip-header .my-settings-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    min-height: 44px;
+    margin-left: 8px;
+    background: transparent;
+    border: 0;
+  }
+  .trip-header .my-settings-button .avatar {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+@media (max-width: 760px) {
+  .app-shell .trip-header .header-right,
+  .app-shell .trip-header .header-right:has(.sync-status:not(.synced)) {
+    grid-template-columns: 28px auto 40px;
+  }
+  .app-shell .trip-header .my-settings-button {
+    margin-left: 4px;
+    padding: 0 4px;
+    min-width: 36px;
+  }
+  .app-shell .trip-header .my-settings-button .avatar {
+    outline: none;
+    border: 1px solid var(--accent);
+    width: 28px;
+    height: 28px;
+    background: var(--surface);
+  }
+}
+
+.personal-settings-modal .personal-group-label {
+  display: none;
+}
+@media (max-width: 760px) {
+  .personal-settings-modal .personal-group-label {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 12px 12px 4px;
+  }
+}
+
+@media (min-width: 761px) {
+  .personal-settings-modal .personal-category {
+    padding-top: 16px;
+  }
+  .personal-category > h3 {
+    margin-bottom: 16px;
+  }
+  .personal-choice-field {
+    margin-bottom: 16px;
+  }
+  .personal-preview {
+    height: 78px;
+  }
+  .personal-theme-cards .personal-preview {
+    height: 56px;
+  }
+}
+.personal-category > :last-child {
+  margin-bottom: 0;
+}

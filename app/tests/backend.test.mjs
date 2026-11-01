@@ -90,3 +90,16 @@ test('bounded password hash queue absorbs bursts and rejects overflow or shutdow
   assert.deepEqual(responses.map(r=>r.status),[201,201,201,201,201,201]);
  }finally{app.locals.drainStreams();listener.closeAllConnections();await new Promise(r=>listener.close(r));app.locals.close();}
 });
+
+test('appearance preferences merge per field and follow the account into a fresh session', async t => {
+ const f=await fixture(t),actor=await f.account('appearance');
+ const initial=await f.req('/api/me',{actor,method:'PATCH',body:{preferences:{palette:'atlas',theme:'dark',reducedMotion:true,reducedTransparency:false}}});
+ assert.equal(initial.status,200);
+ const updated=await f.req('/api/me',{actor,method:'PATCH',body:{preferences:{theme:'system'}}});
+ assert.equal(updated.status,200);
+ assert.deepEqual(updated.data.preferences,{palette:'atlas',theme:'system',reducedMotion:true,reducedTransparency:false});
+ const fresh=await f.req('/api/auth/login',{method:'POST',body:{identifier:'appearance@example.com',password:'long-test-password'}});
+ assert.deepEqual(fresh.data.user.preferences,updated.data.preferences);
+ assert.equal((await f.req('/api/me',{actor,method:'PATCH',body:{preferences:{palette:'missing'}}})).status,422);
+ assert.equal((await f.req('/api/me',{actor,method:'PATCH',body:{preferences:{interactionSound:true}}})).status,422);
+});

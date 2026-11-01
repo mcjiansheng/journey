@@ -3,7 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
 import { createApp, shutdownServer } from '../../server/index.mjs';
 let app, server, base, seededState;
-const evidence = '../.local/evidence/atlas-review';
+const evidence = `../.local/evidence/atlas-review/${process.env.JOURNEY_REVIEW_PALETTE || 'forest'}-${process.env.JOURNEY_REVIEW_THEME || 'system'}`;
+test.beforeEach(async ({page}) => {
+ await page.addInitScript(prefs => localStorage.setItem('journey.appearance', JSON.stringify(prefs)), {palette: process.env.JOURNEY_REVIEW_PALETTE || 'forest', theme: process.env.JOURNEY_REVIEW_THEME || 'system'});
+});
 test.beforeAll(async () => {
   mkdirSync(evidence, { recursive: true });
   app = createApp({
@@ -25,9 +28,15 @@ const nav = (page, label) =>
   page
     .getByRole('navigation', { name: /^(主导航|手机主导航)$/ })
     .getByRole('button', { name: label, exact: true });
+async function resetFixtureAppearance(page) {
+ const prefs={palette:process.env.JOURNEY_REVIEW_PALETTE||'forest',theme:process.env.JOURNEY_REVIEW_THEME||'system'};
+ const session=await (await page.request.get(base+'/api/session')).json();
+ const result=await page.request.patch(base+'/api/me',{headers:{Origin:base,'X-CSRF-Token':session.csrfToken},data:{preferences:prefs}});
+ expect(result.ok()).toBe(true);
+}
 async function seed(page) {
   if (seededState) {
-    await page.context().addCookies(seededState.cookies);
+    await page.context().addCookies(seededState.cookies);await resetFixtureAppearance(page);
     await page.goto(base);
     await expect(page.locator('.continue-card')).toBeVisible();
     return;
@@ -44,6 +53,7 @@ async function seed(page) {
       }),
     }).then((r) => r.json());
     const headers = { 'Content-Type': 'application/json', 'X-CSRF-Token': auth.csrfToken };
+  await fetch('/api/me',{method:'PATCH',headers,body:JSON.stringify({preferences:JSON.parse(localStorage.getItem('journey.appearance'))})});
     const createTrip = (name, destination) =>
       fetch('/api/trips', {
         method: 'POST',
@@ -189,6 +199,7 @@ for (const width of [1440, 768, 390, 320])
     await capture('join');
     await close();
     await page.locator('.continue-card').click();
+    await expect(page.locator('.activity-card')).toHaveCount(2);
     await capture('itinerary');
     await page.locator('.activity-main').first().click();
     await capture('activity-editor');
@@ -206,11 +217,13 @@ for (const width of [1440, 768, 390, 320])
     await expect(page.locator('.map-offline-places')).toBeVisible();
     await capture('map');
     await nav(page, '费用').click();
+    await expect(page.locator('.expense-row')).toHaveCount(2);
     await capture('expenses');
     await page.getByRole('button', { name: '记一笔', exact: true }).click();
     await capture('expense-editor');
     await close();
-    await nav(page, '管理').click();
+    await nav(page, '旅程设置').click();
+    await expect(page.getByLabel('旅程名称')).toBeVisible();
     await capture('settings');
     await page.getByRole('button', { name: '日期与计划天数', exact: false }).click();
     await capture('dates');
@@ -221,11 +234,43 @@ for (const width of [1440, 768, 390, 320])
     await page.locator(width > 760 ? '.back-home' : '.header-home').click();
     await page.locator('.home-header .profile-button').click();
     await capture('personal');
-    await page.getByLabel('外观', { exact: true }).selectOption('dark');
+    await page.getByRole('navigation', {name:'设置分类'}).getByRole('button', {name:/^外观/}).click();
+    await page.getByRole('button', {name:'深色',exact:true}).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
     await capture('personal-dark');
     await close();
     await page.locator('.continue-card').click();
-    await nav(page, '管理').click();
+    await nav(page, '旅程设置').click();
+    await expect(page.getByLabel('旅程名称')).toBeVisible();
     await capture('settings-dark');
     expect(errors).toEqual([]);
   });
+
+for (const width of [1440, 390]) test(`palette materials retain selection, weight and compact layout at ${width}px`, async ({page, context}) => {
+  await page.setViewportSize({width,height:900});
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await seed(page); await page.locator('.continue-card').click();
+  await expect(page.locator('.activity-card')).toHaveCount(2);
+  const client=await context.newCDPSession(page);
+  for (const palette of ['forest','atlas']) for (const mode of ['light','dark','system']) for (const flat of [false,true]) {
+    await page.emulateMedia({colorScheme:mode==='light'?'light':'dark',reducedMotion:'reduce'});
+    await page.evaluate(({palette,mode,flat})=>{Object.assign(document.documentElement.dataset,{palette,theme:mode,transparency:String(flat)});},{palette,mode,flat});
+    const indicator=page.locator(width>760?'.sidebar .selection-indicator':'.bottom-nav .selection-indicator');
+    await expect(indicator).toBeVisible();
+    const style=await indicator.evaluate(el=>{const s=getComputedStyle(el),root=getComputedStyle(document.documentElement);const sample=document.createElement('span');sample.style.color='var(--optical-selected)';document.body.append(sample);const expected=getComputedStyle(sample).color;sample.remove();return{background:s.backgroundColor,expected,surface:root.getPropertyValue('--surface').trim(),shadow:root.getPropertyValue('--optical-shadow').trim()}});
+    expect(style.background).toBe(style.expected);
+    if(flat) { expect(style.shadow).toBe('transparent'); expect(await page.locator('html').evaluate(el=>getComputedStyle(el).getPropertyValue('--pointer-highlight').trim())).toBe('transparent'); }
+    for(const selector of ['.activity-time','.activity-main h3']) expect(await page.locator(selector).first().evaluate(el=>getComputedStyle(el).fontWeight)).toBe('600');
+    if(width>760) expect(await page.getByRole('tab',{selected:true}).locator('strong').evaluate(el=>getComputedStyle(el).fontWeight)).toBe('600');
+    expect(await page.locator('.trip-title').evaluate(el=>getComputedStyle(el).fontFamily)).not.toMatch(/Songti|Noto Serif|Source Han|Journey/i);
+    expect((await page.locator('.activity-card').first().boundingBox()).y).toBeLessThan(width>760?300:230);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await shot(page,`materials-${palette}-${mode}-${flat?'flat':'glass'}-${width}`);
+  }
+  // The system preference uses the same tokens; explicit off takes priority on Web.
+  await client.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-transparency',value:'reduce'}]});
+  await page.evaluate(()=>document.documentElement.dataset.transparency='system');
+  expect(await page.locator('html').evaluate(el=>getComputedStyle(el).getPropertyValue('--optical-shadow').trim())).toBe('transparent');
+  await page.evaluate(()=>document.documentElement.dataset.transparency='false');
+  expect(await page.locator('html').evaluate(el=>getComputedStyle(el).getPropertyValue('--optical-shadow').trim())).not.toBe('transparent');
+});

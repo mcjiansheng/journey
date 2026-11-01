@@ -5,17 +5,15 @@ import {
   CalendarDays,
   Map,
   Wallet,
-  Settings as SettingsIcon,
+  SlidersHorizontal as SettingsIcon,
   Users,
   ArrowLeft,
-  Plus,
   Cloud,
   CloudOff,
   RefreshCw,
   AlertCircle,
   X,
   UserRound,
-  Home as HomeIcon,
 } from 'lucide-react';
 import { useJourney } from './sync.js';
 import { usePageNavigation } from './usePageNavigation.js';
@@ -31,14 +29,15 @@ import Settings, {
   TripRecovery,
   applyAppearance,
 } from './components/Settings.jsx';
-import { ActionNotice, IconButton, Modal } from './components/ui.jsx';
+import { ActionNotice, IconButton } from './components/ui.jsx';
 import { visibleDays } from './domain.js';
-import SyncSettings, { syncStatusText } from './components/SyncSettings.jsx';
+import { appearanceKey, readAppearance, mergeAccountAppearance } from './appearance.js';
+import { syncStatusText } from './components/SyncSettings.jsx';
 const pages = [
   ['itinerary', '行程', CalendarDays],
   ['map', '地图', Map],
   ['expenses', '费用', Wallet],
-  ['settings', '管理', SettingsIcon],
+  ['settings', '旅程设置', SettingsIcon],
 ];
 function initialInvite() {
   const url = new URL(location.href);
@@ -73,10 +72,14 @@ export default function App() {
   const tripDeleted = j.snapshot?.trip?.state === 'deleted';
   const page = tripDeleted ? 'recovery' : j.context?.page || 'itinerary';
   useEffect(() => {
-    try {
-      applyAppearance(JSON.parse(localStorage.getItem('journey.appearance') || '{}'));
-    } catch {}
-  }, []);
+    const preferences = mergeAccountAppearance(readAppearance(), j.user?.preferences);
+    localStorage.setItem(appearanceKey, JSON.stringify(preferences));
+    applyAppearance(preferences);
+    const media = matchMedia('(prefers-color-scheme: dark)');
+    const update = () => applyAppearance(readAppearance());
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [j.user?.id, j.user?.preferences]);
   useEffect(() => {
     if (j.user && intent) setModal('join');
   }, [j.user?.id, intent]);
@@ -153,7 +156,7 @@ export default function App() {
               <span>同行</span>
               <small>JOURNEY</small>
             </span>
-            <IconButton icon={SettingsIcon} label="个人设置" onClick={() => setModal('personal')} />
+            <IconButton icon={UserRound} label="我的设置" onClick={() => setModal('personal')} />
           </header>
           {intent && (
             <div className="invite-intent">
@@ -215,12 +218,15 @@ export default function App() {
               )}
             </div>
             <div className="sidebar-foot">
-              <button className="profile-button" onClick={() => setModal('personal')}>
+              <button
+                className="profile-button"
+                aria-label="我的设置"
+                onClick={() => setModal('personal')}
+              >
                 <span className="avatar">
                   {j.user.displayName?.slice(0, 1) || <UserRound size={17} />}
                 </span>
                 <span>{j.user.displayName}</span>
-                <SettingsIcon size={16} />
               </button>
             </div>
           </aside>
@@ -281,6 +287,15 @@ export default function App() {
                   )}
                   <Users size={18} />
                 </button>
+                <button
+                  className="my-settings-button"
+                  aria-label="我的设置"
+                  onClick={() => setModal('personal')}
+                >
+                  <span className="avatar">
+                    {j.user.displayName?.slice(0, 1) || <UserRound size={17} />}
+                  </span>
+                </button>
               </div>
             </header>
             <main
@@ -325,6 +340,7 @@ export default function App() {
                   onTeam={() => setModal('team')}
                   onDeleted={() => setModal('deleted')}
                   onDates={() => setModal('dates')}
+                  onPersonal={() => setModal('personal')}
                 />
               ) : (
                 <Itinerary
@@ -386,13 +402,13 @@ export default function App() {
           onClose={() => setNotice((current) => (current?.id === notice.id ? null : current))}
         />
       )}{' '}
-      {modal === 'sync' && (
-        <Modal title="保存与同步" onClose={() => setModal(null)}>
-          <SyncSettings journey={j} title="同步状态" />
-        </Modal>
-      )}{' '}
-      {modal === 'personal' && (
-        <PersonalSettings key={j.user?.id || 'guest'} journey={j} onClose={() => setModal(null)} />
+      {(modal === 'sync' || modal === 'personal') && (
+        <PersonalSettings
+          key={`${j.user?.id || 'guest'}:${modal}`}
+          journey={j}
+          initialCategory={modal === 'sync' ? 'sync' : null}
+          onClose={() => setModal(null)}
+        />
       )}{' '}
       {modal === 'create' && <CreateTrip journey={j} onClose={() => setModal(null)} />}{' '}
       {modal === 'join' && (

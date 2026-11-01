@@ -1,0 +1,677 @@
+[
+  {
+    "platform": "web",
+    "title": "海图蓝 · 深色 · 费用 · 1440",
+    "file": "web/atlas-dark-expenses-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 深色 · 费用 · 390",
+    "file": "web/atlas-dark-expenses-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 深色 · 首页 · 1440",
+    "file": "web/atlas-dark-home-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 深色 · 首页 · 390",
+    "file": "web/atlas-dark-home-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 深色 · 行程 · 1440",
+    "file": "web/atlas-dark-itinerary-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 深色 · 行程 · 390",
+    "file": "web/atlas-dark-itinerary-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 深色 · 我的设置 · 1440",
+    "file": "web/atlas-dark-personal-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 深色 · 我的设置 · 390",
+    "file": "web/atlas-dark-personal-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 深色 · 设置 · 1440",
+    "file": "web/atlas-dark-settings-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 深色 · 设置 · 390",
+    "file": "web/atlas-dark-settings-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 浅色 · 费用 · 1440",
+    "file": "web/atlas-light-expenses-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 浅色 · 费用 · 390",
+    "file": "web/atlas-light-expenses-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 浅色 · 首页 · 1440",
+    "file": "web/atlas-light-home-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 浅色 · 首页 · 390",
+    "file": "web/atlas-light-home-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 浅色 · 行程 · 1440",
+    "file": "web/atlas-light-itinerary-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 浅色 · 行程 · 320",
+    "file": "web/atlas-light-itinerary-320.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 浅色 · 行程 · 390",
+    "file": "web/atlas-light-itinerary-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 浅色 · 行程 · 768",
+    "file": "web/atlas-light-itinerary-768.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 浅色 · 我的设置 · 1440",
+    "file": "web/atlas-light-personal-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 浅色 · 我的设置 · 390",
+    "file": "web/atlas-light-personal-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 浅色 · 设置 · 1440",
+    "file": "web/atlas-light-settings-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 浅色 · 设置 · 390",
+    "file": "web/atlas-light-settings-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 跟随系统 · 深色 · 行程 · 1440",
+    "file": "web/atlas-system-dark-itinerary-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 跟随系统 · 深色 · 行程 · 390",
+    "file": "web/atlas-system-dark-itinerary-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 跟随系统 · 浅色 · 行程 · 1440",
+    "file": "web/atlas-system-light-itinerary-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "海图蓝 · 跟随系统 · 浅色 · 行程 · 390",
+    "file": "web/atlas-system-light-itinerary-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 深色 · 费用 · 1440",
+    "file": "web/forest-dark-expenses-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 深色 · 费用 · 390",
+    "file": "web/forest-dark-expenses-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 深色 · 首页 · 1440",
+    "file": "web/forest-dark-home-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 深色 · 首页 · 390",
+    "file": "web/forest-dark-home-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 深色 · 行程 · 1440",
+    "file": "web/forest-dark-itinerary-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 深色 · 行程 · 390",
+    "file": "web/forest-dark-itinerary-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 深色 · 我的设置 · 1440",
+    "file": "web/forest-dark-personal-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 深色 · 我的设置 · 390",
+    "file": "web/forest-dark-personal-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 深色 · 设置 · 1440",
+    "file": "web/forest-dark-settings-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 深色 · 设置 · 390",
+    "file": "web/forest-dark-settings-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 浅色 · 费用 · 1440",
+    "file": "web/forest-light-expenses-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 浅色 · 费用 · 390",
+    "file": "web/forest-light-expenses-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 浅色 · 首页 · 1440",
+    "file": "web/forest-light-home-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 浅色 · 首页 · 390",
+    "file": "web/forest-light-home-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 浅色 · 行程 · 1440",
+    "file": "web/forest-light-itinerary-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 浅色 · 行程 · 320",
+    "file": "web/forest-light-itinerary-320.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 浅色 · 行程 · 390",
+    "file": "web/forest-light-itinerary-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 浅色 · 行程 · 768",
+    "file": "web/forest-light-itinerary-768.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 浅色 · 我的设置 · 1440",
+    "file": "web/forest-light-personal-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 浅色 · 我的设置 · 390",
+    "file": "web/forest-light-personal-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 浅色 · 设置 · 1440",
+    "file": "web/forest-light-settings-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 浅色 · 设置 · 390",
+    "file": "web/forest-light-settings-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 跟随系统 · 深色 · 行程 · 1440",
+    "file": "web/forest-system-dark-itinerary-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 跟随系统 · 深色 · 行程 · 390",
+    "file": "web/forest-system-dark-itinerary-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 跟随系统 · 浅色 · 行程 · 1440",
+    "file": "web/forest-system-light-itinerary-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "森林绿 · 跟随系统 · 浅色 · 行程 · 390",
+    "file": "web/forest-system-light-itinerary-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 海图蓝 · 深色 · 纯平 · 1440",
+    "file": "web/materials-atlas-dark-flat-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 海图蓝 · 深色 · 纯平 · 390",
+    "file": "web/materials-atlas-dark-flat-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 海图蓝 · 深色 · 轻玻璃 · 1440",
+    "file": "web/materials-atlas-dark-glass-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 海图蓝 · 深色 · 轻玻璃 · 390",
+    "file": "web/materials-atlas-dark-glass-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 海图蓝 · 浅色 · 纯平 · 1440",
+    "file": "web/materials-atlas-light-flat-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 海图蓝 · 浅色 · 纯平 · 390",
+    "file": "web/materials-atlas-light-flat-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 海图蓝 · 浅色 · 轻玻璃 · 1440",
+    "file": "web/materials-atlas-light-glass-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 海图蓝 · 浅色 · 轻玻璃 · 390",
+    "file": "web/materials-atlas-light-glass-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 森林绿 · 深色 · 纯平 · 1440",
+    "file": "web/materials-forest-dark-flat-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 森林绿 · 深色 · 纯平 · 390",
+    "file": "web/materials-forest-dark-flat-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 森林绿 · 深色 · 轻玻璃 · 1440",
+    "file": "web/materials-forest-dark-glass-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 森林绿 · 深色 · 轻玻璃 · 390",
+    "file": "web/materials-forest-dark-glass-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 森林绿 · 浅色 · 纯平 · 1440",
+    "file": "web/materials-forest-light-flat-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 森林绿 · 浅色 · 纯平 · 390",
+    "file": "web/materials-forest-light-flat-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 森林绿 · 浅色 · 轻玻璃 · 1440",
+    "file": "web/materials-forest-light-glass-1440.png"
+  },
+  {
+    "platform": "web",
+    "title": "材质 · 森林绿 · 浅色 · 轻玻璃 · 390",
+    "file": "web/materials-forest-light-glass-390.png"
+  },
+  {
+    "platform": "web",
+    "title": "设置 · 桌面 · 森林绿 · 浅色",
+    "file": "web/settings-desktop-forest-light.png"
+  },
+  {
+    "platform": "web",
+    "title": "设置 · 手机 · 外观设置",
+    "file": "web/settings-mobile-appearance.png"
+  },
+  {
+    "platform": "web",
+    "title": "设置 · 手机 · 分类首页",
+    "file": "web/settings-mobile-index.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 深色 · 纯平 · 外观设置",
+    "file": "ios/ios-palettes-atlas-dark-flat-appearance.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 深色 · 纯平 · 首页",
+    "file": "ios/ios-palettes-atlas-dark-flat-home.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 深色 · 纯平 · 行程",
+    "file": "ios/ios-palettes-atlas-dark-flat-itinerary.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 深色 · 纯平 · 设置",
+    "file": "ios/ios-palettes-atlas-dark-flat-settings.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 深色 · 纯平 · 旅程 · 设置",
+    "file": "ios/ios-palettes-atlas-dark-flat-trip-settings.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 深色 · 轻玻璃 · 外观设置",
+    "file": "ios/ios-palettes-atlas-dark-glass-appearance.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 深色 · 轻玻璃 · 首页",
+    "file": "ios/ios-palettes-atlas-dark-glass-home.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 深色 · 轻玻璃 · 行程",
+    "file": "ios/ios-palettes-atlas-dark-glass-itinerary.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 深色 · 轻玻璃 · 旅程 · 设置",
+    "file": "ios/ios-palettes-atlas-dark-glass-trip-settings.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 浅色 · 纯平 · 外观设置",
+    "file": "ios/ios-palettes-atlas-light-flat-appearance.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 浅色 · 纯平 · 首页",
+    "file": "ios/ios-palettes-atlas-light-flat-home.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 浅色 · 纯平 · 行程",
+    "file": "ios/ios-palettes-atlas-light-flat-itinerary.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 浅色 · 纯平 · 设置",
+    "file": "ios/ios-palettes-atlas-light-flat-settings.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 浅色 · 纯平 · 旅程 · 设置",
+    "file": "ios/ios-palettes-atlas-light-flat-trip-settings.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 浅色 · 轻玻璃 · 外观设置",
+    "file": "ios/ios-palettes-atlas-light-glass-appearance.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 浅色 · 轻玻璃 · 首页",
+    "file": "ios/ios-palettes-atlas-light-glass-home.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 浅色 · 轻玻璃 · 行程",
+    "file": "ios/ios-palettes-atlas-light-glass-itinerary.png"
+  },
+  {
+    "platform": "ios",
+    "title": "海图蓝 · 浅色 · 轻玻璃 · 旅程 · 设置",
+    "file": "ios/ios-palettes-atlas-light-glass-trip-settings.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 深色 · 纯平 · 外观设置",
+    "file": "ios/ios-palettes-forest-dark-flat-appearance.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 深色 · 纯平 · 首页",
+    "file": "ios/ios-palettes-forest-dark-flat-home.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 深色 · 纯平 · 行程",
+    "file": "ios/ios-palettes-forest-dark-flat-itinerary.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 深色 · 纯平 · 设置",
+    "file": "ios/ios-palettes-forest-dark-flat-settings.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 深色 · 纯平 · 旅程 · 设置",
+    "file": "ios/ios-palettes-forest-dark-flat-trip-settings.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 深色 · 轻玻璃 · 外观设置",
+    "file": "ios/ios-palettes-forest-dark-glass-appearance.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 深色 · 轻玻璃 · 首页",
+    "file": "ios/ios-palettes-forest-dark-glass-home.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 深色 · 轻玻璃 · 行程",
+    "file": "ios/ios-palettes-forest-dark-glass-itinerary.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 深色 · 轻玻璃 · 旅程 · 设置",
+    "file": "ios/ios-palettes-forest-dark-glass-trip-settings.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 浅色 · 纯平 · 外观设置",
+    "file": "ios/ios-palettes-forest-light-flat-appearance.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 浅色 · 纯平 · 首页",
+    "file": "ios/ios-palettes-forest-light-flat-home.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 浅色 · 纯平 · 行程",
+    "file": "ios/ios-palettes-forest-light-flat-itinerary.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 浅色 · 纯平 · 设置",
+    "file": "ios/ios-palettes-forest-light-flat-settings.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 浅色 · 纯平 · 旅程 · 设置",
+    "file": "ios/ios-palettes-forest-light-flat-trip-settings.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 浅色 · 轻玻璃 · 外观设置",
+    "file": "ios/ios-palettes-forest-light-glass-appearance.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 浅色 · 轻玻璃 · 首页",
+    "file": "ios/ios-palettes-forest-light-glass-home.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 浅色 · 轻玻璃 · 行程",
+    "file": "ios/ios-palettes-forest-light-glass-itinerary.png"
+  },
+  {
+    "platform": "ios",
+    "title": "森林绿 · 浅色 · 轻玻璃 · 旅程 · 设置",
+    "file": "ios/ios-palettes-forest-light-glass-trip-settings.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 深色 · 外观设置",
+    "file": "android/android-atlas-dark-appearance.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 深色 · 纯平 · 外观设置",
+    "file": "android/android-atlas-dark-flat-appearance.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 深色 · 纯平 · 行程",
+    "file": "android/android-atlas-dark-flat-itinerary.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 深色 · 首页",
+    "file": "android/android-atlas-dark-home.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 深色 · 行程",
+    "file": "android/android-atlas-dark-itinerary.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 深色 · 设置 · 首页",
+    "file": "android/android-atlas-dark-settings-home.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 深色 · 旅程 · 设置",
+    "file": "android/android-atlas-dark-trip-settings.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 浅色 · 外观设置",
+    "file": "android/android-atlas-light-appearance.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 浅色 · 纯平 · 外观设置",
+    "file": "android/android-atlas-light-flat-appearance.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 浅色 · 纯平 · 行程",
+    "file": "android/android-atlas-light-flat-itinerary.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 浅色 · 首页",
+    "file": "android/android-atlas-light-home.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 浅色 · 行程",
+    "file": "android/android-atlas-light-itinerary.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 浅色 · 设置 · 首页",
+    "file": "android/android-atlas-light-settings-home.png"
+  },
+  {
+    "platform": "android",
+    "title": "海图蓝 · 浅色 · 旅程 · 设置",
+    "file": "android/android-atlas-light-trip-settings.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 深色 · 外观设置",
+    "file": "android/android-forest-dark-appearance.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 深色 · 纯平 · 外观设置",
+    "file": "android/android-forest-dark-flat-appearance.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 深色 · 纯平 · 行程",
+    "file": "android/android-forest-dark-flat-itinerary.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 深色 · 首页",
+    "file": "android/android-forest-dark-home.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 深色 · 行程",
+    "file": "android/android-forest-dark-itinerary.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 深色 · 设置 · 首页",
+    "file": "android/android-forest-dark-settings-home.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 深色 · 旅程 · 设置",
+    "file": "android/android-forest-dark-trip-settings.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 浅色 · 外观设置",
+    "file": "android/android-forest-light-appearance.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 浅色 · 纯平 · 外观设置",
+    "file": "android/android-forest-light-flat-appearance.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 浅色 · 纯平 · 行程",
+    "file": "android/android-forest-light-flat-itinerary.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 浅色 · 首页",
+    "file": "android/android-forest-light-home.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 浅色 · 行程",
+    "file": "android/android-forest-light-itinerary.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 浅色 · 设置 · 首页",
+    "file": "android/android-forest-light-settings-home.png"
+  },
+  {
+    "platform": "android",
+    "title": "森林绿 · 浅色 · 旅程 · 设置",
+    "file": "android/android-forest-light-trip-settings.png"
+  }
+]

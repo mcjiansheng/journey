@@ -56,6 +56,7 @@ enum PlaceSearch {
 
 }
 struct PlacePicker: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @Environment(\.dismiss) var dismiss
   var onSelect: (JSON) -> Void
@@ -82,7 +83,7 @@ struct PlacePicker: View {
             } label: {
               VStack(alignment: .leading, spacing: 6) {
                 Text(place["name"].string)
-                Text(place["address"].string).font(.caption).foregroundStyle(Palette.muted)
+                Text(place["address"].string).font(.caption).foregroundStyle(palette.muted)
               }
             }
           }
@@ -119,6 +120,7 @@ struct MapPinItem: Identifiable {
   var favorite: JSON?
 }
 struct TripMapView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @State private var camera: MapCameraPosition = .automatic
   @State private var fittedTrip: String?
@@ -157,7 +159,7 @@ struct TripMapView: View {
   }
   var body: some View {
     VStack(spacing: 0) {
-      Text(store.trip["name"].string).font(.subheadline).foregroundStyle(Palette.muted).frame(
+      Text(store.trip["name"].string).font(.subheadline).foregroundStyle(palette.muted).frame(
         maxWidth: .infinity, alignment: .leading
       ).padding(.horizontal).padding(.bottom, 8)
       Map(position: $camera) {
@@ -175,7 +177,7 @@ struct TripMapView: View {
                 ? Coordinates.wgs84(fromGCJ: .init(latitude: c[1].number, longitude: c[0].number))
                 : nil
             }
-          ).stroke(Palette.accent, lineWidth: 4)
+          ).stroke(palette.accent, lineWidth: 4)
         }
         ForEach(pins) { pin in
           if let c = Coordinates.coordinate(pin.place) {
@@ -184,7 +186,7 @@ struct TripMapView: View {
                 selected = pin
               } label: {
                 Image(systemName: pin.favorite == nil ? "mappin.circle.fill" : "star.circle.fill")
-                  .font(.title).foregroundStyle(Palette.accent).background(
+                  .font(.title).foregroundStyle(palette.accent).background(
                     .regularMaterial, in: Circle())
               }
             }
@@ -196,7 +198,7 @@ struct TripMapView: View {
       }.frame(minHeight: 230)
       JourneyList {
         Section("收藏地点") {
-          if favorites.isEmpty { Text("收藏沿途想去的地方").foregroundStyle(Palette.muted) }
+          if favorites.isEmpty { Text("收藏沿途想去的地方").foregroundStyle(palette.muted) }
           ForEach(favorites) { o in
             Button {
               selected = MapPinItem(id: o.id, place: o["payload"], favorite: o)
@@ -208,7 +210,7 @@ struct TripMapView: View {
             } label: {
               VStack(alignment: .leading) {
                 Text(o["payload"]["name"].string)
-                Text(o["payload"]["address"].string).font(.caption).foregroundStyle(Palette.muted)
+                Text(o["payload"]["address"].string).font(.caption).foregroundStyle(palette.muted)
               }
             }
           }
@@ -244,7 +246,7 @@ struct TripMapView: View {
           JourneyForm {
             Section {
               Text(pin.place["name"].string).font(.title2)
-              Text(pin.place["address"].string).foregroundStyle(Palette.muted)
+              Text(pin.place["address"].string).foregroundStyle(palette.muted)
             }
             Button("添加到行程") {
               pendingActivityPlace = pin.place

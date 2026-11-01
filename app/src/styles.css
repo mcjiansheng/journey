@@ -3,7 +3,6 @@
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
-  color-scheme: light;
 }
 * {
   box-sizing: border-box;
@@ -62,7 +61,7 @@ p {
 }
 h1 {
   font-size: var(--fs-page);
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: -1.3px;
   line-height: 1.5;
 }
@@ -840,11 +839,11 @@ textarea {
   min-height: 43px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--elevated);
   color: var(--text);
   padding: 11px 12px;
   font-size: var(--fs-meta);
-  box-shadow: inset 0 1px 2px #00000002;
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--optical-shadow) 12%, transparent);
 }
 textarea {
   resize: vertical;
@@ -952,7 +951,7 @@ input[type='checkbox'] {
 .segmented button.selected {
   background: var(--surface);
   color: var(--accent);
-  box-shadow: 0 1px 4px #1b422318;
+  box-shadow: 0 1px 4px var(--optical-shadow);
 }
 fieldset {
   border: 0;
@@ -1153,7 +1152,7 @@ details[open] > summary {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  box-shadow: 0 10px 40px #213c3326;
+  box-shadow: 0 10px 40px var(--optical-shadow);
   z-index: 20;
   font-size: var(--fs-caption);
 }
@@ -1426,7 +1425,7 @@ details[open] > summary {
     border-radius: var(--radius-xl);
     background: var(--glass);
     border: 1px solid #ffffffc4;
-    box-shadow: 0 9px 35px #1a3d2526;
+    box-shadow: 0 9px 35px var(--optical-shadow);
     -webkit-backdrop-filter: blur(24px);
     backdrop-filter: blur(24px);
   }
@@ -1803,27 +1802,6 @@ details[open] > summary {
     scroll-behavior: auto !important;
   }
 }
-:root[data-transparency='true'] .bottom-nav,
-:root[data-transparency='true'] .map-shell .sidebar,
-:root[data-transparency='true'] .map-shell .trip-header {
-  background: var(--surface);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-:root[data-transparency='true'] .modal::backdrop {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  background: #20382bcc;
-}
-@media (prefers-reduced-transparency: reduce) {
-  :root:not([data-transparency='false']) .bottom-nav,
-  :root:not([data-transparency='false']) .map-shell .sidebar,
-  :root:not([data-transparency='false']) .map-shell .trip-header {
-    background: var(--surface);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-}
 body {
   background: var(--bg);
 }
@@ -1992,13 +1970,13 @@ body {
 }
 .primary {
   box-shadow:
-    inset 0 1px 0 #ffffff28,
-    0 4px 10px #285e4b16;
+    inset 0 1px 0 var(--button-highlight),
+    0 4px 10px var(--optical-shadow);
 }
 .primary:hover {
   box-shadow:
-    inset 0 1px 0 #ffffff28,
-    0 7px 16px #285e4b25;
+    inset 0 1px 0 var(--button-highlight),
+    0 7px 16px var(--optical-shadow);
 }
 .secondary {
   box-shadow: 0 2px 8px var(--optical-shadow);
@@ -2046,7 +2024,7 @@ body {
   border-color: #ffffff95;
   box-shadow:
     inset 0 1px 0 #ffffffb3,
-    0 5px 13px #2c4c3610;
+    0 5px 13px var(--optical-shadow);
 }
 .back-home {
   font-size: var(--fs-caption);
@@ -2180,7 +2158,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  box-shadow: 0 12px 36px #22382d22;
+  box-shadow: 0 12px 36px var(--optical-shadow);
 }
 .activity-more-panel .object-actions {
   flex-direction: column;
@@ -2258,8 +2236,8 @@ body {
 }
 .modal {
   box-shadow:
-    inset 0 1px 0 var(--optical-edge),
-    0 24px 90px #102d2c30;
+    inset 0 1px 0 var(--surface-highlight),
+    0 24px 90px var(--optical-shadow);
 }
 .modal[open] {
   animation: modal-enter 0.18s ease-out;
@@ -2268,7 +2246,7 @@ body {
   background: var(--surface);
 }
 .modal::backdrop {
-  background: #203b3348;
+  background: var(--overlay);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
@@ -2715,22 +2693,6 @@ body {
     padding: 10px 11px;
   }
 }
-:root[data-transparency='true'] .activity-card,
-:root[data-transparency='true'] .trip-header,
-:root[data-transparency='true'] .day-tabs button {
-  background: var(--surface);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-@media (prefers-reduced-transparency: reduce) {
-  :root:not([data-transparency='false']) .activity-card,
-  :root:not([data-transparency='false']) .trip-header,
-  :root:not([data-transparency='false']) .day-tabs button {
-    background: var(--surface);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-}
 /* Keep the sidebar wordmark as a two-line lockup beside the compass. */
 .sidebar > .brand {
   align-items: center;
@@ -2795,7 +2757,7 @@ body:has(> .site-filing),
     linear-gradient(135deg, var(--optical-sheen), transparent 70%), var(--optical-selected);
   border-color: var(--optical-edge);
   box-shadow:
-    inset 0 1px 0 var(--optical-edge),
+    inset 0 1px 0 var(--surface-highlight),
     0 3px 13px var(--optical-shadow);
   font-weight: 600;
 }
@@ -2811,10 +2773,6 @@ body:has(> .site-filing),
   padding: 6px;
   gap: 4px;
   border-radius: var(--radius-lg);
-  background: var(--surface);
-  border: 1px solid var(--optical-edge);
-  border-bottom-color: var(--optical-edge-low);
-  box-shadow: 0 2px 8px var(--optical-shadow);
   margin-bottom: 27px;
 }
 .day-tabs button {
@@ -2833,7 +2791,7 @@ body:has(> .site-filing),
   color: var(--accent);
   border-color: var(--optical-edge);
   box-shadow:
-    inset 0 1px 0 var(--optical-edge),
+    inset 0 1px 0 var(--surface-highlight),
     0 3px 9px var(--optical-shadow);
 }
 .day-tabs button.selected small {
@@ -2870,14 +2828,12 @@ body:has(> .site-filing),
 .activity-card {
   background: var(--surface);
   border-color: var(--line);
-  border-right-color: color-mix(in srgb, var(--line) 65%, var(--optical-edge-low));
-  border-bottom-color: color-mix(in srgb, var(--line) 60%, var(--optical-edge-low));
-  box-shadow: 0 2px 8px var(--optical-shadow);
+  box-shadow: var(--card-shadow);
 }
 .activity-card:hover {
   box-shadow:
-    inset 0 1px 0 var(--optical-edge),
-    inset 0 -1px 0 var(--optical-edge-low),
+    inset 0 1px 0 var(--surface-highlight),
+    inset 0 -1px 0 var(--surface-highlight),
     0 10px 30px var(--optical-shadow);
 }
 .activity-number {
@@ -2899,24 +2855,22 @@ body:has(> .site-filing),
 .modal-head {
   background: var(--surface);
   border-color: var(--line);
-  box-shadow: 0 2px 8px var(--optical-shadow);
+  box-shadow: var(--card-shadow);
 }
 .bottom-nav {
   background: linear-gradient(145deg, var(--optical-sheen), transparent 70%), var(--glass);
   border: 1px solid var(--optical-edge);
   border-bottom-color: var(--optical-edge-low);
   box-shadow:
-    inset 0 1px 0 var(--optical-edge),
-    inset 0 -1px 0 var(--optical-edge-low),
+    inset 0 1px 0 var(--surface-highlight),
+    inset 0 -1px 0 var(--surface-highlight),
     0 9px 30px var(--optical-shadow);
   -webkit-backdrop-filter: blur(26px) saturate(150%);
   backdrop-filter: blur(26px) saturate(150%);
 }
 .bottom-nav button.selected {
   background: color-mix(in srgb, var(--accent-soft) 82%, transparent);
-  box-shadow: inset 0 1px 0 var(--optical-edge-low);
-}
-@media (prefers-color-scheme: dark) {
+  box-shadow: inset 0 1px 0 var(--surface-highlight);
 }
 @media (min-width: 761px) and (max-width: 1100px) {
   .app-shell > .sidebar {
@@ -2961,32 +2915,6 @@ body:has(> .site-filing),
   }
   .home-main > h1 {
     margin-bottom: 24px;
-  }
-}
-:root[data-transparency='true'] .app-shell > .sidebar,
-:root[data-transparency='true'] .day-tabs,
-:root[data-transparency='true'] .day-tabs button.selected,
-:root[data-transparency='true'] .activity-card,
-:root[data-transparency='true'] .secondary,
-:root[data-transparency='true'] .trip-card,
-:root[data-transparency='true'] .modal-head,
-:root[data-transparency='true'] .bottom-nav {
-  background: var(--surface);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-@media (prefers-reduced-transparency: reduce) {
-  :root:not([data-transparency='false']) .app-shell > .sidebar,
-  :root:not([data-transparency='false']) .day-tabs,
-  :root:not([data-transparency='false']) .day-tabs button.selected,
-  :root:not([data-transparency='false']) .activity-card,
-  :root:not([data-transparency='false']) .secondary,
-  :root:not([data-transparency='false']) .trip-card,
-  :root:not([data-transparency='false']) .modal-head,
-  :root:not([data-transparency='false']) .bottom-nav {
-    background: var(--surface);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
   }
 }
 /* Actual device interaction controls; Safari retains its native switch appearance. */
@@ -3047,7 +2975,7 @@ body:has(> .site-filing),
   height: 21px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 3px #17362b2b;
+  box-shadow: 0 1px 3px var(--optical-shadow);
   transition: transform 200ms;
 }
 .feedback-setting input[type='checkbox'][switch][data-native-switch='false']:checked {
@@ -3084,42 +3012,42 @@ body:has(> .site-filing),
     opacity: 0;
     background: radial-gradient(
       150px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
-      #ffffff4d,
+      var(--pointer-highlight),
       transparent 76%
     );
-    box-shadow: inset 0 0 0 1px #ffffff00;
+    box-shadow: inset 0 0 0 1px transparent;
     transition:
       opacity 200ms,
       box-shadow 200ms;
   }
   [data-pointer-active]::after {
     opacity: 1;
-    box-shadow: inset 0 0 0 1px #ffffff70;
+    box-shadow: inset 0 0 0 1px var(--pointer-edge);
   }
   .primary[data-pointer-active]::after {
     background: radial-gradient(
       120px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
-      #ffffff24,
+      var(--pointer-highlight),
       transparent 80%
     );
   }
   :root[data-theme='dark'] [data-pointer-active]::after {
     background: radial-gradient(
       150px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
-      #d8fff414,
+      var(--pointer-highlight),
       transparent 76%
     );
-    box-shadow: inset 0 0 0 1px #d8fff426;
+    box-shadow: inset 0 0 0 1px var(--pointer-edge);
   }
 }
 @media (prefers-color-scheme: dark) and (hover: hover) and (pointer: fine) {
   :root:not([data-theme='light']):not([data-theme='dark']) [data-pointer-active]::after {
     background: radial-gradient(
       150px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
-      #d8fff414,
+      var(--pointer-highlight),
       transparent 76%
     );
-    box-shadow: inset 0 0 0 1px #d8fff426;
+    box-shadow: inset 0 0 0 1px var(--pointer-edge);
   }
 }
 :root[data-motion='true'] [data-pointer-active]::after {
@@ -3216,9 +3144,7 @@ html.has-modal body {
   .bottom-nav {
     isolation: isolate;
     transform: translateZ(0);
-    background:
-      linear-gradient(145deg, var(--optical-sheen), transparent 70%),
-      color-mix(in srgb, var(--surface) 94%, transparent);
+    background: linear-gradient(145deg, var(--optical-sheen), transparent 70%), var(--glass);
   }
   .bottom-nav button {
     position: relative;
@@ -3247,18 +3173,6 @@ html.has-modal body {
   .header-right {
     position: relative;
     z-index: 1;
-  }
-}
-:root[data-transparency='true'] .bottom-nav {
-  background: var(--surface);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-@media (prefers-reduced-transparency: reduce) {
-  :root:not([data-transparency='false']) .bottom-nav {
-    background: var(--surface);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
   }
 }
 
@@ -3452,7 +3366,7 @@ html.has-modal body {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow: 0 12px 40px #18362d22;
+  box-shadow: 0 12px 40px var(--optical-shadow);
   font-size: var(--fs-meta);
 }
 .action-notice > span {
@@ -3574,5 +3488,46 @@ details[open] > summary:not(:has(svg))::before {
   }
   .member-more {
     align-self: flex-end;
+  }
+}
+/* Content improvements shared by both palettes. */
+.day-tabs {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.itinerary-toolbar {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+.settings-page > .section {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 24px;
+  box-shadow: var(--card-shadow);
+}
+.settings-page .lifecycle-menu > summary {
+  color: var(--muted);
+}
+.settings-link > span:last-child {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.workspace-heading {
+  font-size: var(--fs-section);
+  margin-bottom: 8px;
+  letter-spacing: 0;
+}
+.brand small,
+.auth-brand small {
+  font-size: var(--fs-caption);
+}
+@media (max-width: 760px) {
+  .settings-page > .section {
+    padding: 18px 16px;
+  }
+  .settings-page .form-grid {
+    grid-template-columns: 1fr;
   }
 }

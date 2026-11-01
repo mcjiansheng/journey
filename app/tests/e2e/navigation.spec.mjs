@@ -63,7 +63,7 @@ test('navigation indicator moves across pages and rapid reversals return home cl
  const result=await page.evaluate(async()=>{
   const buttons=[...document.querySelectorAll('nav[aria-label="主导航"] button')];
   const click=label=>buttons.find(button=>button.getAttribute('aria-label')===label).click();
-  click('地图');await new Promise(r=>setTimeout(r,75));click('行程');await new Promise(r=>setTimeout(r,75));click('管理');await new Promise(r=>setTimeout(r,75));click('费用');await new Promise(r=>setTimeout(r,75));click('行程');
+  click('地图');await new Promise(r=>setTimeout(r,75));click('行程');await new Promise(r=>setTimeout(r,75));click('旅程设置');await new Promise(r=>setTimeout(r,75));click('费用');await new Promise(r=>setTimeout(r,75));click('行程');
   await new Promise(resolve=>setTimeout(resolve,520));return document.querySelector('nav[aria-label="主导航"] button[aria-current="page"]')?.getAttribute('aria-label');
  });
  expect(result).toBe('行程');await expect(page.locator('.itinerary-page')).toBeVisible();
@@ -153,7 +153,7 @@ test('mobile widths, reduced motion, and WebKit keep navigation reachable',async
   const style=getComputedStyle(node);return style.transitionDuration.split(',').every(value=>Number.parseFloat(value)===0)&&style.animationDuration.split(',').every(value=>Number.parseFloat(value)===0);
  }))).toBe(true);
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();
- await page.getByLabel('当前计划日').selectOption({index:1});
+ await page.getByLabel('当前计划日').selectOption(await page.getByRole('option',{name:/^第2天/}).getAttribute('value'));
  await expect(page.getByLabel('当前计划日').locator('option:checked')).toContainText('第2天');await expect(page.locator('.day-content-outgoing')).toHaveCount(0);
  expect(await page.locator('.day-content-stage').evaluate(stage=>({animations:stage.getAnimations({subtree:true}).length,opacity:getComputedStyle(stage.querySelector('.day-content')).opacity}))).toEqual({animations:0,opacity:'1'});
  const browser=await launchWebKit();
@@ -164,8 +164,8 @@ test('mobile widths, reduced motion, and WebKit keep navigation reachable',async
   await expect(webPage.locator('.map-shell')).toBeVisible();await webPage.screenshot({path:'../.local/evidence/navigation-webkit-map.png',fullPage:true,animations:'disabled',scale:'css'});
   await webPage.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).tap();
   await expect(webPage.locator('.itinerary-page')).toBeVisible();await noOverflow(webPage);
-  await addActivity(webPage,'WebKit第一天活动',{touch:true});await webPage.getByLabel('当前计划日').selectOption({index:1});await addActivity(webPage,'WebKit第二天活动',{touch:true});
-  await webPage.getByLabel('当前计划日').selectOption({index:0});await expect(webPage.getByRole('heading',{name:'WebKit第一天活动',exact:true})).toBeVisible();
+  await webPage.getByLabel('当前计划日').selectOption(await webPage.getByRole('option',{name:/^第1天/}).getAttribute('value'));await addActivity(webPage,'WebKit第一天活动',{touch:true});await webPage.getByLabel('当前计划日').selectOption(await webPage.getByRole('option',{name:/^第2天/}).getAttribute('value'));await addActivity(webPage,'WebKit第二天活动',{touch:true});
+  await webPage.getByLabel('当前计划日').selectOption(await webPage.getByRole('option',{name:/^第1天/}).getAttribute('value'));await expect(webPage.getByRole('heading',{name:'WebKit第一天活动',exact:true})).toBeVisible();
   await expect(webPage.locator('.day-content-outgoing')).toHaveCount(0);await noOverflow(webPage);await context.close();
  }finally{await browser.close()}
 });

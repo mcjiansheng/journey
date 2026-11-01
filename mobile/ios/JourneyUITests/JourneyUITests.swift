@@ -64,6 +64,91 @@ final class JourneyUITests: XCTestCase {
     XCTAssertTrue(app.buttons["tab.itinerary"].waitForExistence(timeout: 20))
   }
 
+  func testPaletteSettingsScreenshots() throws {
+    try verifyPaletteSettingsScreenshots(flatOnly: false)
+  }
+
+  func testFlatPaletteSettingsScreenshots() throws {
+    try verifyPaletteSettingsScreenshots(flatOnly: true)
+  }
+
+  private func verifyPaletteSettingsScreenshots(flatOnly: Bool) throws {
+    continueAfterFailure = false
+    let fixtureURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent(".local/mobile-acceptance/fixture.json")
+    let data = ProcessInfo.processInfo.environment["JOURNEY_FIXTURE_JSON"].map { Data($0.utf8) }
+      ?? (try? Data(contentsOf: fixtureURL))
+    guard let data, let fixture = try JSONSerialization.jsonObject(with: data) as? [String: String]
+    else { throw XCTSkip("Local backend fixture is required") }
+    let app = XCUIApplication()
+    app.launchEnvironment["JOURNEY_SERVER_URL"] = fixture["serverURL"]
+    app.launch()
+    let account = app.textFields["auth.identifier"]
+    let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+      account.exists || app.buttons["创建旅程"].exists || app.buttons["tab.itinerary"].exists
+    }, object: app)
+    XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 30), .completed)
+    if app.buttons["tab.itinerary"].exists {
+      app.buttons["tab.itinerary"].tap(); app.buttons["我的旅程"].tap()
+    }
+    let fixtureTrip = app.buttons["trip.open." + fixture["tripId"]!]
+    if !account.exists && !fixtureTrip.waitForExistence(timeout: 3) {
+      app.buttons["settings.personal"].tap()
+      app.buttons["退出登录"].tap()
+      XCTAssertTrue(account.waitForExistence(timeout: 10))
+    }
+    if account.exists {
+      account.tap(); account.typeText(fixture["identifier"]!)
+      let password = app.secureTextFields["auth.password"]
+      password.tap(); password.typeText(fixture["password"]!)
+      app.buttons["auth.submit"].tap()
+      XCTAssertTrue(app.buttons["创建旅程"].waitForExistence(timeout: 20))
+    }
+    XCTAssertTrue(fixtureTrip.waitForExistence(timeout: 20))
+    func capture(_ name: String) {
+      let shot = XCTAttachment(screenshot: app.screenshot())
+      shot.name = "ios-palettes-" + name; shot.lifetime = .keepAlways; add(shot)
+    }
+    for palette in ["forest", "atlas"] {
+      for theme in ["light", "dark"] {
+        for flat in flatOnly ? [true] : [false, true] {
+          let prefix = palette + "-" + theme + (flat ? "-flat" : "-glass")
+          app.buttons["settings.personal"].tap()
+          XCTAssertTrue(app.buttons["settings.appearance"].waitForExistence(timeout: 5))
+          app.buttons["settings.appearance"].tap()
+          let paletteButton = app.buttons["settings.palette." + palette]
+          XCTAssertTrue(paletteButton.waitForExistence(timeout: 5)); paletteButton.tap()
+          let themeButton = app.buttons["settings.theme." + theme]
+          XCTAssertTrue(themeButton.waitForExistence(timeout: 5))
+          let enabled = NSPredicate(format: "enabled == true")
+          expectation(for: enabled, evaluatedWith: themeButton); waitForExpectations(timeout: 10)
+          themeButton.tap()
+          let segment = app.segmentedControls["settings.transparency"].buttons[flat ? "开" : "关"]
+          if !segment.isHittable { app.swipeUp() }
+          expectation(for: enabled, evaluatedWith: segment); waitForExpectations(timeout: 10)
+          segment.tap()
+          capture(prefix + "-appearance")
+          app.navigationBars["外观"].buttons["BackButton"].tap()
+          capture(prefix + "-settings")
+          app.buttons["完成"].tap()
+          capture(prefix + "-home")
+          app.buttons["trip.open." + fixture["tripId"]!].tap()
+          XCTAssertTrue(app.buttons["tab.itinerary"].waitForExistence(timeout: 10))
+          capture(prefix + "-itinerary")
+          app.buttons["tab.settings"].tap()
+          XCTAssertTrue(app.navigationBars["旅程设置"].waitForExistence(timeout: 5))
+          capture(prefix + "-trip-settings")
+          app.buttons["settings.personal"].tap()
+          XCTAssertTrue(app.navigationBars["我的设置"].waitForExistence(timeout: 5))
+          app.buttons["完成"].tap()
+          app.buttons["tab.itinerary"].tap(); app.buttons["我的旅程"].tap()
+        }
+      }
+    }
+    app.terminate()
+  }
+
   func testR3NativeScreenshots() throws {
     continueAfterFailure = false
     let fixtureURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
@@ -91,7 +176,7 @@ final class JourneyUITests: XCTestCase {
       }
       let trip = app.buttons["trip.open." + fixture["tripId"]!]
       if !account.exists && !trip.exists {
-        app.buttons["个人设置"].tap()
+        app.buttons["我的设置"].tap()
         app.buttons["退出登录"].tap()
         XCTAssertTrue(account.waitForExistence(timeout: 10))
       }
@@ -104,6 +189,7 @@ final class JourneyUITests: XCTestCase {
         app.buttons["auth.submit"].tap()
       }
       XCTAssertTrue(trip.waitForExistence(timeout: 20))
+      chooseAppearance(theme, in: app)
       func capture(_ name: String) {
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "ios-" + theme + "-" + name
@@ -115,7 +201,7 @@ final class JourneyUITests: XCTestCase {
       XCTAssertTrue(app.buttons["tab.itinerary"].waitForExistence(timeout: 15))
       for (id, title, name) in [
         ("itinerary", "行程", "itinerary"), ("map", "地图", "map"),
-        ("ledger", "费用", "ledger"), ("settings", "管理", "management"),
+        ("ledger", "费用", "ledger"), ("settings", "旅程设置", "management"),
       ] {
         app.buttons["tab." + id].tap()
         XCTAssertTrue(app.buttons["tab." + id].isSelected)
@@ -133,6 +219,18 @@ final class JourneyUITests: XCTestCase {
       app.navigationBars.buttons["收起"].tap()
       app.terminate()
     }
+  }
+
+  private func chooseAppearance(_ theme: String, in app: XCUIApplication) {
+    app.buttons["settings.personal"].tap()
+    XCTAssertTrue(app.buttons["settings.appearance"].waitForExistence(timeout: 5))
+    app.buttons["settings.appearance"].tap()
+    let choice = app.buttons["settings.theme." + theme]
+    XCTAssertTrue(choice.waitForExistence(timeout: 5)); choice.tap()
+    expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: choice)
+    waitForExpectations(timeout: 10)
+    app.navigationBars["外观"].buttons["BackButton"].tap()
+    app.buttons["完成"].tap()
   }
 
   private func verifyNativeScreens(theme: String, edit: Bool) throws {
@@ -166,13 +264,14 @@ final class JourneyUITests: XCTestCase {
     if app.buttons["我的旅程"].waitForExistence(timeout: 2) { app.buttons["我的旅程"].tap() }
     let trip = app.buttons["trip.open." + fixture["tripId"]!]
     XCTAssertTrue(trip.waitForExistence(timeout: 20))
+    chooseAppearance(theme, in: app)
     let homeShot = XCTAttachment(screenshot: app.screenshot())
     homeShot.name = theme + "-home"
     homeShot.lifetime = .keepAlways
     add(homeShot)
     trip.staticTexts["南京周末"].tap()
     XCTAssertTrue(app.buttons["tab.itinerary"].waitForExistence(timeout: 15))
-    for (id, name) in [("map", "地图"), ("ledger", "费用"), ("settings", "管理"), ("itinerary", "行程")] {
+    for (id, name) in [("map", "地图"), ("ledger", "费用"), ("settings", "旅程设置"), ("itinerary", "行程")] {
       app.buttons["tab." + id].tap()
       XCTAssertTrue(app.buttons["tab." + id].isSelected)
       if name == "地图" { sleep(5) }

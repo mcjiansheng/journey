@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ItineraryView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @State private var dayID = ""
   @State private var editing: JSON?
@@ -35,7 +36,7 @@ struct ItineraryView: View {
                 RouteSignature.description(route, objects: store.objects),
                 systemImage: "point.topleft.down.curvedto.point.bottomright.up"
               )
-              .font(.caption).foregroundStyle(Palette.muted)
+              .font(.caption).foregroundStyle(palette.muted)
             }.buttonStyle(.plain).listRowBackground(Color.clear)
           } else if editMode == .active {
             Button("添加路程") { openRoute(activity) }.listRowBackground(Color.clear)
@@ -51,14 +52,14 @@ struct ItineraryView: View {
                     ? [p["time"]["start"].string, p["time"]["end"].string].filter { !$0.isEmpty }
                       .joined(separator: " – ")
                     : p["time"]["period"].string.isEmpty ? "时间灵活" : p["time"]["period"].string
-                ).font(.caption).foregroundStyle(Palette.accent)
-                Text(p["title"].string).font(.headline).foregroundStyle(Palette.text)
+                ).font(.caption).foregroundStyle(palette.accent)
+                Text(p["title"].string).font(.headline).foregroundStyle(palette.text)
                 if !p["place"]["name"].string.isEmpty {
                   Label(p["place"]["name"].string, systemImage: "mappin").font(.subheadline)
-                    .foregroundStyle(Palette.muted)
+                    .foregroundStyle(palette.muted)
                 }
                 if !p["notes"].string.isEmpty {
-                  Text(p["notes"].string).font(.subheadline).foregroundStyle(Palette.muted)
+                  Text(p["notes"].string).font(.subheadline).foregroundStyle(palette.muted)
                     .lineLimit(
                       1)
                 }
@@ -121,7 +122,7 @@ struct ItineraryView: View {
           adding = true
         } label: {
           Label("添加活动", systemImage: "plus")
-        }.tint(Palette.accent).disabled(dayID.isEmpty).accessibilityLabel("添加活动")
+        }.tint(palette.accent).disabled(dayID.isEmpty).accessibilityLabel("添加活动")
       }
     }.sheet(item: $routeSelection) { selection in
       RouteEditor(object: selection.object, from: selection.from, to: selection.to)
@@ -164,6 +165,7 @@ func dayTitle(_ day: JSON, trip: JSON = .null) -> String {
   return "第 \(ordinal) 天" + (date.isEmpty ? "" : " · \(date)")
 }
 struct LifecycleMenu: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   let object: JSON
   var edit: (() -> Void)? = nil
@@ -207,6 +209,7 @@ struct LifecycleMenu: View {
   }
 }
 struct LifecycleActions: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   let object: JSON
   var edit: (() -> Void)? = nil
@@ -215,18 +218,19 @@ struct LifecycleActions: View {
     HStack {
       let absent = object["expressions"].array.filter { $0["notParticipating"].bool }.count
       let wishes = object["expressions"].array.filter { $0["wishDelete"].bool }.count
-      if absent > 0 { Text("\(absent) 人不参加").foregroundStyle(Palette.muted) }
-      if wishes > 0 { Text("\(wishes) 人希望删除").foregroundStyle(Palette.muted) }
+      if absent > 0 { Text("\(absent) 人不参加").foregroundStyle(palette.muted) }
+      if wishes > 0 { Text("\(wishes) 人希望删除").foregroundStyle(palette.muted) }
       Spacer()
       Menu {
         LifecycleMenu(object: object, edit: edit, route: route)
       } label: {
         Image(systemName: "ellipsis").frame(minWidth: 44, minHeight: 44)
-      }.accessibilityLabel("更多操作").buttonStyle(.plain).foregroundStyle(Palette.accent)
+      }.accessibilityLabel("更多操作").buttonStyle(.plain).foregroundStyle(palette.accent)
     }.font(.caption)
   }
 }
 struct ActivityEditor: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @Environment(\.dismiss) var dismiss
   var object: JSON? = nil
@@ -329,7 +333,7 @@ struct ActivityEditor: View {
         Section("地点") {
           Button(form["place"].isNull ? "搜索地点" : form["place"]["name"].string) { search = true }
           if !form["place"].isNull {
-            Text(form["place"]["address"].string).font(.caption).foregroundStyle(Palette.muted)
+            Text(form["place"]["address"].string).font(.caption).foregroundStyle(palette.muted)
             Button("移除地点", role: .destructive) {
               form["place"] = .null
               changed("place")

@@ -13,6 +13,7 @@ import SwiftUI
   @Published var status = "正在连接…"
   @Published var ready = false
   @Published var busy = false
+  @Published private(set) var savingAppearance = false
   @Published var recoveryBusy = false
   @Published var loadedTrips = false
   @Published var sessionExpired = false
@@ -448,9 +449,34 @@ import SwiftUI
     cache.drafts.removeValue(forKey: key)
     try persist()
   }
+  // Own the request beyond the settings sheet's lifetime. Block a second tap before
+  // starting the task so a failed older request cannot undo a newer selection.
+  @discardableResult
+  func saveAppearancePreference(_ key: String, _ value: JSON) -> Task<Void, Never>? {
+    guard !savingAppearance else { return nil }
+    let storageKey = "journey." + key
+    let previous = UserDefaults.standard.object(forKey: storageKey)
+    let accountEpoch = epoch
+    savingAppearance = true
+    UserDefaults.standard.set(PreferenceChoice.string(value), forKey: storageKey)
+    return Task {
+      defer { savingAppearance = false }
+      do {
+        try await updateProfile(.object(["preferences": .object([key: value])]))
+      } catch {
+        guard accountEpoch == epoch else { return }
+        if let previous { UserDefaults.standard.set(previous, forKey: storageKey) }
+        else { UserDefaults.standard.removeObject(forKey: storageKey) }
+        self.error = (error as? APIError)?.code == "NETWORK"
+          ? "无法连接服务器，设置未保存" : error.localizedDescription
+      }
+    }
+  }
+
   func updateProfile(_ body: JSON) async throws {
     let r = try await api("/api/me", method: "PATCH", body: body)
     user = r["user"].isNull ? r : r["user"]
+    UserDefaults.standard.set(try JSONEncoder().encode(user), forKey: "journey.lastAccount:" + baseURL)
   }
   func change(_ path: String, method: String = "POST", body: JSON? = nil) async throws {
     _ = try await api(path, method: method, body: body)

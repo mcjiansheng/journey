@@ -160,13 +160,13 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
             }
         }
     }
+    val reducedMotion = LocalJourneyPalette.current.reducedMotion
     LaunchedEffect(selected?.toString()) {
         selected?.let { p ->
             if (!p.isNull("lng") && !p.isNull("lat")) {
                 val ll = Coordinates.toWgs(p.optDouble("lng"), p.optDouble("lat"))
-                nativeMap?.animateCamera(
-                    CameraUpdateFactory.newLatLngZoom(LatLng(ll.second, ll.first), 15.0)
-                )
+                val camera = CameraUpdateFactory.newLatLngZoom(LatLng(ll.second, ll.first), 15.0)
+                if (reducedMotion) nativeMap?.moveCamera(camera) else nativeMap?.animateCamera(camera)
             }
         }
     }

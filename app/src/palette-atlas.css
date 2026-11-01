@@ -1,0 +1,39 @@
+/* Atlas decoration only. Dynamic names and dialog titles retain the shared system font. */
+:root[data-palette='atlas']
+  :is(
+    .auth-brand > span,
+    .brand > span,
+    .journey-sketch figcaption,
+    .home-main > h1,
+    .login-heading h1
+  ) {
+  font-family: 'Songti SC', 'Noto Serif CJK SC', 'Source Han Serif SC', serif;
+  font-weight: 600;
+  font-synthesis: weight;
+}
+:root[data-palette='atlas'] .continue-card::before {
+  content: '';
+  position: absolute;
+  width: 340px;
+  height: 340px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: 50%;
+  right: -165px;
+  bottom: -200px;
+  box-shadow:
+    0 0 0 32px color-mix(in srgb, var(--accent) 5%, transparent),
+    0 0 0 65px color-mix(in srgb, var(--accent) 4%, transparent);
+  pointer-events: none;
+}
+:root[data-palette='atlas'] .continue-card {
+  overflow: hidden;
+}
+:root[data-palette='atlas'] .continue-card .trip-art {
+  border-left: 7px solid var(--accent);
+  border-radius: var(--radius-md) var(--radius-xl) var(--radius-xl) var(--radius-md);
+  background: var(--surface);
+  color: var(--accent);
+}
+:root[data-palette='atlas'] .trip-card-icon {
+  border-radius: var(--radius-sm) var(--radius-md) var(--radius-md) var(--radius-sm);
+}

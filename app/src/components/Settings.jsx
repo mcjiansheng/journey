@@ -1,233 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import {
-  UserRound,
-  Users,
   Link,
   Copy,
   Check,
   LogOut,
   Trash2,
-  Settings2,
-  Sun,
-  Moon,
-  Bell,
-  RefreshCw,
   Archive,
   ChevronRight,
-  Shield,
-  Download,
-  HardDrive,
   MoreHorizontal,
 } from 'lucide-react';
-import { Modal, Field, AsyncButton, Section, Empty, active, errorMessage, Back } from './ui.jsx';
+import { Modal, Field, AsyncButton, Section, Empty, errorMessage } from './ui.jsx';
 import { ObjectActions } from './Itinerary.jsx';
 import { timezoneLabel } from '../destination-timezone.js';
-import { dayLabel } from '../domain.js';
-import {
-  getFeedbackPreferences,
-  setFeedbackPreferences,
-  supportsHaptics,
-  supportsNativeSwitch,
-} from '../feedback.js';
+import { supportsNativeSwitch } from '../feedback.js';
 import { TeamModeSetting } from './TeamModePicker.jsx';
-import SyncSettings from './SyncSettings.jsx';
-export function applyAppearance(p) {
-  const theme = p?.theme || 'system';
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.dataset.motion = String(p?.reducedMotion ?? 'system');
-  document.documentElement.dataset.transparency = String(p?.reducedTransparency ?? 'system');
-  document.documentElement.dataset.mapSidebarCollapse = String(p?.autoCollapseMapSidebar ?? true);
-}
-export function PersonalSettings({ journey: j, onClose, inline = false }) {
-  const [prefs, setPrefs] = useState(() => {
-    try {
-      return {
-        ...JSON.parse(localStorage.getItem('journey.appearance') || '{}'),
-        collaborationNotifications: j.user?.preferences?.collaborationNotifications,
-      };
-    } catch {
-      return j.user?.preferences || {};
-    }
-  });
-  const [name, setName] = useState(j.user?.displayName || ''),
-    [error, setError] = useState('');
-  async function preference(key, value) {
-    try {
-      const stored = JSON.parse(localStorage.getItem('journey.appearance') || '{}');
-      const next = { ...stored, [key]: value };
-      if (key === 'interactionSound') setFeedbackPreferences({ sound: value });
-      else if (key === 'interactionHaptics') setFeedbackPreferences({ haptics: value });
-      else localStorage.setItem('journey.appearance', JSON.stringify(next));
-      setPrefs((previous) => ({ ...previous, ...next }));
-      applyAppearance(next);
-      if (j.user && key === 'collaborationNotifications')
-        await j.updateProfile({ preferences: { [key]: value } });
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  }
-  const content = (
-    <>
-      <Section title="个人资料">
-        {j.user ? (
-          <>
-            <Field label="你的称呼">
-              <input
-                value={name}
-                maxLength={80}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={async () => {
-                  if (name.trim() && name !== j.user.displayName)
-                    try {
-                      await j.updateProfile({ displayName: name.trim() });
-                    } catch (e) {
-                      setError(errorMessage(e));
-                    }
-                }}
-              />
-            </Field>
-            <p className="muted">{j.user.identifier}</p>
-          </>
-        ) : (
-          <p className="muted">登录后，可与同伴共同安排旅程。</p>
-        )}
-      </Section>
-      <Section title="显示与动效">
-        <Field label="外观">
-          <select
-            value={prefs.theme || 'system'}
-            onChange={(e) => preference('theme', e.target.value)}
-          >
-            <option value="system">跟随系统</option>
-            <option value="light">浅色</option>
-            <option value="dark">深色</option>
-          </select>
-        </Field>
-        <Field label="减少动态效果">
-          <select
-            value={String(prefs.reducedMotion ?? 'system')}
-            onChange={(e) =>
-              preference(
-                'reducedMotion',
-                e.target.value === 'system' ? 'system' : e.target.value === 'true',
-              )
-            }
-          >
-            <option value="system">跟随系统</option>
-            <option value="true">开启</option>
-            <option value="false">关闭</option>
-          </select>
-        </Field>
-        <Field label="减少透明效果">
-          <select
-            value={String(prefs.reducedTransparency ?? 'system')}
-            onChange={(e) =>
-              preference(
-                'reducedTransparency',
-                e.target.value === 'system' ? 'system' : e.target.value === 'true',
-              )
-            }
-          >
-            <option value="system">跟随系统</option>
-            <option value="true">开启</option>
-            <option value="false">关闭</option>
-          </select>
-        </Field>
-        <label className="feedback-setting">
-          <span>
-            <strong>地图自动收起侧栏</strong>
-          </span>
-          <input
-            type="checkbox"
-            switch=""
-            role="switch"
-            data-native-switch={supportsNativeSwitch() ? 'true' : 'false'}
-            checked={prefs.autoCollapseMapSidebar ?? true}
-            onChange={(e) => preference('autoCollapseMapSidebar', e.target.checked)}
-          />
-        </label>
-      </Section>
-      <Section title="交互反馈">
-        <label className="feedback-setting">
-          <span>
-            <strong>轻提示音</strong>
-          </span>
-          <input
-            type="checkbox"
-            switch=""
-            role="switch"
-            data-native-switch={supportsNativeSwitch() ? 'true' : 'false'}
-            checked={prefs.interactionSound ?? getFeedbackPreferences().sound}
-            onChange={(e) => preference('interactionSound', e.target.checked)}
-          />
-        </label>
-        {supportsHaptics() && (
-          <label className="feedback-setting">
-            <span>
-              <strong>触感反馈</strong>
-            </span>
-            <input
-              type="checkbox"
-              switch=""
-              role="switch"
-              data-native-switch={supportsNativeSwitch() ? 'true' : 'false'}
-              checked={prefs.interactionHaptics ?? getFeedbackPreferences().haptics}
-              onChange={(e) => preference('interactionHaptics', e.target.checked)}
-            />
-          </label>
-        )}
-      </Section>
-      <Section title="通知">
-        <div className="setting-row">
-          <div>
-            <strong>同伴修改提醒</strong>
-            <p>页面保持打开时，接收同伴的协作更新。</p>
-          </div>
-          <AsyncButton
-            className="secondary small"
-            onClick={async () => {
-              try {
-                if (prefs.collaborationNotifications) {
-                  await preference('collaborationNotifications', false);
-                  return;
-                }
-                if (!('Notification' in window)) throw new Error('当前浏览器不支持系统通知。');
-                const result = await Notification.requestPermission();
-                if (result !== 'granted')
-                  throw new Error('通知尚未获准，可在浏览器网站设置中开启。');
-                await preference('collaborationNotifications', true);
-              } catch (e) {
-                setError(errorMessage(e));
-              }
-            }}
-          >
-            {prefs.collaborationNotifications ? '关闭' : '开启'}
-          </AsyncButton>
-        </div>
-      </Section>
-      {j.user && <SyncSettings journey={j} />}
-      {error && (
-        <p className="field-error" role="status">
-          {error}
-        </p>
-      )}
-      {j.user && (
-        <button className="text-button danger" onClick={() => j.logout()}>
-          <LogOut size={17} />
-          退出登录
-        </button>
-      )}
-    </>
-  );
-  return inline ? (
-    <div className="personal-settings">{content}</div>
-  ) : (
-    <Modal title="个人设置" onClose={onClose}>
-      {content}
-    </Modal>
-  );
-}
+export { applyAppearance } from '../appearance.js';
+export { default as PersonalSettings } from './PersonalSettings.jsx';
 export function Team({ journey: j, onClose }) {
   const trip = j.snapshot.trip;
   const members = j.snapshot.members;
@@ -530,7 +319,7 @@ export function TripRecovery({ journey: j, onHome, onTeam, onDeleted }) {
     </div>
   );
 }
-export default function Settings({ journey: j, onTeam, onDeleted, onDates }) {
+export default function Settings({ journey: j, onTeam, onDeleted, onDates, onPersonal }) {
   const trip = j.snapshot.trip;
   const [error, setError] = useState('');
   const [name, setName] = useState(trip.name),
@@ -563,7 +352,8 @@ export default function Settings({ journey: j, onTeam, onDeleted, onDates }) {
   }
   return (
     <div className="page settings-page">
-      <h1 className="workspace-heading">旅程管理</h1>
+      <h1 className="workspace-heading">旅程设置</h1>
+      <p className="muted">修改会同步给全部 {j.snapshot.members.length} 位同伴</p>
       <Section title="当前旅程">
         <div className="form-grid">
           <Field label="旅程名称">
@@ -649,6 +439,9 @@ export default function Settings({ journey: j, onTeam, onDeleted, onDates }) {
           </button>
         </div>
       </Section>
+      <button className="text-button" onClick={onPersonal}>
+        想改主题色或提醒方式？打开我的设置
+      </button>
       {error && (
         <p className="field-error" role="alert">
           {error}

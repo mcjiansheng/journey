@@ -24,7 +24,12 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -109,8 +114,17 @@ fun Choice(label: String, value: String, choices: List<String>, set: (String) ->
 
 @Composable
 fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val palette = LocalJourneyPalette.current
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth()
+            .shadow(if (palette.reducedTransparency) 0.dp else 5.dp, RoundedCornerShape(20.dp),
+                ambientColor = palette.shadow, spotColor = palette.shadow)
+            .drawWithContent {
+                drawContent()
+                if (!palette.reducedTransparency) drawLine(palette.highlight,
+                    androidx.compose.ui.geometry.Offset(20.dp.toPx(), 1.dp.toPx()),
+                    androidx.compose.ui.geometry.Offset(size.width - 20.dp.toPx(), 1.dp.toPx()), 1.dp.toPx())
+            },
         colors = CardDefaults.cardColors(containerColor = LocalJourneyPalette.current.card),
         border = BorderStroke(1.dp, LocalJourneyPalette.current.border),
         shape = RoundedCornerShape(20.dp),
@@ -210,15 +224,21 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
                     },
                     actions = {
                         if (s.user != null) {
-                            IconButton({ s.action { s.retry() } }) {
+                            IconButton({ modal = "sync" }) {
                                 Icon(if (s.status == "已同步") Icons.Outlined.CloudDone else Icons.Outlined.CloudOff,
-                                    s.status + "，点按同步")
+                                    s.status + "，保存与同步")
                             }
                             if (s.status != "已同步") Text(s.status, style = MaterialTheme.typography.labelSmall)
                         }
                         if (s.user != null)
-                            IconButton({ modal = "profile" }) {
-                                Icon(Icons.Outlined.AccountCircle, "个人设置")
+                            IconButton({ modal = "profile" }, modifier = Modifier.semantics { contentDescription = "我的设置" }) {
+                                Surface(shape = CircleShape, color = LocalJourneyPalette.current.selected) {
+                                    Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                                        Text(s.user?.s("displayName").orEmpty().take(1).ifEmpty { "我" },
+                                            color = LocalJourneyPalette.current.primary,
+                                            style = MaterialTheme.typography.titleSmall)
+                                    }
+                                }
                             }
                     },
                 )
@@ -230,7 +250,7 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
                         shape = RoundedCornerShape(32.dp),
                         color = LocalJourneyPalette.current.elevated,
                         border = BorderStroke(1.dp, LocalJourneyPalette.current.border),
-                        shadowElevation = 3.dp,
+                        shadowElevation = if (LocalJourneyPalette.current.reducedTransparency) 0.dp else 3.dp,
                     ) {
                         NavigationBar(
                             containerColor = Color.Transparent,
@@ -241,7 +261,7 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
                                 "行程" to Icons.Outlined.EventNote,
                                 "地图" to Icons.Outlined.Map,
                                 "费用" to Icons.Outlined.Payments,
-                                "管理" to Icons.Outlined.Settings,
+                                "旅程设置" to Icons.Outlined.Tune,
                             ).forEach { (name, icon) ->
                                 NavigationBarItem(
                                     selected = s.page == name,
@@ -361,7 +381,7 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
                                         editing = o
                                         modal = "expense"
                                     }
-                                "管理" ->
+                                "旅程设置" ->
                                     ManagementScreen(
                                         s,
                                         onInvite = { modal = "invites" },
@@ -383,6 +403,7 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
         )
     when (modal) {
         "profile" -> ProfileSheet(s) { modal = "" }
+        "sync" -> ProfileSheet(s, initialCategory = "保存与同步") { modal = "" }
         "create" -> CreateSheet(s) { modal = "" }
         "join" -> JoinSheet(s, invite, { invite = it }) { modal = "" }
         "activity" -> ActivitySheet(s, editing, initialPlace) { modal = "" }

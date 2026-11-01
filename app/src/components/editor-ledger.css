@@ -137,7 +137,7 @@
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  box-shadow: 0 12px 36px #22382d22;
+  box-shadow: 0 12px 36px var(--optical-shadow);
 }
 .expense-more-panel .object-actions {
   flex-direction: column;
@@ -264,4 +264,38 @@
 .expense-amount,
 .ledger-currency-totals strong {
   font-variant-numeric: tabular-nums;
+}
+
+/* Date groups and totals share the same surface in both palettes. */
+.ledger-total {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+}
+.ledger-total strong {
+  font-size: clamp(30px, 3.5vw, 40px);
+  font-weight: 600;
+}
+.expense-date-group {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 8px 20px 0;
+  box-shadow: var(--card-shadow);
+}
+.expense-date-group > h3 {
+  border-bottom: 1px solid var(--line);
+  padding-block: 12px;
+}
+.expense-date-group .expense-row:last-child {
+  border-bottom: 0;
+}
+.expense-amount {
+  font-weight: 600;
+}
+@media (max-width: 760px) {
+  .expense-date-group {
+    padding-inline: 14px;
+  }
 }

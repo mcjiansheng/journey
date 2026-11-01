@@ -198,20 +198,6 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-:root[data-transparency='true'] .team-mode-face {
-  background: var(--surface);
-}
-:root[data-transparency='true'] .team-mode-option input:checked + .team-mode-face {
-  background: var(--accent-soft);
-}
-@media (prefers-reduced-transparency: reduce) {
-  :root:not([data-transparency='false']) .team-mode-face {
-    background: var(--surface);
-  }
-  :root:not([data-transparency='false']) .team-mode-option input:checked + .team-mode-face {
-    background: var(--accent-soft);
-  }
-}
 @media (forced-colors: active) {
   .team-mode-face {
     border-color: ButtonText;

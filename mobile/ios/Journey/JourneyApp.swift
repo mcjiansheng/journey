@@ -4,10 +4,23 @@ import SwiftUI
   @StateObject private var store = JourneyStore()
   @Environment(\.scenePhase) private var phase
   @AppStorage("journey.theme") private var theme = "system"
+  @AppStorage("journey.palette") private var paletteName = "forest"
+  @AppStorage("journey.reducedTransparency") private var transparency = "system"
+  @AppStorage("journey.reducedMotion") private var motion = "system"
   var body: some Scene {
     WindowGroup {
-      RootView().environmentObject(store).environment(\.locale, Locale(identifier: "zh_CN")).tint(
-        Palette.accent
+      RootView().environmentObject(store)
+        .modifier(JourneyAppearance(paletteName: paletteName, transparency: transparency, motion: motion))
+        .onChange(of: store.user) { _, user in
+          guard !user.isNull else { return }
+          let prefs = user["preferences"]
+          paletteName = prefs["palette"].string.isEmpty ? "forest" : prefs["palette"].string
+          theme = prefs["theme"].string.isEmpty ? "system" : prefs["theme"].string
+          transparency = PreferenceChoice.string(prefs["reducedTransparency"])
+          motion = PreferenceChoice.string(prefs["reducedMotion"])
+        }
+        .environment(\.locale, Locale(identifier: "zh_CN")).tint(
+        DesignTokens.palette(paletteName).accent
       ).preferredColorScheme(
         theme == "system" ? nil : theme == "dark" ? .dark : .light
       ).task {
@@ -20,12 +33,13 @@ import SwiftUI
   }
 }
 struct RootView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   var body: some View {
     Group {
       if !store.ready {
         ProgressView("正在连接同行…").frame(maxWidth: .infinity, maxHeight: .infinity)
-          .foregroundStyle(Palette.muted).background { JourneyBackground() }
+          .foregroundStyle(palette.muted).background { JourneyBackground() }
       } else if store.user.isNull || store.sessionExpired {
         LoginView()
       } else if store.selectedTrip != nil {
@@ -46,7 +60,7 @@ struct RootView: View {
             } label: {
               Image(systemName: "xmark")
             }.accessibilityLabel("收起")
-          }.padding().background(Palette.surfaceSolid, in: RoundedRectangle(cornerRadius: 16))
+          }.padding().background(palette.surfaceSolid, in: RoundedRectangle(cornerRadius: 16))
             .padding(.horizontal).padding(.bottom, store.selectedTrip == nil ? 12 : 88)
         }
       }.alert(
@@ -60,6 +74,7 @@ struct RootView: View {
   }
 }
 struct LoginView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @State private var register = false
   @State private var identifier = ""
@@ -70,12 +85,12 @@ struct LoginView: View {
       JourneyForm {
         Section {
           VStack(alignment: .leading, spacing: 14) {
-            Image(systemName: "safari").font(.system(size: 34)).foregroundStyle(Palette.accent)
+            Image(systemName: "safari").font(.system(size: 34)).foregroundStyle(palette.accent)
               .frame(width: 68, height: 68).background(
-                Palette.iconBackground, in: RoundedRectangle(cornerRadius: 22))
+                palette.iconBackground, in: RoundedRectangle(cornerRadius: 22))
             Text("同行").font(.largeTitle.bold())
             Text("JOURNEY").font(.caption).tracking(4)
-            Text("和同伴一起，把旅行慢慢安排好。").foregroundStyle(Palette.muted)
+            Text("和同伴一起，把旅行慢慢安排好。").foregroundStyle(palette.muted)
           }.padding(.vertical, 24).listRowBackground(Color.clear)
         }
         Section {
@@ -103,6 +118,7 @@ struct LoginView: View {
   }
 }
 struct HomeView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @State private var sheet: String?
   var body: some View {
@@ -111,9 +127,9 @@ struct HomeView: View {
         Section {
           VStack(alignment: .leading, spacing: 12) {
             Label("同行 JOURNEY", systemImage: "safari").font(.headline).foregroundStyle(
-              Palette.accent)
+              palette.accent)
             Text("我的旅程").font(.largeTitle.bold())
-            Text("把下一段好时光，留给彼此。").foregroundStyle(Palette.muted)
+            Text("把下一段好时光，留给彼此。").foregroundStyle(palette.muted)
           }.padding(.vertical, 14).listRowBackground(Color.clear)
         }
         Section {
@@ -140,11 +156,11 @@ struct HomeView: View {
               store.perform { try await store.open(trip.id) }
             } label: {
               HStack(spacing: 16) {
-                Image(systemName: "safari").font(.title2).foregroundStyle(Palette.accent)
+                Image(systemName: "safari").font(.title2).foregroundStyle(palette.accent)
                   .frame(width: 52, height: 58)
-                  .background(Palette.iconBackground, in: RoundedRectangle(cornerRadius: 17))
+                  .background(palette.iconBackground, in: RoundedRectangle(cornerRadius: 17))
                 VStack(alignment: .leading, spacing: 7) {
-                  Text(trip["name"].string).font(.headline).foregroundStyle(Palette.text)
+                  Text(trip["name"].string).font(.headline).foregroundStyle(palette.text)
                   Text(
                     [
                       trip["destination"].string, trip["startDate"].string,
@@ -153,17 +169,17 @@ struct HomeView: View {
                         : trip["state"].string == "deleted"
                           ? "已删除" : "\(Int(trip["dayCount"].number)) 天",
                     ].filter { !$0.isEmpty }.joined(separator: " · ")
-                  ).font(.subheadline).foregroundStyle(Palette.muted)
+                  ).font(.subheadline).foregroundStyle(palette.muted)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(
-                  Palette.muted)
+                  palette.muted)
               }.padding(.vertical, 4)
             }.buttonStyle(.plain).accessibilityIdentifier("trip.open." + trip.id)
           }
         }
         if store.status != "已同步" && store.cache.queue.isEmpty {
-          Text(store.status).font(.caption).foregroundStyle(Palette.muted).listRowBackground(
+          Text(store.status).font(.caption).foregroundStyle(palette.muted).listRowBackground(
             Color.clear)
         }
       }.navigationTitle("").toolbar {
@@ -171,7 +187,7 @@ struct HomeView: View {
           sheet = "profile"
         } label: {
           Image(systemName: "person.crop.circle")
-        }.accessibilityLabel("个人设置")
+        }.accessibilityLabel("我的设置").accessibilityIdentifier("settings.personal")
       }.refreshable {
         do { try await store.refreshTrips() } catch { store.error = error.localizedDescription }
       }.sheet(item: Binding(get: { sheet.map(SheetID.init) }, set: { sheet = $0?.id })) { item in
@@ -205,6 +221,7 @@ struct SheetID: Identifiable {
   init(_ id: String) { self.id = id }
 }
 struct CreateTripView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @Environment(\.dismiss) var dismiss
   @State private var name = ""
@@ -259,7 +276,7 @@ struct CreateTripView: View {
         }
         Section {
           if let creationError {
-            Text(creationError).foregroundStyle(Palette.danger).accessibilityIdentifier(
+            Text(creationError).foregroundStyle(palette.danger).accessibilityIdentifier(
               "trip.create.error")
           }
           Button(creating ? "正在创建…" : "创建旅程") { create() }
@@ -315,6 +332,7 @@ struct CreateTripView: View {
 }
 
 struct TeamModeCards: View {
+  @Environment(\.journeyPalette) private var palette
   @Binding var selection: String
   var body: some View {
     VStack(spacing: 12) {
@@ -328,26 +346,26 @@ struct TeamModeCards: View {
       selection = value
     } label: {
       HStack(alignment: .top, spacing: 12) {
-        Image(systemName: symbol).font(.title2).foregroundStyle(Palette.accent)
+        Image(systemName: symbol).font(.title2).foregroundStyle(palette.accent)
           .frame(width: 44, height: 44).background(
-            Palette.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 12)
+            palette.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 12)
           )
           .accessibilityHidden(true)
         VStack(alignment: .leading, spacing: 6) {
-          Text(title).font(.headline).foregroundStyle(Palette.text)
-          Text(detail).font(.subheadline).foregroundStyle(Palette.muted).fixedSize(
+          Text(title).font(.headline).foregroundStyle(palette.text)
+          Text(detail).font(.subheadline).foregroundStyle(palette.muted).fixedSize(
             horizontal: false, vertical: true)
         }.frame(maxWidth: .infinity, alignment: .leading)
         Image(systemName: selected ? "checkmark.circle.fill" : "circle").font(.title3)
-          .foregroundStyle(selected ? Palette.accent : Palette.muted).accessibilityHidden(true)
+          .foregroundStyle(selected ? palette.accent : palette.muted).accessibilityHidden(true)
       }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
         .background(
-          selected ? Palette.accent.opacity(0.09) : Palette.surfaceSolid,
+          selected ? palette.accent.opacity(0.09) : palette.surfaceSolid,
           in: RoundedRectangle(cornerRadius: 16)
         )
         .overlay {
           RoundedRectangle(cornerRadius: 16).strokeBorder(
-            selected ? Palette.accent : Palette.border, lineWidth: selected ? 1.5 : 1)
+            selected ? palette.accent : palette.border, lineWidth: selected ? 1.5 : 1)
         }
         .contentShape(RoundedRectangle(cornerRadius: 16))
     }.buttonStyle(.plain).accessibilityElement(children: .combine)
@@ -357,6 +375,7 @@ struct TeamModeCards: View {
 }
 
 struct JourneyTimeZonePicker: View {
+  @Environment(\.journeyPalette) private var palette
   @Binding var selection: String
   var useAutomatic: (() -> Void)? = nil
   @Environment(\.dismiss) private var dismiss
@@ -388,13 +407,13 @@ struct JourneyTimeZonePicker: View {
           } label: {
             HStack {
               VStack(alignment: .leading, spacing: 4) {
-                Text(JourneyTimeZone.label(identifier)).foregroundStyle(Palette.text)
+                Text(JourneyTimeZone.label(identifier)).foregroundStyle(palette.text)
                 Text(JourneyTimeZone.offset(identifier)).font(.caption).foregroundStyle(
-                  Palette.muted)
+                  palette.muted)
               }
               Spacer()
               if identifier == selection {
-                Image(systemName: "checkmark").foregroundStyle(Palette.accent)
+                Image(systemName: "checkmark").foregroundStyle(palette.accent)
               }
             }
           }.accessibilityIdentifier("timezone." + identifier)
@@ -409,6 +428,7 @@ let currencies = [
   "CNY", "USD", "EUR", "JPY", "GBP", "HKD", "KRW", "SGD", "THB", "TWD", "AUD", "CAD",
 ]
 struct JoinView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @Environment(\.dismiss) var dismiss
   @State private var input = ""
@@ -449,20 +469,23 @@ struct JoinView: View {
   }
 }
 struct WorkspaceView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @State private var tab = "itinerary"
+  @State private var profile = false
   var body: some View {
     TabView(selection: $tab) {
-      NavigationStack { ItineraryView() }.toolbar(.hidden, for: .tabBar).tag("itinerary")
-      NavigationStack { TripMapView() }.toolbar(.hidden, for: .tabBar).tag("map")
-      NavigationStack { ExpensesView() }.toolbar(.hidden, for: .tabBar).tag("ledger")
-      NavigationStack { ManageView() }.toolbar(.hidden, for: .tabBar).tag("settings")
-    }.safeAreaInset(edge: .bottom, spacing: 0) {
+      NavigationStack { ItineraryView().toolbar { personalToolbar } }.toolbar(.hidden, for: .tabBar).tag("itinerary")
+      NavigationStack { TripMapView().toolbar { personalToolbar } }.toolbar(.hidden, for: .tabBar).tag("map")
+      NavigationStack { ExpensesView().toolbar { personalToolbar } }.toolbar(.hidden, for: .tabBar).tag("ledger")
+      NavigationStack { ManageView().toolbar { personalToolbar } }.toolbar(.hidden, for: .tabBar).tag("settings")
+    }.sheet(isPresented: $profile) { ProfileView() }
+    .safeAreaInset(edge: .bottom, spacing: 0) {
       JourneyTabBar(selection: $tab)
     }.safeAreaInset(edge: .top, spacing: 0) {
       if !store.cache.queue.isEmpty {
         Label("\(store.cache.queue.count) 项修改等待同步", systemImage: "arrow.triangle.2.circlepath")
-          .font(.caption).padding(7).frame(maxWidth: .infinity).background(Palette.background)
+          .font(.caption).padding(7).frame(maxWidth: .infinity).background(palette.background)
       }
     }
     .onChange(of: tab) { _, value in
@@ -482,41 +505,170 @@ struct WorkspaceView: View {
       }
     }
   }
+  @ToolbarContentBuilder private var personalToolbar: some ToolbarContent {
+    ToolbarItem(placement: .topBarTrailing) {
+      Button { profile = true } label: { Image(systemName: "person.crop.circle") }
+        .accessibilityLabel("我的设置").accessibilityIdentifier("settings.personal")
+    }
+  }
+
 }
+enum PreferenceChoice {
+  static func string(_ value: JSON) -> String {
+    value.isNull ? "system" : value == .bool(true) ? "true" : value == .bool(false) ? "false" : value.string
+  }
+  static func json(_ value: String) -> JSON {
+    value == "system" ? .string("system") : .bool(value == "true")
+  }
+}
+
 struct ProfileView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @Environment(\.dismiss) var dismiss
-  @State private var name = ""
-  @AppStorage("journey.theme") var theme = "system"
+  @AppStorage("journey.palette") private var paletteName = "forest"
+  @AppStorage("journey.theme") private var theme = "system"
   var body: some View {
     NavigationStack {
       JourneyForm {
-        Section("个人资料") {
-          TextField("你的称呼", text: $name)
-          Text(store.user["identifier"].string).foregroundStyle(Palette.muted)
-          Button("保存称呼") {
-            store.perform { try await store.updateProfile(.object(["displayName": .string(name)])) }
+        Section {
+          Label(store.user["displayName"].string, systemImage: "person.crop.circle.fill").font(.title3.bold())
+          Text("只对你自己生效，在所有旅程中通用").font(.subheadline).foregroundStyle(palette.muted)
+        }
+        Section("偏好") {
+          NavigationLink { AppearanceSettingsView() } label: {
+            LabeledContent("外观", value: (paletteName == "atlas" ? "海图蓝" : "森林绿") + " · " + (theme == "system" ? "跟随系统" : theme == "dark" ? "深色" : "浅色"))
+          }.accessibilityIdentifier("settings.appearance")
+          NavigationLink("辅助功能") { AccessibilitySettingsView() }
+          NavigationLink("通知与提示") { NotificationSettingsView() }
+        }
+        Section("数据") { NavigationLink("保存与同步") { SyncView() } }
+        Section("账号") { NavigationLink("账号") { AccountSettingsView() } }
+        Section {
+          Button("退出登录", role: .destructive) {
+            store.perform { try await store.logout(); dismiss() }
+          }.foregroundStyle(palette.danger)
+        }
+      }.navigationTitle("我的设置").toolbar { Button("完成") { dismiss() } }
+    }.preferredColorScheme(theme == "system" ? nil : theme == "dark" ? .dark : .light)
+  }
+}
+
+struct AppearanceSettingsView: View {
+  @Environment(\.journeyPalette) private var palette
+  @EnvironmentObject var store: JourneyStore
+  @Environment(\.colorScheme) private var colorScheme
+  @AppStorage("journey.palette") private var paletteName = "forest"
+  @AppStorage("journey.theme") private var theme = "system"
+  @AppStorage("journey.reducedTransparency") private var transparency = "system"
+  var body: some View {
+    JourneyForm {
+      Section("主题色") {
+        HStack {
+          ForEach(["forest", "atlas"], id: \.self) { value in
+            Button {
+              store.saveAppearancePreference("palette", .string(value))
+            } label: {
+              SettingsPreview(title: value == "atlas" ? "海图蓝" : "森林绿", colors: DesignTokens.palette(value), selected: paletteName == value)
+            }.buttonStyle(.plain).accessibilityIdentifier("settings.palette." + value)
+              .accessibilityAddTraits(paletteName == value ? [.isSelected] : [])
           }
         }
-        Picker("外观", selection: $theme) {
-          Text("跟随系统").tag("system")
-          Text("浅色").tag("light")
-          Text("深色").tag("dark")
-        }
-        NavigationLink("保存与同步") { SyncView() }
-        Button("退出登录", role: .destructive) {
-          store.perform {
-            try await store.logout()
-            dismiss()
-          }
-        }
-      }.navigationTitle("个人设置").toolbar { Button("完成") { dismiss() } }.onAppear {
-        name = store.user["displayName"].string
       }
-    }
+      Section("明暗") {
+        HStack {
+          ForEach(["system", "light", "dark"], id: \.self) { value in
+            Button {
+              store.saveAppearancePreference("theme", .string(value))
+            } label: {
+              SettingsPreview(title: value == "system" ? "跟随系统" : value == "dark" ? "深色" : "浅色", colors: DesignTokens.palette(paletteName), selected: theme == value, previewScheme: value == "dark" ? .dark : value == "light" ? .light : colorScheme)
+            }.buttonStyle(.plain).accessibilityIdentifier("settings.theme." + value)
+              .accessibilityAddTraits(theme == value ? [.isSelected] : [])
+          }
+        }
+      }
+      Section {
+        Picker("减少透明效果", selection: Binding(get: { transparency }, set: {
+          store.saveAppearancePreference("reducedTransparency", PreferenceChoice.json($0))
+        })) { Text("跟随系统").tag("system"); Text("关").tag("false"); Text("开").tag("true") }
+          .pickerStyle(.segmented).accessibilityIdentifier("settings.transparency")
+      } header: { Text("减少透明效果") } footer: {
+        Text("使用不透明的实底卡片和面板，不显示毛玻璃和高光。")
+      }
+      if let error = store.error {
+        Section { Text(error).foregroundStyle(palette.danger).accessibilityIdentifier("settings.error") }
+      }
+    }.disabled(store.busy || store.savingAppearance).navigationTitle("外观")
+  }
+}
+
+struct SettingsPreview: View {
+  @Environment(\.colorScheme) private var colorScheme
+  var title: String
+  var colors: DesignTokens.Colors
+  var selected: Bool
+  var previewScheme: ColorScheme? = nil
+  var body: some View {
+    VStack(spacing: 10) {
+      HStack(spacing: 6) {
+        RoundedRectangle(cornerRadius: 3).fill(colors.selected).frame(width: 15)
+        VStack(spacing: 6) {
+          Capsule().fill(colors.primary).frame(height: 5).padding(.trailing, 16)
+          RoundedRectangle(cornerRadius: 4).fill(colors.surface).frame(height: 18)
+          RoundedRectangle(cornerRadius: 4).fill(colors.surface).frame(height: 18)
+        }
+      }.padding(10).frame(height: 85).background(colors.page, in: RoundedRectangle(cornerRadius: 10))
+        .environment(\.colorScheme, previewScheme ?? colorScheme)
+      Text(title).font(.caption.weight(.semibold)).foregroundStyle(colors.text)
+      Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(colors.primary)
+    }.frame(maxWidth: .infinity).padding(8)
+      .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? colors.primary : colors.border, lineWidth: selected ? 2 : 1) }
+      .contentShape(Rectangle()).accessibilityElement(children: .ignore).accessibilityLabel(title)
+  }
+}
+
+struct AccessibilitySettingsView: View {
+  @Environment(\.journeyPalette) private var palette
+  @EnvironmentObject var store: JourneyStore
+  @AppStorage("journey.reducedMotion") private var motion = "system"
+  var body: some View {
+    JourneyForm {
+      Section {
+        Picker("减少动态效果", selection: Binding(get: { motion }, set: { value in
+          store.saveAppearancePreference("reducedMotion", PreferenceChoice.json(value))
+        })) { Text("跟随系统").tag("system"); Text("关").tag("false"); Text("开").tag("true") }.pickerStyle(.segmented)
+      } header: { Text("减少动态效果") } footer: { Text("减少页面切换和界面动画。") }
+      if let error = store.error {
+        Section { Text(error).foregroundStyle(palette.danger).accessibilityIdentifier("settings.error") }
+      }
+    }.disabled(store.busy || store.savingAppearance).navigationTitle("辅助功能")
+  }
+}
+
+struct NotificationSettingsView: View {
+  var body: some View {
+    JourneyForm {
+      Section("同伴修改提醒") { Text("打开旅程后，同伴的修改会自动更新。") }
+    }.navigationTitle("通知与提示")
+  }
+}
+
+struct AccountSettingsView: View {
+  @EnvironmentObject var store: JourneyStore
+  @State private var name = ""
+  var body: some View {
+    JourneyForm {
+      Section("个人资料") {
+        TextField("你的称呼", text: $name)
+        LabeledContent("登录账号", value: store.user["identifier"].string)
+        Button("保存称呼") { store.perform { try await store.updateProfile(.object(["displayName": .string(name)])) } }
+          .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+      }
+    }.navigationTitle("账号").onAppear { name = store.user["displayName"].string }
   }
 }
 struct SyncView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @State private var confirm: String?
   var body: some View {
@@ -538,7 +690,7 @@ struct SyncView: View {
                   ? "正在等待服务器确认"
                   : op.blocked == "CLOCK_UNCERTAIN"
                     ? "需要确认重新应用" : op.blocked == nil ? "等待上传" : "暂时无法提交"
-              ).font(.caption).foregroundStyle(Palette.muted)
+              ).font(.caption).foregroundStyle(palette.muted)
             }
           }
           if ops.first?.blocked == "CLOCK_UNCERTAIN" && !ops.contains(where: \.receiptUnknown) {
@@ -546,7 +698,7 @@ struct SyncView: View {
           }
         }
       }
-      if store.cache.queue.isEmpty { Text("修改已保存并同步").foregroundStyle(Palette.muted) }
+      if store.cache.queue.isEmpty { Text("修改已保存并同步").foregroundStyle(palette.muted) }
     }.navigationTitle("保存与同步").confirmationDialog(
       "以现在的时间重新应用这些修改？",
       isPresented: Binding(get: { confirm != nil }, set: { if !$0 { confirm = nil } })

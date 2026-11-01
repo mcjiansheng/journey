@@ -21,6 +21,14 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.22.1'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install shared token generator tooling
+        working-directory: app
+        run: npm ci
       - name: Check shared design tokens
         run: node scripts/generate-design-tokens.mjs --check
       - name: Check shared destination timezones

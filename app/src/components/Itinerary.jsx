@@ -1102,7 +1102,7 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
 
   return (
     <div className={`page itinerary-page${sorting ? ' is-sorting' : ''}`}>
-      <h1 className="workspace-heading">行程</h1>
+      <h1 className="sr-only">行程</h1>
       <div className="itinerary-toolbar">
         {((todayDay && todayDay.id !== current?.id) || nextActivity) && (
           <nav className="day-browse-actions" aria-label="浏览行程">

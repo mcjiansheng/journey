@@ -1,71 +1,96 @@
 import SwiftUI
 
-// Shared roles for every native screen. Light keeps the web's mint / sky / cream family.
-enum Palette {
-  private static func adaptive(
-    _ light: UInt32, _ dark: UInt32, lightAlpha: CGFloat = 1, darkAlpha: CGFloat = 1
-  ) -> Color {
-    Color(
-      uiColor: UIColor { traits in
-        let value = traits.userInterfaceStyle == .dark ? dark : light
-        return UIColor(
-          red: CGFloat((value >> 16) & 255) / 255,
-          green: CGFloat((value >> 8) & 255) / 255,
-          blue: CGFloat(value & 255) / 255,
-          alpha: traits.userInterfaceStyle == .dark ? darkAlpha : lightAlpha)
-      })
+private struct JourneyPaletteKey: EnvironmentKey {
+  static let defaultValue = DesignTokens.forest
+}
+private struct JourneyFlatKey: EnvironmentKey {
+  static let defaultValue = false
+}
+extension EnvironmentValues {
+  var journeyPalette: DesignTokens.Colors {
+    get { self[JourneyPaletteKey.self] }
+    set { self[JourneyPaletteKey.self] = newValue }
   }
-  static let background = DesignTokens.page
-  static let surface = DesignTokens.surface
-  static let surfaceSolid = DesignTokens.surface
-  static let secondarySurface = DesignTokens.surface
-  static let border = adaptive(0xB5C6BB, 0xFFFFFF, lightAlpha: 0.30, darkAlpha: 0.08)
-  static let iconBackground = DesignTokens.iconBackground
-  static let text = DesignTokens.text
-  static let muted = DesignTokens.muted
-  static let accent = DesignTokens.primary
-  static let onAccent = DesignTokens.onPrimary
-  static let selected = adaptive(0xFFFFFF, 0x7FCBA5, darkAlpha: 0.16)
-  static let danger = DesignTokens.danger
-  static let mint = DesignTokens.ambientMint
-  static let sky = DesignTokens.ambientSky
-  static let low = DesignTokens.ambientLow
-  static let shadow = adaptive(0x294B3B, 0x000000, lightAlpha: 0.04, darkAlpha: 0.12)
+  var journeyFlat: Bool {
+    get { self[JourneyFlatKey.self] }
+    set { self[JourneyFlatKey.self] = newValue }
+  }
+}
+extension DesignTokens.Colors {
+  var background: Color { page }
+  var surfaceSolid: Color { surface }
+  var secondarySurface: Color { elevated }
+  var accent: Color { primary }
+  var onAccent: Color { onPrimary }
+  var mint: Color { ambientMint }
+  var sky: Color { ambientSky }
+  var low: Color { ambientLow }
+}
+
+struct JourneyAppearance: ViewModifier {
+  var paletteName: String
+  var transparency: String
+  var motion: String
+  @Environment(\.accessibilityReduceTransparency) private var systemFlat
+  @Environment(\.accessibilityReduceMotion) private var systemMotion
+  func body(content: Content) -> some View {
+    content.environment(\.journeyPalette, DesignTokens.palette(paletteName))
+      .environment(\.journeyFlat, systemFlat || transparency == "true")
+      .transaction {
+        if motion == "true" || (motion == "system" && systemMotion) { $0.disablesAnimations = true }
+      }
+  }
+}
+
+private struct JourneyNavigationAppearance: ViewModifier {
+  @Environment(\.colorScheme) private var colorScheme
+  func body(content: Content) -> some View {
+    content.toolbarColorScheme(colorScheme, for: .navigationBar)
+  }
 }
 
 struct JourneyBackground: View {
+  @Environment(\.journeyPalette) private var palette
   @Environment(\.colorScheme) private var colorScheme
   var body: some View {
     GeometryReader { geometry in
       let radius = max(geometry.size.width, geometry.size.height) * (colorScheme == .dark ? 1.15 : 0.8)
       ZStack {
-        Palette.background
+        palette.background
         RadialGradient(
-          colors: [Palette.mint, .clear], center: .topLeading, startRadius: 0, endRadius: radius)
+          colors: [palette.mint, .clear], center: .topLeading, startRadius: 0, endRadius: radius)
         RadialGradient(
-          colors: [Palette.sky, .clear], center: .topTrailing, startRadius: 0, endRadius: radius)
+          colors: [palette.sky, .clear], center: .topTrailing, startRadius: 0, endRadius: radius)
         RadialGradient(
-          colors: [Palette.low, .clear], center: .bottom, startRadius: 0, endRadius: radius)
+          colors: [palette.low, .clear], center: .bottom, startRadius: 0, endRadius: radius)
       }
     }.ignoresSafeArea().allowsHitTesting(false)
   }
 }
 
 struct JourneyCard: View {
-  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+  @Environment(\.journeyPalette) private var palette
+  @Environment(\.journeyFlat) private var flat
   var body: some View {
     RoundedRectangle(cornerRadius: DesignTokens.radiusLg, style: .continuous)
-      .fill(Palette.surfaceSolid)
+      .fill(palette.surfaceSolid)
       .overlay {
         RoundedRectangle(cornerRadius: DesignTokens.radiusLg, style: .continuous).strokeBorder(
-          Palette.border, lineWidth: 0.5)
+          palette.border, lineWidth: 0.5)
       }
-      .shadow(color: Palette.shadow, radius: 12, y: 4)
+      .overlay {
+        if !flat {
+          RoundedRectangle(cornerRadius: DesignTokens.radiusLg, style: .continuous)
+            .strokeBorder(LinearGradient(colors: [palette.highlight, .clear], startPoint: .top, endPoint: .bottom), lineWidth: 0.5)
+        }
+      }
+      .shadow(color: flat ? .clear : palette.shadow, radius: 12, y: 4)
   }
 }
 
 // Keep native scrolling, editing, pickers and form semantics, with one surface treatment.
 struct JourneyList<Content: View>: View {
+  @Environment(\.journeyPalette) private var palette
   @ViewBuilder var content: Content
   var body: some View {
     List {
@@ -77,57 +102,66 @@ struct JourneyList<Content: View>: View {
     }
     .listStyle(.insetGrouped).listRowSpacing(12)
     .scrollContentBackground(.hidden).background { JourneyBackground() }
-    .foregroundStyle(Palette.text).tint(Palette.accent)
+    .foregroundStyle(palette.text).tint(palette.accent)
+      .modifier(JourneyNavigationAppearance())
   }
 }
 
 struct JourneyForm<Content: View>: View {
+  @Environment(\.journeyPalette) private var palette
   @ViewBuilder var content: Content
   var body: some View {
     Form {
-      content.listRowBackground(Palette.surface)
-        .listRowSeparatorTint(Palette.border)
+      content.listRowBackground(palette.surface)
+        .listRowSeparatorTint(palette.border)
     }.scrollContentBackground(.hidden).background { JourneyBackground() }
-      .foregroundStyle(Palette.text).tint(Palette.accent)
+      .foregroundStyle(palette.text).tint(palette.accent)
+      .modifier(JourneyNavigationAppearance())
   }
 }
 
 extension View {
-  @ViewBuilder func journeyButton(prominent: Bool = false) -> some View {
-    if #available(iOS 26.0, *) {
-      if prominent {
-        self.buttonStyle(JourneyGlassPrimaryStyle())
-      } else {
-        self.buttonStyle(.glass).tint(Palette.accent).foregroundStyle(Palette.accent)
-      }
-    } else {
-      self.buttonStyle(JourneyButtonStyle(prominent: prominent))
-    }
+  func journeyButton(prominent: Bool = false) -> some View {
+    modifier(JourneyButtonModifier(prominent: prominent))
+  }
+}
+
+private struct JourneyButtonModifier: ViewModifier {
+  var prominent: Bool
+  @Environment(\.journeyFlat) private var flat
+  @Environment(\.journeyPalette) private var palette
+  @ViewBuilder func body(content: Content) -> some View {
+    if #available(iOS 26.0, *), !flat {
+      if prominent { content.buttonStyle(JourneyGlassPrimaryStyle()) }
+      else { content.buttonStyle(.glass).tint(palette.accent).foregroundStyle(palette.accent) }
+    } else { content.buttonStyle(JourneyButtonStyle(prominent: prominent)) }
   }
 }
 
 private struct JourneyButtonStyle: ButtonStyle {
+  @Environment(\.journeyPalette) private var palette
   var prominent: Bool
   @Environment(\.isEnabled) private var enabled
   func makeBody(configuration: Configuration) -> some View {
     configuration.label.font(.subheadline.weight(.semibold))
       .padding(.horizontal, 16).padding(.vertical, 12)
-      .foregroundStyle(prominent ? Palette.onAccent : Palette.accent)
-      .background(prominent ? Palette.accent : Palette.secondarySurface, in: Capsule())
+      .foregroundStyle(prominent ? palette.onAccent : palette.accent)
+      .background(prominent ? palette.accent : palette.secondarySurface, in: Capsule())
       .opacity(enabled ? (configuration.isPressed ? 0.7 : 1) : 0.4)
   }
 }
 
 @available(iOS 26.0, *)
 private struct JourneyGlassPrimaryStyle: ButtonStyle {
+  @Environment(\.journeyPalette) private var palette
   @Environment(\.isEnabled) private var enabled
   func makeBody(configuration: Configuration) -> some View {
     configuration.label.font(.subheadline.weight(.semibold))
-      .foregroundStyle(Palette.onAccent)
+      .foregroundStyle(palette.onAccent)
       .padding(.horizontal, 16).frame(minHeight: 44)
       .background {
         Capsule().fill(.clear)
-          .glassEffect(.regular.tint(Palette.accent).interactive(), in: Capsule())
+          .glassEffect(.regular.tint(palette.accent).interactive(), in: Capsule())
       }
       .opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.4)
   }
@@ -140,10 +174,12 @@ extension ToolbarContent {
 }
 
 struct JourneyTabBar: View {
+  @Environment(\.journeyPalette) private var palette
+  @Environment(\.journeyFlat) private var flat
   @Binding var selection: String
   private let tabs = [
     ("itinerary", "行程", "list.bullet.rectangle"), ("map", "地图", "map"),
-    ("ledger", "费用", "creditcard"), ("settings", "管理", "gearshape"),
+    ("ledger", "费用", "creditcard"), ("settings", "旅程设置", "slider.horizontal.3"),
   ]
   var body: some View {
     HStack(spacing: 4) {
@@ -154,9 +190,9 @@ struct JourneyTabBar: View {
           VStack(spacing: 5) {
             Image(systemName: symbol).font(.system(size: 20, weight: .medium))
             Text(title).font(.caption2.weight(.semibold))
-          }.foregroundStyle(selection == id ? Palette.accent : Palette.muted)
+          }.foregroundStyle(selection == id ? palette.accent : palette.muted)
             .frame(maxWidth: .infinity).frame(minHeight: 54)
-            .background(selection == id ? Palette.selected : .clear, in: Capsule())
+            .background(selection == id ? palette.selected : .clear, in: Capsule())
             .contentShape(Capsule())
         }.buttonStyle(.plain).accessibilityIdentifier("tab." + id)
           .accessibilityAddTraits(selection == id ? [.isSelected] : [])
@@ -166,15 +202,16 @@ struct JourneyTabBar: View {
       .padding(.horizontal, 20).padding(.bottom, 8)
   }
   @ViewBuilder private var navigationGlass: some View {
-    if #available(iOS 26.0, *) {
+    if #available(iOS 26.0, *), !flat {
       Capsule().fill(.clear).glassEffect(.regular, in: Capsule())
     } else {
-      Capsule().fill(Palette.surfaceSolid).overlay { Capsule().strokeBorder(Palette.border) }
+      Capsule().fill(palette.surfaceSolid).overlay { Capsule().strokeBorder(palette.border) }
     }
   }
 }
 
 struct EditorSaveStatus: View {
+  @Environment(\.journeyPalette) private var palette
   var draftKey = ""
   @EnvironmentObject var store: JourneyStore
   var body: some View {
@@ -185,6 +222,6 @@ struct EditorSaveStatus: View {
       syncing ? "正在同步" : local ? "已保存到此设备" : "已同步",
       systemImage: local ? "internaldrive" : "checkmark.icloud"
     )
-    .font(.caption).foregroundStyle(Palette.muted)
+    .font(.caption).foregroundStyle(palette.muted)
   }
 }

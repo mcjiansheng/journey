@@ -19,7 +19,7 @@
     linear-gradient(145deg, var(--optical-sheen), transparent 70%), var(--optical-selected);
   border: 1px solid var(--optical-edge);
   box-shadow:
-    inset 0 1px 0 var(--optical-edge),
+    inset 0 1px 0 var(--surface-highlight),
     0 3px 9px var(--optical-shadow);
 }
 .selection-indicator[data-ready] {
@@ -245,20 +245,6 @@
   }
   .day-tabs .selection-indicator {
     border-radius: var(--radius-md);
-  }
-}
-:root[data-transparency='true'] .selection-indicator,
-:root[data-transparency='true'] .map-shell .header-right {
-  background: var(--surface);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-@media (prefers-reduced-transparency: reduce) {
-  :root:not([data-transparency='false']) .selection-indicator,
-  :root:not([data-transparency='false']) .map-shell .header-right {
-    background: var(--surface);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
   }
 }
 

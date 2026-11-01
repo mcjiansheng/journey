@@ -25,8 +25,9 @@ async function seed(page){
  await expect(page.locator('.itinerary-page')).toBeVisible();
 }
 async function openPreferences(page){
- await nav(page,'行程').click();await page.locator('.profile-button').click();
- return page.getByRole('dialog',{name:'个人设置'}).getByRole('switch',{name:'地图自动收起侧栏',exact:true});
+ await nav(page,'行程').click();await page.locator('.sidebar .profile-button').click();
+ await page.getByRole('navigation',{name:'设置分类'}).getByRole('button',{name:/^地图/}).click();
+ return page.getByRole('dialog',{name:'我的设置'}).getByRole('switch',{name:'地图自动收起侧栏',exact:true});
 }
 async function expectSidebar(page,{width,height,compact=false}){
  const sidebar=page.locator('.sidebar');
@@ -55,7 +56,7 @@ async function checkPreference(page,viewport){
  await page.keyboard.press('Escape');await expectSidebar(page,full);
  await nav(page,'地图').click();await expectSidebar(page,full);
  await nav(page,'费用').click();await expectSidebar(page,full);
- await nav(page,'管理').click();await expectSidebar(page,full);
+ await nav(page,'旅程设置').click();await expectSidebar(page,full);
  await page.reload();await page.getByRole('button',{name:/继续旅程/}).click();
  const savedToggle=await openPreferences(page);await expect(savedToggle).not.toBeChecked();
  await page.keyboard.press('Escape');await nav(page,'地图').click();await expectSidebar(page,full);
@@ -67,7 +68,7 @@ async function checkPreference(page,viewport){
  const mobileNav=page.getByRole('navigation',{name:'手机主导航',exact:true});await expect(mobileNav).toBeVisible();
  const before=await mobileNav.boundingBox();
  await page.getByRole('button',{name:'返回我的旅程',exact:true}).click();await page.locator('.profile-button').click();
- await page.getByRole('switch',{name:'地图自动收起侧栏',exact:true}).uncheck();await page.keyboard.press('Escape');await page.getByRole('button',{name:/继续旅程/}).click();
+ await expect(page.getByRole('navigation',{name:'设置分类'}).getByRole('button',{name:/^地图/})).toBeHidden();await page.keyboard.press('Escape');await page.getByRole('button',{name:/继续旅程/}).click();
  await expect(page.locator('.sidebar')).toBeHidden();await expect(mobileNav).toBeVisible();
  const after=await mobileNav.boundingBox();
  for(const key of ['x','y','width','height'])expect(after[key]).toBeCloseTo(before[key]);
