@@ -101,5 +101,15 @@ test('appearance preferences merge per field and follow the account into a fresh
  const fresh=await f.req('/api/auth/login',{method:'POST',body:{identifier:'appearance@example.com',password:'long-test-password'}});
  assert.deepEqual(fresh.data.user.preferences,updated.data.preferences);
  assert.equal((await f.req('/api/me',{actor,method:'PATCH',body:{preferences:{palette:'missing'}}})).status,422);
- assert.equal((await f.req('/api/me',{actor,method:'PATCH',body:{preferences:{interactionSound:true}}})).status,422);
+ const future={futureAppearance:{contrast:'high',revision:2}};
+ const forward=await f.req('/api/me',{actor,method:'PATCH',body:{preferences:future}});
+ assert.equal(forward.status,200);
+ assert.deepEqual(forward.data.preferences,{...updated.data.preferences,...future});
+ const partial=await f.req('/api/me',{actor,method:'PATCH',body:{preferences:{theme:'light'}}});
+ assert.deepEqual(partial.data.preferences,{...forward.data.preferences,theme:'light'});
+ const session=await f.req('/api/session',{actor});
+ assert.deepEqual(session.data.user.preferences,partial.data.preferences);
+ for(const preferences of [{theme:'sepia'},{reducedMotion:'yes'},{reducedTransparency:1},{collaborationNotifications:'yes'}])
+  assert.equal((await f.req('/api/me',{actor,method:'PATCH',body:{preferences}})).status,422);
+ assert.equal((await f.req('/api/me',{actor,method:'PATCH',body:{unexpected:true}})).status,422);
 });

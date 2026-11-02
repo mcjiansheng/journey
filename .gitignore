@@ -38,3 +38,6 @@ hs_err_pid*.log
 /mobile/ios/*.xcresult/
 /mobile/ios/*.xcarchive/
 /mobile/ios/*.ipa
+
+# Deliverable installation packages and validation logs.
+/outputs/2026-11-02-release/

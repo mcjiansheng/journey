@@ -33,9 +33,12 @@ struct JourneyAppearance: ViewModifier {
   var motion: String
   @Environment(\.accessibilityReduceTransparency) private var systemFlat
   @Environment(\.accessibilityReduceMotion) private var systemMotion
+  static func reduceTransparency(_ choice: String, system: Bool) -> Bool {
+    choice == "true" || (choice == "system" && system)
+  }
   func body(content: Content) -> some View {
     content.environment(\.journeyPalette, DesignTokens.palette(paletteName))
-      .environment(\.journeyFlat, systemFlat || transparency == "true")
+      .environment(\.journeyFlat, Self.reduceTransparency(transparency, system: systemFlat))
       .transaction {
         if motion == "true" || (motion == "system" && systemMotion) { $0.disablesAnimations = true }
       }
@@ -51,18 +54,21 @@ private struct JourneyNavigationAppearance: ViewModifier {
 
 struct JourneyBackground: View {
   @Environment(\.journeyPalette) private var palette
+  @Environment(\.journeyFlat) private var flat
   @Environment(\.colorScheme) private var colorScheme
   var body: some View {
     GeometryReader { geometry in
       let radius = max(geometry.size.width, geometry.size.height) * (colorScheme == .dark ? 1.15 : 0.8)
       ZStack {
         palette.background
-        RadialGradient(
-          colors: [palette.mint, .clear], center: .topLeading, startRadius: 0, endRadius: radius)
-        RadialGradient(
-          colors: [palette.sky, .clear], center: .topTrailing, startRadius: 0, endRadius: radius)
-        RadialGradient(
-          colors: [palette.low, .clear], center: .bottom, startRadius: 0, endRadius: radius)
+        if !flat {
+          RadialGradient(
+            colors: [palette.mint, .clear], center: .topLeading, startRadius: 0, endRadius: radius)
+          RadialGradient(
+            colors: [palette.sky, .clear], center: .topTrailing, startRadius: 0, endRadius: radius)
+          RadialGradient(
+            colors: [palette.low, .clear], center: .bottom, startRadius: 0, endRadius: radius)
+        }
       }
     }.ignoresSafeArea().allowsHitTesting(false)
   }

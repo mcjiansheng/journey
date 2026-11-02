@@ -34,6 +34,7 @@ import {
   readAppearance,
   mergeAccountAppearance,
   applyAppearance,
+  isDark,
   accountAppearanceKeys,
 } from '../appearance.js';
 import { palettePreviews } from '../palette-meta.js';
@@ -189,7 +190,8 @@ export default function PersonalSettings({ journey: j, onClose, initialCategory 
         await j.updateProfile({ preferences: { [key]: value } });
     } catch (e) {
       // Closing the dialog does not turn a failed save into a persisted preference.
-      // Restore only this field, and only while it still belongs to this account/change.
+      // Session refresh can replace cached preferences while the save is pending.
+      // Restore only this field while it still belongs to this account/change.
       const current = readAppearance();
       if ((!j.user || j.isCurrentUser(j.user.id)) && current[key] === value) {
         const restored = { ...current, [key]: previous[key] };
@@ -304,16 +306,7 @@ export default function PersonalSettings({ journey: j, onClose, initialCategory 
                       disabled={saving}
                       onClick={() => preference('palette', key)}
                     >
-                      <Preview
-                        colors={
-                          info[
-                            prefs.theme === 'dark' ||
-                            ((!prefs.theme || prefs.theme === 'system') && systemDark)
-                              ? 'dark'
-                              : 'light'
-                          ]
-                        }
-                      />
+                      <Preview colors={info[isDark(prefs.theme, systemDark) ? 'dark' : 'light']} />
                       <span>
                         {info.label}
                         {palette === key && <Check size={16} />}
@@ -430,6 +423,12 @@ export default function PersonalSettings({ journey: j, onClose, initialCategory 
                     disabled={saving}
                     maxLength={80}
                     onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                        e.preventDefault();
+                        e.currentTarget.blur();
+                      }
+                    }}
                     onBlur={async () => {
                       if (
                         name.trim() &&

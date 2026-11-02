@@ -1,5 +1,6 @@
 // Applied before styles and React load so a returning visit keeps its appearance.
 (() => {
+  /* THEME_MODE_FUNCTION */
   let p = {};
   try { p = JSON.parse(localStorage.getItem('journey.appearance') || '{}') || {}; } catch {}
   const root = document.documentElement;
@@ -9,6 +10,6 @@
   root.dataset.transparency = String(p.reducedTransparency ?? 'system');
   root.dataset.mapSidebarCollapse = String(p.autoCollapseMapSidebar ?? true);
   const colors = /* PALETTE_PAGE_COLORS */;
-  const dark = p.theme === 'dark' || ((!p.theme || p.theme === 'system') && matchMedia('(prefers-color-scheme: dark)').matches);
+  const dark = isDark(p.theme, matchMedia('(prefers-color-scheme: dark)').matches);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', (colors[p.palette] || colors.forest)[dark ? 'dark' : 'light']);
 })();

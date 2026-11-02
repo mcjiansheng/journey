@@ -4,6 +4,14 @@ import XCTest
 @testable import Journey
 
 final class JourneyTests: XCTestCase {
+  func testReduceTransparencyRespectsExplicitChoiceAndSystem() {
+    for system in [false, true] {
+      XCTAssertTrue(JourneyAppearance.reduceTransparency("true", system: system))
+      XCTAssertFalse(JourneyAppearance.reduceTransparency("false", system: system))
+      XCTAssertEqual(JourneyAppearance.reduceTransparency("system", system: system), system)
+    }
+  }
+
   func testAppearancePreferencesUseSharedBooleanSchema() {
     XCTAssertEqual(PreferenceChoice.string(.null), "system")
     XCTAssertEqual(PreferenceChoice.string(.string("system")), "system")

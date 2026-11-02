@@ -1,3 +1,6 @@
+import { palettePreviews } from './palette-meta.js';
+import { isDark } from './theme-mode.js';
+export { isDark } from './theme-mode.js';
 export const appearanceKey = 'journey.appearance';
 // A pending save belongs to the app, so reopening settings cannot submit over it.
 let savingAppearance = false;
@@ -53,11 +56,8 @@ export function applyAppearance(p) {
   root.dataset.motion = String(p?.reducedMotion ?? 'system');
   root.dataset.transparency = String(p?.reducedTransparency ?? 'system');
   root.dataset.mapSidebarCollapse = String(p?.autoCollapseMapSidebar ?? true);
-  const dark =
-    p?.theme === 'dark' ||
-    ((!p?.theme || p.theme === 'system') && matchMedia('(prefers-color-scheme: dark)').matches);
-  const color = getComputedStyle(root).getPropertyValue('--bg').trim();
-  document
-    .querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', color || (dark ? '#17231e' : '#edf1ec'));
+  const dark = isDark(p?.theme, matchMedia('(prefers-color-scheme: dark)').matches);
+  const color = (palettePreviews[p?.palette] || palettePreviews.forest)[dark ? 'dark' : 'light']
+    .page;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
 }

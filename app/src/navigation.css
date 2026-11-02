@@ -433,6 +433,11 @@
     --map-controls-top: 84px;
   }
 }
+@media (min-width: 1024px) and (max-width: 1100px) {
+  :root[data-map-sidebar-collapse='false'] .map-shell {
+    --map-controls-top: 84px;
+  }
+}
 @media (max-width: 760px) {
   .app-shell .header-right:has(.sync-status:not(.synced)) {
     grid-template-columns: auto auto;

@@ -155,10 +155,11 @@ test('older search responses cannot replace newer results or reopen canceled sea
 });
 
 test('a real mouse click on a basemap label opens that POI',async({page},testInfo)=>{
- test.setTimeout(90000);await openMap(page);
+ test.setTimeout(180000);await openMap(page);
  await page.evaluate(()=>{
   window.__clickedHotspot=null;
-  window.__pickingMap.on('hotspotclick',event=>{window.__clickedHotspot={id:event.id,name:event.name};});
+  // Geographic labels without a POI id select coordinates without place details.
+  window.__pickingMap.on('hotspotclick',event=>{if(event.id)window.__clickedHotspot={id:event.id,name:event.name};});
   window.__pickingMap.setZoomAndCenter(16,[118.7955,32.071]);
  });
  // The SDK renders labels in canvas. Scan the unobstructed map using actual
@@ -166,7 +167,8 @@ test('a real mouse click on a basemap label opens that POI',async({page},testInf
  await page.waitForTimeout(1500);
  let clicked=null;
  for(let y=350;y<=700&&!clicked;y+=24)for(let x=35;x<=335&&!clicked;x+=24){
-  await page.mouse.click(x,y);await page.waitForTimeout(55);
+  // Separate physical single clicks so the SDK does not zoom on a double click.
+  await page.mouse.click(x,y);await page.waitForTimeout(600);
   clicked=await page.evaluate(()=>window.__clickedHotspot);
  }
  expect(clicked,'a rendered basemap label should respond to a physical mouse click').toBeTruthy();

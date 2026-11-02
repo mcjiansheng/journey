@@ -129,7 +129,7 @@ async function verifyLifecycle(page) {
   expect(sdkRequests()).toBe(1);
   await page.evaluate(() => { window.__retainedCanvas = document.querySelector('.map-canvas'); });
 
-  for (const label of ['行程', '费用', '管理', '行程']) {
+  for (const label of ['行程', '费用', '旅程设置', '行程']) {
     await nav(page, label).click();
     await expect(page.locator('.journey-map')).toBeHidden();
     expect(await page.locator('.journey-map').evaluate(el => !!el.closest('[inert][aria-hidden="true"]'))).toBe(true);

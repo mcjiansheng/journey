@@ -1,5 +1,9 @@
 // Applied before styles and React load so a returning visit keeps its appearance.
 (() => {
+  function isDark(theme, systemDark) {
+    return theme === 'dark' || ((!theme || theme === 'system') && systemDark);
+  }
+
   let p = {};
   try {
     p = JSON.parse(localStorage.getItem('journey.appearance') || '{}') || {};
@@ -14,9 +18,7 @@
     forest: { light: '#f1f2ec', dark: '#0c1311' },
     atlas: { light: '#edf3f6', dark: '#0a151c' },
   };
-  const dark =
-    p.theme === 'dark' ||
-    ((!p.theme || p.theme === 'system') && matchMedia('(prefers-color-scheme: dark)').matches);
+  const dark = isDark(p.theme, matchMedia('(prefers-color-scheme: dark)').matches);
   document
     .querySelector('meta[name="theme-color"]')
     ?.setAttribute('content', (colors[p.palette] || colors.forest)[dark ? 'dark' : 'light']);

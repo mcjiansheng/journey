@@ -290,7 +290,7 @@ final class JourneyUITests: XCTestCase {
     editorShot.lifetime = .keepAlways
     add(editorShot)
     // An incomplete activity stays a draft and reopens without creating a blank row.
-    let notes = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields["备注"]
+    let notes = app.descendants(matching: .any)["activity.notes"].firstMatch
     notes.tap()
     notes.typeText("收起后保留的输入")
     app.navigationBars.buttons["收起"].tap()
@@ -326,7 +326,7 @@ final class JourneyUITests: XCTestCase {
       XCTAssertTrue(routeMinutes.waitForExistence(timeout: 5))
       routeMinutes.tap()
       routeMinutes.typeText("12")
-      app.navigationBars.buttons["完成"].tap()
+      app.navigationBars["路程"].buttons["完成"].tap()
       XCTAssertTrue(routeMinutes.waitForNonExistence(timeout: 10))
     }
     app.buttons["tab.ledger"].tap()
@@ -339,7 +339,7 @@ final class JourneyUITests: XCTestCase {
     let amount = app.textFields["金额"]
     amount.tap()
     amount.typeText("23.50")
-    app.navigationBars.buttons["完成"].tap()
+    app.navigationBars["添加费用"].buttons["完成"].tap()
     XCTAssertTrue(app.buttons["添加费用"].waitForExistence(timeout: 10))
     let shot = XCTAttachment(screenshot: app.screenshot())
     shot.name = "native-itinerary"

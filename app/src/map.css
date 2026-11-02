@@ -699,17 +699,6 @@
   }
 }
 @media (max-width: 760px) {
-  .journey-map .map-panel {
-    max-height: calc(
-      var(--visual-height, 100dvh) - var(--map-controls-top) - 228px - env(safe-area-inset-bottom)
-    );
-  }
-  .journey-map.map-searching .map-panel,
-  .journey-map.map-keyboard-open .map-panel {
-    max-height: calc(
-      var(--visual-height, 100dvh) - var(--map-controls-top) - 146px - env(safe-area-inset-bottom)
-    );
-  }
   .journey-map:is(.map-searching, .map-keyboard-open) .amap-logo {
     bottom: calc(
       100dvh - var(--visual-height, 100dvh) + 28px + env(safe-area-inset-bottom)
@@ -816,12 +805,13 @@
 @media (max-width: 760px) {
   .journey-map .map-panel {
     max-height: calc(
-      var(--visual-height, 100dvh) - var(--map-controls-top) - 116px - env(safe-area-inset-bottom)
+      var(--visual-height, 100dvh) - var(--map-controls-top) - 228px - env(safe-area-inset-bottom)
     );
   }
-  .journey-map:is(.map-searching, .map-keyboard-open) .map-panel {
+  .journey-map.map-searching .map-panel,
+  .journey-map.map-keyboard-open .map-panel {
     max-height: calc(
-      var(--visual-height, 100dvh) - var(--map-controls-top) - 24px - env(safe-area-inset-bottom)
+      var(--visual-height, 100dvh) - var(--map-controls-top) - 146px - env(safe-area-inset-bottom)
     );
   }
   .journey-map .map-panel > .map-upper-controls {

@@ -41,10 +41,33 @@ async function setup(page,{favoriteCount=1}={}){
  await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
  await page.evaluate(()=>{
   const AMap=window.AMap;
-  AMap.Map=new Proxy(AMap.Map,{construct(Target,args){const instance=Reflect.construct(Target,args);window.__selectionMap=instance;return instance;}});
+  AMap.Map=new Proxy(AMap.Map,{construct(Target,args){
+   const instance=Reflect.construct(Target,args);window.__selectionMap=instance;
+   const camera=window.__selectionCamera={ready:false,requests:0,completed:0,moving:false,zooming:false};
+   instance.on('complete',()=>{camera.ready=true;});
+   instance.on('movestart',()=>{camera.moving=true;});
+   instance.on('zoomstart',()=>{camera.zooming=true;});
+   const completed=()=>{if(!camera.moving&&!camera.zooming)camera.completed=camera.requests;};
+   instance.on('moveend',()=>{camera.moving=false;completed();});
+   instance.on('zoomend',()=>{camera.zooming=false;completed();});
+   for(const name of ['setFitView','setZoomAndCenter']){
+    const original=instance[name];
+    instance[name]=function(...args){camera.requests++;return original.apply(this,args);};
+   }
+   return instance;
+  }});
  });
  await page.getByRole('button',{name:/继续旅程/}).click();
 }
+
+async function settledCamera(page,afterRequest=-1){
+ await expect(page.getByText('正在定位地图…',{exact:true})).toHaveCount(0);
+ await expect.poll(()=>page.evaluate(afterRequest=>{
+  const camera=window.__selectionCamera;
+  return !!camera?.ready&&camera.requests>afterRequest&&camera.completed===camera.requests&&!camera.moving&&!camera.zooming;
+ },afterRequest),{timeout:30000}).toBe(true);
+}
+async function cameraRequest(page){return page.evaluate(()=>window.__selectionCamera.requests);}
 
 async function visibleMapFooter(page){
  await expect.poll(()=>page.evaluate(()=>{
@@ -81,12 +104,14 @@ for(const width of [390,320])test(`real map selection and activity entry leave t
  test.setTimeout(90000);await page.setViewportSize({width,height:844});await setup(page);
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'地图',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>!!window.__selectionMap&&document.querySelectorAll('.place-marker').length>0),{timeout:30000}).toBe(true);
+ await settledCamera(page);
  const before=await page.evaluate(()=>window.__selectionMap.lngLatToContainer([118.7975,32.0739]).y);
  await page.evaluate(()=>window.__selectionMap.panBy(0,80,0));
  await expect.poll(()=>page.evaluate(()=>window.__selectionMap.lngLatToContainer([118.7975,32.0739]).y)).toBeCloseTo(before+80,0);
  await page.getByRole('button',{name:'查看收藏列表',exact:true}).click();
+ const selectionRequest=await cameraRequest(page);
  await page.locator('.map-result').filter({hasText:'玄武湖选点验收'}).click();
- await visibleSelectedMarker(page);
+ await settledCamera(page,selectionRequest);await visibleSelectedMarker(page);
  const viewport=()=>page.evaluate(()=>{const map=window.__selectionMap,center=map.getCenter();return[center.lng,center.lat,map.getZoom()].map(n=>Number(n.toFixed(6)));});
  const beforeExpansion=await viewport();
  await page.getByRole('button',{name:'更多操作',exact:false}).click();
@@ -95,14 +120,16 @@ for(const width of [390,320])test(`real map selection and activity entry leave t
  await page.setViewportSize({width,height:640});
  expect(await viewport()).toEqual(beforeExpansion);await visibleMapFooter(page);
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();
+ const activityRequest=await cameraRequest(page);
  await page.locator('.activity-card').getByRole('button',{name:'地图',exact:true}).click();
- await visibleSelectedMarker(page);
+ await settledCamera(page,activityRequest);await visibleSelectedMarker(page);
 });
 
 for(const width of [390,320])test(`real SDK footer stays visible beside long lists and the keyboard at ${width}px`,async({page},testInfo)=>{
  test.setTimeout(90000);await page.setViewportSize({width,height:640});await setup(page,{favoriteCount:16});
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'地图',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>!!window.__selectionMap&&document.querySelectorAll('.place-marker').length>0),{timeout:30000}).toBe(true);
+ await settledCamera(page);
  await page.getByRole('button',{name:'查看收藏列表',exact:true}).click();
  await expect(page.locator('.map-result')).toHaveCount(16);await visibleMapFooter(page);
  await page.locator('.map-result').last().scrollIntoViewIfNeeded();await visibleMapFooter(page);

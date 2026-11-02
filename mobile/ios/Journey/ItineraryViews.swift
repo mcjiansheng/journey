@@ -346,6 +346,7 @@ struct ActivityEditor: View {
         }
         Section {
           TextField("备注", text: text("notes"), axis: .vertical).lineLimit(3...8)
+            .accessibilityIdentifier("activity.notes")
           TextField("相关链接", text: text("url")).keyboardType(.URL).textInputAutocapitalization(
             .never
           ).autocorrectionDisabled()

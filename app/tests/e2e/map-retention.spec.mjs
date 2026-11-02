@@ -17,6 +17,11 @@ async function home(page,mobile){
  await page.getByRole('button',{name:mobile?'返回我的旅程':'我的旅程',exact:true}).click();
  await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
 }
+async function selectSecondDay(page){
+ const select=page.getByRole('combobox',{name:'当前计划日'});
+ const option=select.getByRole('option',{name:/^第2天 11\/02(?: · 今天)?$/});
+ await select.selectOption(await option.getAttribute('value'));
+}
 function fulfillDetail(route){
  const callback=new URL(route.request().url()).searchParams.get('callback');
  const id=new URL(route.request().url()).searchParams.get('id');
@@ -112,7 +117,7 @@ async function retention(page,mobile){
   window.__retentionObserver=new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(loading(node))window.__retentionLoading.push(node.textContent);});
   window.__retentionObserver.observe(document.querySelector('#main'),{childList:true,subtree:true});
  });
- for(const label of ['行程','费用','管理','行程','费用','管理']){
+ for(const label of ['行程','费用','旅程设置','行程','费用','旅程设置']){
   await navigate(page,label,mobile);await expectInactive(page,mobile);await expectSameMap(page);
   await navigate(page,'地图',mobile);await expect(page.getByRole('heading',{name:'保留的自定义地点',exact:true})).toBeVisible();
   await expect(page.locator('.place-address')).toHaveText('北门长椅旁');
@@ -150,7 +155,7 @@ test('activity navigation reuses the map and home releases it before another tri
  test.setTimeout(120000);await page.setViewportSize({width:390,height:844});
  let details=0;await page.route('**/_AMapService/v3/place/detail?**',route=>{details++;return fulfillDetail(route);});
  await setup(page,true);await select(page);await navigate(page,'行程',true);
- await page.getByRole('combobox',{name:'当前计划日'}).selectOption({label:'第2天 11/02'});
+ await selectSecondDay(page);
  await page.locator('.activity-card').filter({hasText:'第二天湖边集合'}).getByRole('button',{name:'地图',exact:true}).click();
  await expect(page.getByRole('heading',{name:'我们约定的东门',exact:true})).toBeVisible();
  await expect(page.locator('.place-address')).toHaveText('东门售票亭旁集合');
@@ -178,7 +183,7 @@ test('an activity chosen before map initialization completes keeps its selection
  await page.route('**/_AMapService/v3/place/detail?**',fulfillDetail);
  await setup(page,true,{holdComplete:true});
  await expect.poll(()=>page.evaluate(()=>window.__retentionCompletions.length)).toBe(1);
- await navigate(page,'行程',true);await page.getByRole('combobox',{name:'当前计划日'}).selectOption({label:'第2天 11/02'});
+ await navigate(page,'行程',true);await selectSecondDay(page);
  await page.locator('.activity-card').filter({hasText:'第二天湖边集合'}).getByRole('button',{name:'地图',exact:true}).click();
  await expectSameMap(page);
  await page.evaluate(()=>{window.__retentionHoldComplete=false;for(const complete of window.__retentionCompletions.splice(0))complete();});
@@ -195,7 +200,7 @@ test('a first activity map entry persists its selected place and route day acros
  test.setTimeout(90000);await page.setViewportSize({width:390,height:844});
  await page.route('**/_AMapService/v3/place/detail?**',fulfillDetail);
  await setup(page,true,{coldActivity:true});
- await page.getByRole('combobox',{name:'当前计划日'}).selectOption({label:'第2天 11/02'});
+ await selectSecondDay(page);
  await page.locator('.activity-card').filter({hasText:'第二天湖边集合'}).getByRole('button',{name:'地图',exact:true}).click();
  await expect(page.getByRole('heading',{name:'我们约定的东门',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'地图路线日期',exact:true})).toContainText('第2天路线');

@@ -190,13 +190,13 @@ test('reopening settings waits for the pending save before accepting a new choic
 });
 
 
-test('account display name saves on blur and survives reopening settings',async({page})=>{
+for (const key of ['Tab', 'Enter']) test(`account display name saves with ${key} and survives reopening settings`,async({page})=>{
  await page.setViewportSize({width:1440,height:900});await account(page);
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.getByRole('button',{name:'我的设置',exact:true}).click();
  await page.getByRole('navigation',{name:'设置分类'}).getByRole('button',{name:/^账号/}).click();
  const saved=page.waitForResponse(r=>r.url().endsWith('/api/me')&&r.request().method()==='PATCH');
- await page.getByLabel('你的称呼').fill('新的称呼');await page.getByLabel('你的称呼').press('Tab');
+ await page.getByLabel('你的称呼').fill('新的称呼');await page.getByLabel('你的称呼').press(key);
  const response=await saved;expect(response.ok()).toBe(true);expect((await response.json()).displayName).toBe('新的称呼');
  await page.reload();
  await page.getByRole('button',{name:'我的设置',exact:true}).click();
@@ -307,4 +307,25 @@ test('settings selections move continuously and rapid category changes keep the 
   expect(result.finalOpacity).toBe('1');
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
+});
+
+test('account display name waits for IME composition before Enter saves', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await account(page);
+  await page.getByRole('button', { name: '我的设置', exact: true }).click();
+  await page.getByRole('navigation', { name: '设置分类' }).getByRole('button', { name: /^账号/ }).click();
+  const input = page.getByLabel('你的称呼');
+  let saves = 0;
+  page.on('request', request => { if (request.url().endsWith('/api/me') && request.method() === 'PATCH') saves++; });
+  await input.fill('中文称呼');
+  await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true });
+  await expect(input).toBeFocused();
+  await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 229 });
+  await expect(input).toBeFocused();
+  expect(saves).toBe(0);
+  const saved = page.waitForResponse(r => r.url().endsWith('/api/me') && r.request().method() === 'PATCH');
+  await input.press('Enter');
+  expect((await saved).ok()).toBe(true);
+  await expect(input).not.toBeFocused();
+  expect(saves).toBe(1);
 });
