@@ -46,7 +46,7 @@ xcodebuild build -project mobile/ios/Journey.xcodeproj -scheme Journey \
   -derivedDataPath .local/ios CODE_SIGNING_ALLOWED=NO
 ```
 
-模拟器 `.app` 位于 `.local/ios/Build/Products/Debug-iphonesimulator/Journey.app`。在 Xcode 的 Run 环境变量中设置 `JOURNEY_SERVER_URL=http://127.0.0.1:4188` 可连接本地后端。真机安装在 Signing & Capabilities 中选择开发团队，由 Xcode 生成开发签名。
+模拟器 `.app` 位于 `.local/ios/Build/Products/Debug-iphonesimulator/Journey.app`。在 Xcode 的 Run 环境变量中设置 `JOURNEY_SERVER_URL=http://127.0.0.1:4188` 可连接本地后端。真机安装所用的开发团队写入已忽略的 `mobile/ios/Config/Signing.local.xcconfig`，详见 [iOS 构建说明](ios/README.md)。
 
 CI 工作流 `.github/workflows/mobile.yml` 分别执行 Android 单元测试、Lint、APK 构建，以及 iOS 单元测试和模拟器构建，并保存构建产物。
 

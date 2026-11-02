@@ -21,15 +21,20 @@ class ThemeTest {
             assertEquals(normal.border, flat.border)
         }
     }
-    @Test fun atlasUsesBlueAndSolidBackdropWhileForestKeepsAmbientColors() {
+    @Test fun palettesKeepDistinctAmbientColors() {
         for (dark in listOf(false, true)) {
             val forest = journeyPalette("forest", dark)
             val atlas = journeyPalette("atlas", dark)
             assertNotEquals(forest.primary, atlas.primary)
-            assertNotEquals(Color.Transparent, forest.ambientTop)
-            assertEquals(Color.Transparent, atlas.ambientTop)
-            assertEquals(Color.Transparent, atlas.ambientMint)
-            assertEquals(Color.Transparent, atlas.ambientBottom)
+            for ((forestGlow, atlasGlow) in listOf(
+                forest.ambientTop to atlas.ambientTop,
+                forest.ambientMint to atlas.ambientMint,
+                forest.ambientBottom to atlas.ambientBottom,
+            )) {
+                assertTrue(forestGlow.alpha > 0f)
+                assertTrue(atlasGlow.alpha > 0f)
+                assertNotEquals(forestGlow, atlasGlow)
+            }
         }
     }
 }

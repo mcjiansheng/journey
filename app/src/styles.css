@@ -51,7 +51,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
-  outline: 3px solid #4b967d;
+  outline: 3px solid var(--focus-ring, #4b967d);
 }
 h1,
 h2,
@@ -425,10 +425,22 @@ small {
   color: #b4bfb0;
   margin-bottom: 36px;
 }
+/* 分隔线放在按钮外面，焦点框只圈住头像和名字 */
+.sidebar-foot::before {
+  content: '';
+  display: block;
+  height: 1px;
+  margin-bottom: 9px;
+  background: var(--line);
+}
 .sidebar-foot .profile-button {
-  border-top: 1px solid var(--line);
-  padding-top: 17px;
-  width: 100%;
+  width: calc(100% + 16px);
+  margin: 0 -8px;
+  padding: 0 8px;
+  border-radius: var(--radius-md);
+}
+.sidebar-foot .profile-button:focus-visible {
+  outline-offset: 0;
 }
 .sidebar-foot .profile-button > svg {
   margin-left: auto;

@@ -12,7 +12,7 @@
   root.dataset.mapSidebarCollapse = String(p.autoCollapseMapSidebar ?? true);
   const colors = {
     forest: { light: '#f1f2ec', dark: '#0c1311' },
-    atlas: { light: '#edf3f6', dark: '#102632' },
+    atlas: { light: '#edf3f6', dark: '#0a151c' },
   };
   const dark =
     p.theme === 'dark' ||

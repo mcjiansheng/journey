@@ -1,0 +1,2 @@
+// 个人开发团队保存在同目录的 Signing.local.xcconfig。
+#include? "Signing.local.xcconfig"

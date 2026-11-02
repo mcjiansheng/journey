@@ -23,7 +23,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 
 真实 UI 验收先启动 `node mobile/tools/dev-server.mjs --seed`。测试读取它生成的 `.local/mobile-acceptance/fixture.json`，通过正常密码登录，打开南京周末，检查四个原生页面，保存活动、手动路程与费用。没有 fixture 时，UI 测试报告跳过；单元测试继续运行。
 
-开发签名在 Xcode 的 Signing & Capabilities 中选择自己的团队；工程未保存个人团队标识。签名需要本 App 的开发描述文件。
+开发签名使用 `Config/Signing.local.xcconfig`，内容为 `DEVELOPMENT_TEAM = 你的团队标识`。此文件已加入忽略；共享的 `Config/Signing.xcconfig` 按需读取它，模拟器和 CI 无需创建。Xcode 的 Signing & Capabilities 会显示继承的团队，重新生成工程也会保留本机签名配置。
 
 ### 真机与本地后端
 
