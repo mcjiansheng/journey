@@ -129,7 +129,7 @@
     background: var(--glass);
     -webkit-backdrop-filter: blur(20px);
     backdrop-filter: blur(20px);
-    box-shadow: 0 3px 15px #203b3308;
+    box-shadow: 0 3px 15px var(--optical-shadow);
   }
   .mobile-day-bar select {
     min-width: 0;
@@ -336,7 +336,7 @@
     bottom: calc(100px + env(safe-area-inset-bottom));
     z-index: 8;
     border-radius: var(--radius-xl);
-    box-shadow: 0 4px 16px color-mix(in srgb, var(--text) 18%, transparent);
+    box-shadow: 0 4px 16px var(--optical-shadow);
     min-height: 48px;
   }
   .itinerary-page .route-slot:not(.has-route) .route-add {

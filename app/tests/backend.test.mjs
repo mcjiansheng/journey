@@ -90,3 +90,26 @@ test('bounded password hash queue absorbs bursts and rejects overflow or shutdow
   assert.deepEqual(responses.map(r=>r.status),[201,201,201,201,201,201]);
  }finally{app.locals.drainStreams();listener.closeAllConnections();await new Promise(r=>listener.close(r));app.locals.close();}
 });
+
+test('appearance preferences merge per field and follow the account into a fresh session', async t => {
+ const f=await fixture(t),actor=await f.account('appearance');
+ const initial=await f.req('/api/me',{actor,method:'PATCH',body:{preferences:{palette:'atlas',theme:'dark',reducedMotion:true,reducedTransparency:false}}});
+ assert.equal(initial.status,200);
+ const updated=await f.req('/api/me',{actor,method:'PATCH',body:{preferences:{theme:'system'}}});
+ assert.equal(updated.status,200);
+ assert.deepEqual(updated.data.preferences,{palette:'atlas',theme:'system',reducedMotion:true,reducedTransparency:false});
+ const fresh=await f.req('/api/auth/login',{method:'POST',body:{identifier:'appearance@example.com',password:'long-test-password'}});
+ assert.deepEqual(fresh.data.user.preferences,updated.data.preferences);
+ assert.equal((await f.req('/api/me',{actor,method:'PATCH',body:{preferences:{palette:'missing'}}})).status,422);
+ const future={futureAppearance:{contrast:'high',revision:2}};
+ const forward=await f.req('/api/me',{actor,method:'PATCH',body:{preferences:future}});
+ assert.equal(forward.status,200);
+ assert.deepEqual(forward.data.preferences,{...updated.data.preferences,...future});
+ const partial=await f.req('/api/me',{actor,method:'PATCH',body:{preferences:{theme:'light'}}});
+ assert.deepEqual(partial.data.preferences,{...forward.data.preferences,theme:'light'});
+ const session=await f.req('/api/session',{actor});
+ assert.deepEqual(session.data.user.preferences,partial.data.preferences);
+ for(const preferences of [{theme:'sepia'},{reducedMotion:'yes'},{reducedTransparency:1},{collaborationNotifications:'yes'}])
+  assert.equal((await f.req('/api/me',{actor,method:'PATCH',body:{preferences}})).status,422);
+ assert.equal((await f.req('/api/me',{actor,method:'PATCH',body:{unexpected:true}})).status,422);
+});

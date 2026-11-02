@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ManageView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @State private var name = ""
   @State private var destination = ""
@@ -18,18 +19,38 @@ struct ManageView: View {
   var info: JSON {
     .object(["name": .string(name), "destination": .string(destination), "timezone": .string(zone)])
   }
+  /// 与网页、Android 一致：按“除自己以外的同伴”计数；只有自己时给出邀请提示。
+  var scopeText: String {
+    let others = max(0, store.snapshot["members"].array.count - 1)
+    return others > 0
+      ? "修改会同步给其他 \(others) 位同伴"
+      : "目前只有你一人。邀请同伴后，这里的修改会同步给他们"
+  }
   var body: some View {
     JourneyForm {
-      Section(store.trip["name"].string) {
-        TextField("旅程名称", text: $name).focused($focused, equals: "name")
-        TextField("目的地", text: $destination).focused($focused, equals: "destination")
+      Section {
+        // 范围说明是标题下的普通说明文字，不放进白色卡片，避免看起来像输入框
+        Text(scopeText)
+          .font(.subheadline).foregroundStyle(palette.muted)
+          .listRowBackground(Color.clear)
+          .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+      }
+      Section("基本信息") {
+        LabeledContent("名称") {
+          TextField("旅程名称", text: $name).focused($focused, equals: "name")
+            .multilineTextAlignment(.trailing)
+        }
+        LabeledContent("目的地") {
+          TextField("目的地", text: $destination).focused($focused, equals: "destination")
+            .multilineTextAlignment(.trailing)
+        }
         NavigationLink {
           JourneyTimeZonePicker(selection: $zone)
         } label: {
           LabeledContent("旅程时区", value: JourneyTimeZone.label(zone))
         }
         if saved {
-          Label("已保存", systemImage: "checkmark").font(.caption).foregroundStyle(Palette.muted)
+          Label("已保存", systemImage: "checkmark").font(.caption).foregroundStyle(palette.muted)
         }
         NavigationLink("日期与计划天数") { RescheduleView() }
         NavigationLink("成员与邀请") { TeamView() }
@@ -67,11 +88,13 @@ struct ManageView: View {
         Button("退出旅程", role: .destructive) { leave = true }
       }
       Section {
-        Button("个人设置") { profile = true }
+        Text("想改主题色或提醒方式？点右上角头像打开我的设置。")
+          .font(.caption).foregroundStyle(palette.muted)
+        Button("我的设置") { profile = true }
         NavigationLink("保存与同步") { SyncView() }
         Button("返回我的旅程") { store.selectedTrip = nil }
       }
-    }.navigationTitle("管理").navigationBarTitleDisplayMode(.large)
+    }.navigationTitle("旅程设置").navigationBarTitleDisplayMode(.large)
       .onChange(of: info) { _, value in
         guard !tripID.isEmpty else { return }
         for key in ["name", "destination", "timezone"] where value[key] != baselineInfo[key] {
@@ -153,6 +176,7 @@ struct ManageView: View {
 
 }
 struct DeletedView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   var body: some View {
     JourneyList {
@@ -170,6 +194,7 @@ struct DeletedView: View {
   }
 }
 struct TeamView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @State private var invites: [JSON] = []
   @State private var invite: JSON = .null
@@ -181,13 +206,13 @@ struct TeamView: View {
           VStack(alignment: .leading, spacing: 10) {
             HStack {
               Image(systemName: "person.crop.circle.fill").font(.title2).foregroundStyle(
-                Palette.accent)
+                palette.accent)
               VStack(alignment: .leading) {
                 Text(member["displayName"].string)
                 Text(
                   member["userId"].string == store.trip["ownerId"].string
                     ? "创建者" : member["isAdmin"].bool ? "管理员" : "成员"
-                ).font(.caption).foregroundStyle(Palette.muted)
+                ).font(.caption).foregroundStyle(palette.muted)
               }
             }
             if store.isOwner && member["userId"].string != store.trip["ownerId"].string {
@@ -233,7 +258,7 @@ struct TeamView: View {
             if let url = URL(string: invite["url"].string) { ShareLink("分享邀请", item: url) }
             Text(
               "有效至 " + Date(timeIntervalSince1970: invite["expiresAt"].number / 1000).formatted()
-            ).font(.caption).foregroundStyle(Palette.muted)
+            ).font(.caption).foregroundStyle(palette.muted)
           }
         }
       }
@@ -282,6 +307,7 @@ struct TeamView: View {
   }
 }
 struct RescheduleView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @Environment(\.dismiss) var dismiss
   @State private var start = Date()

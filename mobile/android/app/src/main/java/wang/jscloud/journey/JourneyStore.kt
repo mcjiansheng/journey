@@ -249,7 +249,7 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
             when (context.s("page", "itinerary")) {
                 "map" -> "地图"
                 "ledger" -> "费用"
-                "settings" -> "管理"
+                "settings" -> "旅程设置"
                 else -> "行程"
             }
         selectedDay = context.s("dayId").ifBlank { null }
@@ -276,7 +276,7 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
                     when (page) {
                         "地图" -> "map"
                         "费用" -> "ledger"
-                        "管理" -> "settings"
+                        "旅程设置" -> "settings"
                         else -> "itinerary"
                     },
                 "dayId" to selectedDay,

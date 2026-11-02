@@ -51,7 +51,7 @@ async function createTrip(page,mode='admin'){
 }
 
 async function openSettings(page){
- await page.getByRole('navigation',{name:/^(主导航|手机主导航)$/}).getByRole('button',{name:'管理',exact:true}).click();
+ await page.getByRole('navigation',{name:/^(主导航|手机主导航)$/}).getByRole('button',{name:'旅程设置',exact:true}).click();
  const row=page.locator('.settings-page .settings-link').filter({hasText:'团队类型'});
  await expect(row).toBeVisible();
  await expect(row).toHaveAttribute('aria-haspopup','dialog');

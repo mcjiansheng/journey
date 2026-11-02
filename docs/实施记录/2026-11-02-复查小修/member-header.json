@@ -1,0 +1,17 @@
+[
+  {
+    "members": 1,
+    "duplicateSelf": false,
+    "extra": null
+  },
+  {
+    "members": 2,
+    "duplicateSelf": false,
+    "extra": null
+  },
+  {
+    "members": 3,
+    "duplicateSelf": false,
+    "extra": "+1"
+  }
+]

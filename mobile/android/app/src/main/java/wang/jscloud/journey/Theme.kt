@@ -20,6 +20,10 @@ import androidx.compose.ui.unit.dp
 @Immutable
 data class JourneyPalette(
     val dark: Boolean,
+    val reducedTransparency: Boolean,
+    val reducedMotion: Boolean,
+    val highlight: Color,
+    val shadow: Color,
     val page: Color,
     val card: Color,
     val border: Color,
@@ -37,51 +41,53 @@ data class JourneyPalette(
     val ambientMint: Color,
 )
 
-private val LightPalette = JourneyPalette(
-    dark = false,
-    page = DesignTokens.lightPage,
-    card = DesignTokens.lightSurface,
-    border = Color(0xFF829B88).copy(alpha = .18f),
-    icon = DesignTokens.lightIconBackground,
-    text = DesignTokens.lightText,
-    muted = DesignTokens.lightMuted,
-    primary = DesignTokens.lightPrimary,
-    onPrimary = DesignTokens.lightOnPrimary,
-    danger = DesignTokens.lightDanger,
-    selected = Color(0xFF7FCBA5).copy(alpha = .16f),
-    secondary = Color.White.copy(alpha = .7f),
-    elevated = DesignTokens.lightElevated,
-    ambientTop = DesignTokens.lightAmbientSky,
-    ambientBottom = DesignTokens.lightAmbientLow,
-    ambientMint = DesignTokens.lightAmbientMint,
-)
-private val DarkPalette = JourneyPalette(
-    dark = true,
-    page = DesignTokens.darkPage,
-    card = DesignTokens.darkSurface,
-    border = Color.White.copy(alpha = .08f),
-    icon = DesignTokens.darkIconBackground,
-    text = DesignTokens.darkText,
-    muted = DesignTokens.darkMuted,
-    primary = DesignTokens.darkPrimary,
-    onPrimary = DesignTokens.darkOnPrimary,
-    danger = DesignTokens.darkDanger,
-    selected = Color(0xFF7FCBA5).copy(alpha = .16f),
-    secondary = Color.White.copy(alpha = .08f),
-    elevated = DesignTokens.darkElevated,
-    ambientTop = DesignTokens.darkAmbientSky,
-    ambientBottom = DesignTokens.darkAmbientLow,
-    ambientMint = DesignTokens.darkAmbientMint,
-)
+internal fun journeyPalette(name: String, dark: Boolean, flat: Boolean = false, reducedMotion: Boolean = false): JourneyPalette {
+    val colors = DesignTokens.palette(name, dark)
+    return JourneyPalette(
+        dark = dark, reducedTransparency = flat, reducedMotion = reducedMotion,
+        page = colors.page, card = colors.surface, border = colors.border,
+        icon = colors.iconBackground, text = colors.text, muted = colors.muted,
+        primary = colors.primary, onPrimary = colors.onPrimary, danger = colors.danger,
+        selected = colors.selected, secondary = if (flat) colors.surface else colors.elevated,
+        elevated = if (flat) colors.surface else colors.elevated,
+        highlight = if (flat) Color.Transparent else colors.highlight,
+        shadow = if (flat) Color.Transparent else colors.shadow,
+        ambientTop = if (flat) Color.Transparent else colors.ambientSky,
+        ambientBottom = if (flat) Color.Transparent else colors.ambientLow,
+        ambientMint = if (flat) Color.Transparent else colors.ambientMint,
+    )
+}
 
-val LocalJourneyPalette = staticCompositionLocalOf { LightPalette }
+val LocalJourneyPalette = staticCompositionLocalOf { journeyPalette("forest", false) }
 
 @Composable
 fun JourneyTheme(store: JourneyStore, content: @Composable () -> Unit) {
     val preference = store.user?.o("preferences")?.s("theme", "system") ?: "system"
     val dark = preference == "dark" ||
         (preference == "system" && androidx.compose.foundation.isSystemInDarkTheme())
-    val p = if (dark) DarkPalette else LightPalette
+    val preferences = store.user?.o("preferences")
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var systemReducedMotion by remember { mutableStateOf(false) }
+    DisposableEffect(context) {
+        fun update() {
+            systemReducedMotion = android.provider.Settings.Global.getFloat(
+                context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+        }
+        val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) = update()
+        }
+        update()
+        context.contentResolver.registerContentObserver(android.provider.Settings.Global.getUriFor(
+            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE), false, observer)
+        onDispose { context.contentResolver.unregisterContentObserver(observer) }
+    }
+    val reducedMotion = when (preferences?.opt("reducedMotion")) {
+        true -> true
+        false -> false
+        else -> systemReducedMotion
+    }
+    val p = journeyPalette(preferences?.s("palette", "forest") ?: "forest", dark,
+        preferences?.opt("reducedTransparency") == true, reducedMotion)
     val activity = LocalActivity.current as? ComponentActivity
     SideEffect {
         activity?.enableEdgeToEdge(
@@ -130,10 +136,12 @@ fun JourneyBackdrop(content: @Composable () -> Unit) {
             fun glow(color: Color, center: Offset, radius: Float) {
                 drawRect(Brush.radialGradient(listOf(color, color.copy(alpha = 0f)), center, radius))
             }
+            if (!p.reducedTransparency) {
             val glowScale = if (p.dark) 1.4f else 1f
             glow(p.ambientTop, Offset(size.width, 0f), size.height * .7f * glowScale)
             glow(p.ambientMint, Offset(0f, size.height * .3f), size.width * 1.1f * glowScale)
             glow(p.ambientBottom, Offset(size.width * .4f, size.height), size.height * .65f * glowScale)
+            }
         }
         content()
     }

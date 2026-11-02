@@ -4,28 +4,100 @@ package wang.jscloud.journey
 import androidx.compose.ui.graphics.Color
 
 object DesignTokens {
-    val lightPrimary = Color(0xff2f6b57)
-    val darkPrimary = Color(0xff8fcbb0)
-    val lightOnPrimary = Color(0xffffffff)
-    val darkOnPrimary = Color(0xff10221a)
-    val lightPage = Color(0xfff1f2ec)
-    val darkPage = Color(0xff0c1311)
-    val lightSurface = Color(0xfffffefa)
-    val darkSurface = Color(0xff16201c)
-    val lightText = Color(0xff22302a)
-    val darkText = Color(0xffe4ebe6)
-    val lightMuted = Color(0xff5e6a63)
-    val darkMuted = Color(0xffa3b0a8)
-    val lightDanger = Color(0xffb0443a)
-    val darkDanger = Color(0xfff09684)
-    val lightAmbientMint = Color(0xa6dceee5)
-    val darkAmbientMint = Color(0x6b2ea078)
-    val lightAmbientSky = Color(0xa1dcebf7)
-    val darkAmbientSky = Color(0x4d3c76be)
-    val lightAmbientLow = Color(0x99fff8e7)
-    val darkAmbientLow = Color(0x3d187068)
-    val lightIconBackground = Color(0xffd9e4d2)
-    val darkIconBackground = Color(0xff22382f)
-    val lightElevated = Color(0xfff7f9f5)
-    val darkElevated = Color(0xff16201c)
+    data class Colors(
+        val primary: Color,
+        val onPrimary: Color,
+        val page: Color,
+        val surface: Color,
+        val text: Color,
+        val muted: Color,
+        val danger: Color,
+        val ambientMint: Color,
+        val ambientSky: Color,
+        val ambientLow: Color,
+        val iconBackground: Color,
+        val elevated: Color,
+        val border: Color,
+        val selected: Color,
+        val highlight: Color,
+        val shadow: Color,
+    )
+    private val forestlight = Colors(
+        primary = Color(0xff2f6b57),
+        onPrimary = Color(0xffffffff),
+        page = Color(0xfff1f2ec),
+        surface = Color(0xfffffefa),
+        text = Color(0xff22302a),
+        muted = Color(0xff5e6a63),
+        danger = Color(0xffb0443a),
+        ambientMint = Color(0xa6dceee5),
+        ambientSky = Color(0xa1dcebf7),
+        ambientLow = Color(0x99fff8e7),
+        iconBackground = Color(0xffd9e4d2),
+        elevated = Color(0xfff7f9f5),
+        border = Color(0xffdce2d9),
+        selected = Color(0xffdcebdd),
+        highlight = Color(0xe0ffffff),
+        shadow = Color(0x0a294b3b),
+    )
+    private val forestdark = Colors(
+        primary = Color(0xff8fcbb0),
+        onPrimary = Color(0xff10221a),
+        page = Color(0xff0c1311),
+        surface = Color(0xff16201c),
+        text = Color(0xffe4ebe6),
+        muted = Color(0xffa3b0a8),
+        danger = Color(0xfff09684),
+        ambientMint = Color(0x6b2ea078),
+        ambientSky = Color(0x4d3c76be),
+        ambientLow = Color(0x3d187068),
+        iconBackground = Color(0xff22382f),
+        elevated = Color(0xff16201c),
+        border = Color(0xff2c3a34),
+        selected = Color(0xff294c3e),
+        highlight = Color(0x1fffffff),
+        shadow = Color(0x1f000000),
+    )
+    private val atlaslight = Colors(
+        primary = Color(0xff176b88),
+        onPrimary = Color(0xffffffff),
+        page = Color(0xffedf3f6),
+        surface = Color(0xffffffff),
+        text = Color(0xff193d51),
+        muted = Color(0xff536a77),
+        danger = Color(0xffb0443a),
+        ambientMint = Color(0xb3cde7f0),
+        ambientSky = Color(0xa8dde2f6),
+        ambientLow = Color(0x99f8f1e2),
+        iconBackground = Color(0xffd8e8f0),
+        elevated = Color(0xfff6f9fb),
+        border = Color(0xffcedde5),
+        selected = Color(0xffc7e2ed),
+        highlight = Color(0xbbffffff),
+        shadow = Color(0x0a193d51),
+    )
+    private val atlasdark = Colors(
+        primary = Color(0xff8ecce2),
+        onPrimary = Color(0xff123342),
+        page = Color(0xff0a151c),
+        surface = Color(0xff13242e),
+        text = Color(0xffe2edf3),
+        muted = Color(0xffa4bdca),
+        danger = Color(0xfff09684),
+        ambientMint = Color(0x7a2a9cc2),
+        ambientSky = Color(0x524a5fc4),
+        ambientLow = Color(0x40157a8a),
+        iconBackground = Color(0xff1c3947),
+        elevated = Color(0xff162a35),
+        border = Color(0xff253f4c),
+        selected = Color(0xff275a72),
+        highlight = Color(0x19ffffff),
+        shadow = Color(0x1f000000),
+    )
+    fun palette(name: String, dark: Boolean): Colors = when {
+        name == "atlas" && dark -> atlasdark
+        name == "atlas" -> atlaslight
+        dark -> forestdark
+        else -> forestlight
+    }
 }

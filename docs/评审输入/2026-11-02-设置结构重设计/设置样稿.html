@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>设置样稿 · 我的设置与旅程设置</title>
+<style>
+:root{--accent:#2f6b57;--bg:#f1f2ec;--surface:#fffefa;--elev:#f7f9f5;--line:#dce2d9;--text:#22302a;--muted:#5e6a63;--soft:#e5eee5;--danger:#b0443a;
+--blue:#176b88;--bluebg:#edf3f6;--bluesoft:#e1eff4;--bluetext:#193d51}
+*{box-sizing:border-box}body{margin:0;background:#c9cec6;font-family:-apple-system,"PingFang SC","Noto Sans CJK SC",sans-serif;color:var(--text);padding:40px;display:flex;gap:48px;align-items:flex-start;width:max-content}
+h1,h2,h3,p{margin:0}
+.cap{font:600 15px/1.4 inherit;color:#33403a;margin-bottom:12px}
+/* desktop modal */
+.modal{width:900px;height:640px;background:var(--surface);border-radius:20px;box-shadow:0 30px 80px #1d2d2533;display:grid;grid-template-columns:232px 1fr;overflow:hidden}
+.side{background:var(--elev);border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:4px}
+.me{display:flex;gap:12px;align-items:center;padding:6px 10px 18px;border-bottom:1px solid var(--line);margin-bottom:10px}
+.av{width:42px;height:42px;border-radius:50%;background:#dfe9da;color:#40624f;display:grid;place-items:center;font-weight:600}
+.me b{display:block;font-size:15px}.me small{color:var(--muted);font-size:12px}
+.nav{display:flex;align-items:center;gap:10px;height:40px;padding:0 12px;border-radius:10px;font-size:14px;color:var(--muted)}
+.nav i{width:18px;height:18px;border-radius:5px;border:1.6px solid currentColor;display:inline-block;opacity:.8}
+.nav.on{background:var(--soft);color:var(--accent);font-weight:600}
+.side .spacer{flex:1}.side .out{color:var(--danger);font-size:14px;padding:0 12px;height:40px;display:flex;align-items:center}
+.main{padding:26px 34px;overflow:hidden;position:relative}
+.close{position:absolute;right:22px;top:20px;width:32px;height:32px;border-radius:50%;background:var(--elev);display:grid;place-items:center;color:var(--muted);font-size:16px}
+.main h2{font-size:22px;font-weight:600}
+.scope{font-size:13px;color:var(--muted);margin:6px 0 22px;display:flex;gap:6px;align-items:center}
+.scope::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.label{font-size:13px;font-weight:600;color:var(--muted);margin:0 0 10px;letter-spacing:.02em}
+.group{margin-bottom:22px}
+.swatches{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.sw{border:1.5px solid var(--line);border-radius:14px;padding:10px;background:var(--surface)}
+.sw.on{border-color:var(--accent);box-shadow:0 0 0 3px #2f6b5722}
+.prev{height:78px;border-radius:9px;padding:9px;display:grid;grid-template-columns:22px 1fr;gap:8px}
+.prev .rail{border-radius:6px}.prev .body{display:flex;flex-direction:column;gap:6px}
+.prev .bar{height:9px;border-radius:4px}.prev .card{flex:1;border-radius:6px;border:1px solid}
+.sw .name{display:flex;justify-content:space-between;align-items:center;margin-top:9px;font-size:14px;font-weight:600}
+.dot{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line)}
+.sw.on .dot{border:5px solid var(--accent)}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.tile{border:1.5px solid var(--line);border-radius:12px;padding:8px;font-size:13px;text-align:center;color:var(--muted)}
+.tile.on{border-color:var(--accent);color:var(--accent);font-weight:600;box-shadow:0 0 0 3px #2f6b5722}
+.mini{height:44px;border-radius:7px;margin-bottom:7px;border:1px solid var(--line)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.row b{font-size:14px;font-weight:500;display:block}.row small{font-size:12.5px;color:var(--muted)}
+.seg{display:inline-flex;background:var(--elev);border:1px solid var(--line);border-radius:9px;padding:3px;gap:2px;flex-shrink:0}
+.seg span{font-size:12.5px;padding:5px 11px;border-radius:6px;color:var(--muted)}.seg span.on{background:var(--surface);color:var(--accent);font-weight:600;box-shadow:0 1px 3px #0001}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:2px 16px}
+/* phones */
+.phone{width:390px;height:780px;border-radius:38px;background:var(--bg);box-shadow:0 30px 80px #1d2d2533;overflow:hidden;border:8px solid #1d2420;position:relative}
+.ph-top{height:40px}
+.ph-head{display:flex;align-items:center;gap:10px;padding:6px 18px 4px}
+.ph-head .back{font-size:20px;color:var(--muted)}
+.ph-title{font-size:28px;font-weight:700;padding:6px 20px 2px}
+.ph-scope{font-size:13px;color:var(--muted);padding:0 20px 14px;display:flex;gap:6px;align-items:center}
+.ph-scope::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.prof{margin:0 16px 16px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;gap:12px;align-items:center}
+.prof .av{width:50px;height:50px;font-size:18px}.prof b{font-size:16px;display:block}.prof small{color:var(--muted);font-size:12.5px}
+.chev{margin-left:auto;color:#9aa49d;font-size:18px}
+.sec{font-size:12.5px;color:var(--muted);padding:6px 32px 6px;font-weight:600}
+.plist{margin:0 16px 16px;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.prow{display:flex;align-items:center;gap:12px;padding:0 14px;height:52px;border-top:1px solid var(--line);font-size:15px}
+.prow:first-child{border-top:0}
+.ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:#fff;font-size:14px;flex-shrink:0}
+.prow .val{margin-left:auto;color:var(--muted);font-size:13.5px;display:flex;gap:6px;align-items:center}
+.prow .val::after{content:"›";font-size:20px;color:#9aa49d;margin-left:4px}
+.prow.red{color:var(--danger);justify-content:center}
+.prow.red .val{display:none}
+.chip{width:12px;height:12px;border-radius:50%;display:inline-block}
+.tabbar{position:absolute;left:12px;right:12px;bottom:12px;height:62px;border-radius:22px;background:var(--surface);border:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);align-items:center;text-align:center;font-size:11.5px;color:var(--muted)}
+.tabbar div{display:flex;flex-direction:column;gap:3px;align-items:center}
+.tabbar i{width:20px;height:20px;border:1.8px solid currentColor;border-radius:5px;display:block}
+.tabbar .on{color:var(--accent);font-weight:600;background:var(--soft);border-radius:14px;margin:6px;padding:6px 0}
+.note{margin:0 16px;font-size:12.5px;color:var(--muted);line-height:1.6}
+</style></head><body>
+
+<div>
+  <div class="cap">桌面：我的设置（左侧分类，右侧内容）</div>
+  <div class="modal">
+    <aside class="side">
+      <div class="me"><div class="av">林</div><div><b>林晓</b><small>lin@example.com</small></div></div>
+      <div class="nav on"><i></i>外观</div>
+      <div class="nav"><i></i>辅助功能</div>
+      <div class="nav"><i></i>通知与提示</div>
+      <div class="nav"><i></i>地图</div>
+      <div class="nav"><i></i>保存与同步</div>
+      <div class="nav"><i></i>账号</div>
+      <div class="spacer"></div>
+      <div class="out">退出登录</div>
+    </aside>
+    <section class="main">
+      <div class="close">✕</div>
+      <h2>外观</h2>
+      <p class="scope">只对你自己生效，在所有旅程中通用</p>
+      <div class="group">
+        <p class="label">主题色</p>
+        <div class="swatches">
+          <div class="sw on">
+            <div class="prev" style="background:#eef2ea"><div class="rail" style="background:#fffefa;border:1px solid #dce2d9"></div><div class="body"><div class="bar" style="background:#2f6b57;width:46%"></div><div class="card" style="background:#fffefa;border-color:#dce2d9"></div><div class="card" style="background:#fffefa;border-color:#dce2d9"></div></div></div>
+            <div class="name">森林绿<span class="dot"></span></div>
+          </div>
+          <div class="sw">
+            <div class="prev" style="background:#edf3f6"><div class="rail" style="background:#e4edf3;border:1px solid #cedde5"></div><div class="body"><div class="bar" style="background:#176b88;width:46%"></div><div class="card" style="background:#fff;border-color:#cedde5"></div><div class="card" style="background:#fff;border-color:#cedde5"></div></div></div>
+            <div class="name">海图蓝<span class="dot"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="group">
+        <p class="label">明暗</p>
+        <div class="tiles">
+          <div class="tile on"><div class="mini" style="background:linear-gradient(135deg,#f1f2ec 50%,#16201c 50%)"></div>跟随系统</div>
+          <div class="tile"><div class="mini" style="background:#f1f2ec"></div>浅色</div>
+          <div class="tile"><div class="mini" style="background:#16201c;border-color:#2c3a34"></div>深色</div>
+        </div>
+      </div>
+      <div class="group">
+        <p class="label">界面质感</p>
+        <div class="list">
+          <div class="row"><div><b>减少透明效果</b><small>使用不透明的实底卡片和面板，不显示毛玻璃和高光</small></div><div class="seg"><span class="on">跟随系统</span><span>关</span><span>开</span></div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div>
+  <div class="cap">手机：我的设置首页</div>
+  <div class="phone">
+    <div class="ph-top"></div>
+    <div class="ph-head"><span class="back">←</span></div>
+    <div class="ph-title">我的设置</div>
+    <div class="ph-scope">只对你自己生效</div>
+    <div class="prof"><div class="av">林</div><div><b>林晓</b><small>lin@example.com</small></div><span class="chev">›</span></div>
+    <div class="sec">偏好</div>
+    <div class="plist">
+      <div class="prow"><span class="ic" style="background:#2f6b57">◐</span>外观<span class="val"><span class="chip" style="background:#2f6b57"></span>森林绿 · 跟随系统</span></div>
+      <div class="prow"><span class="ic" style="background:#3f6f9a">♿</span>辅助功能<span class="val">跟随系统</span></div>
+      <div class="prow"><span class="ic" style="background:#b07a2a">◔</span>通知与提示<span class="val">已开启</span></div>
+    </div>
+    <div class="sec">数据</div>
+    <div class="plist">
+      <div class="prow"><span class="ic" style="background:#4b7d6a">⟳</span>保存与同步<span class="val">已同步</span></div>
+    </div>
+    <div class="plist"><div class="prow red">退出登录</div></div>
+  </div>
+</div>
+
+<div>
+  <div class="cap">手机：旅程设置（原“管理”）</div>
+  <div class="phone">
+    <div class="ph-top"></div>
+    <div class="ph-head"><span class="back">←</span><span style="font-size:15px;font-weight:600">南京周末 · 秋日漫游</span><span style="margin-left:auto" class="av" >林</span></div>
+    <div class="ph-title">旅程设置</div>
+    <div class="ph-scope">修改会同步给全部 3 位同伴</div>
+    <div class="sec">旅程</div>
+    <div class="plist">
+      <div class="prow">名称与目的地<span class="val">南京</span></div>
+      <div class="prow">日期与天数<span class="val">11/06 · 3 天</span></div>
+      <div class="prow">时区<span class="val">北京时间</span></div>
+    </div>
+    <div class="sec">同伴</div>
+    <div class="plist">
+      <div class="prow">成员与邀请<span class="val">3 人</span></div>
+      <div class="prow">团队类型<span class="val">平等团队</span></div>
+      <div class="prow">已删除的内容<span class="val"></span></div>
+    </div>
+    <p class="note">想改主题色或提醒方式？这些在 <b style="color:var(--accent)">我的设置</b> 里（点右上角头像）。</p>
+    <div class="tabbar"><div><i></i>行程</div><div><i></i>地图</div><div><i></i>费用</div><div class="on"><i></i>旅程设置</div></div>
+  </div>
+</div>
+</body></html>

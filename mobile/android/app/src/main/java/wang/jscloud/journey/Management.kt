@@ -17,7 +17,11 @@ fun ManagementScreen(s: JourneyStore, onInvite: () -> Unit, onRename: () -> Unit
     val admin = owner || me?.optBoolean("isAdmin") == true
     var confirmLeave by remember { mutableStateOf(false) }
     var remove by remember { mutableStateOf<JSONObject?>(null) }
-    Heading("旅程管理", trip.s("destination"))
+    // 与网页、iOS 一致：按“除自己以外的同伴”计数；只有自己时给出邀请提示
+    val others = (members.size - 1).coerceAtLeast(0)
+    Heading("旅程设置",
+        if (others > 0) "修改会同步给其他 $others 位同伴"
+        else "目前只有你一人。邀请同伴后，这里的修改会同步给他们")
     Panel {
         Text(trip.s("name"), style = MaterialTheme.typography.titleLarge)
         Text("${trip.s("startDate","日期待定")} · ${trip.optInt("dayCount")} 天")
@@ -86,6 +90,7 @@ fun ManagementScreen(s: JourneyStore, onInvite: () -> Unit, onRename: () -> Unit
         Text(if (trip.s("state") == "deleted") "旅程已删除" else "旅程状态")
         ObjectActions(s, trip.copyJson().put("kind", "trip"))
     }
+    Text("想改主题色或提醒方式？点右上角头像打开我的设置。", color = MaterialTheme.colorScheme.onSurfaceVariant)
     TextButton({ confirmLeave = true }) { Text("退出旅程", color = MaterialTheme.colorScheme.error) }
     if (confirmLeave)
         AlertDialog(
@@ -229,54 +234,6 @@ fun InvitesSheet(s: JourneyStore, close: () -> Unit) {
                     }
                 else Text("已撤销")
             }
-        }
-    }
-}
-
-@Composable
-fun ProfileSheet(s: JourneyStore, close: () -> Unit) {
-    var name by remember { mutableStateOf(s.user?.s("displayName").orEmpty()) }
-    var theme by remember {
-        mutableStateOf(s.user?.o("preferences")?.s("theme", "system") ?: "system")
-    }
-    Sheet("个人设置", close) {
-        Text(s.user?.s("identifier").orEmpty())
-        Field("你的名字", name, { name = it })
-        Choice(
-            "外观",
-            when (theme) {
-                "dark" -> "深色"
-                "light" -> "浅色"
-                else -> "跟随系统"
-            },
-            listOf("跟随系统", "浅色", "深色"),
-        ) {
-            theme =
-                when (it) {
-                    "深色" -> "dark"
-                    "浅色" -> "light"
-                    else -> "system"
-                }
-        }
-        Button(
-            {
-                s.action {
-                    s.profile(name, obj("theme" to theme))
-                    close()
-                }
-            },
-            enabled = name.isNotBlank(),
-        ) {
-            Text("保存设置")
-        }
-        RecoveryPanel(s)
-        TextButton({
-            s.action {
-                s.logout()
-                close()
-            }
-        }) {
-            Text("退出账号")
         }
     }
 }

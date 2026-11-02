@@ -2,24 +2,67 @@
 import SwiftUI
 
 enum DesignTokens {
+  struct Colors {
+    let primary: Color
+    let onPrimary: Color
+    let page: Color
+    let surface: Color
+    let text: Color
+    let muted: Color
+    let danger: Color
+    let ambientMint: Color
+    let ambientSky: Color
+    let ambientLow: Color
+    let iconBackground: Color
+    let elevated: Color
+    let border: Color
+    let selected: Color
+    let highlight: Color
+    let shadow: Color
+  }
   private static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
     Color(uiColor: UIColor { traits in
       let hex = traits.userInterfaceStyle == .dark ? dark : light
       return UIColor(red: CGFloat((hex >> 24) & 255) / 255, green: CGFloat((hex >> 16) & 255) / 255, blue: CGFloat((hex >> 8) & 255) / 255, alpha: CGFloat(hex & 255) / 255)
     })
   }
-  static let primary = adaptive(0x2f6b57ff, 0x8fcbb0ff)
-  static let onPrimary = adaptive(0xffffffff, 0x10221aff)
-  static let page = adaptive(0xf1f2ecff, 0x0c1311ff)
-  static let surface = adaptive(0xfffefaff, 0x16201cff)
-  static let text = adaptive(0x22302aff, 0xe4ebe6ff)
-  static let muted = adaptive(0x5e6a63ff, 0xa3b0a8ff)
-  static let danger = adaptive(0xb0443aff, 0xf09684ff)
-  static let ambientMint = adaptive(0xdceee5a6, 0x2ea0786b)
-  static let ambientSky = adaptive(0xdcebf7a1, 0x3c76be4d)
-  static let ambientLow = adaptive(0xfff8e799, 0x1870683d)
-  static let iconBackground = adaptive(0xd9e4d2ff, 0x22382fff)
-  static let elevated = adaptive(0xf7f9f5ff, 0x16201cff)
+  static let forest = Colors(
+    primary: adaptive(0x2f6b57ff, 0x8fcbb0ff),
+    onPrimary: adaptive(0xffffffff, 0x10221aff),
+    page: adaptive(0xf1f2ecff, 0x0c1311ff),
+    surface: adaptive(0xfffefaff, 0x16201cff),
+    text: adaptive(0x22302aff, 0xe4ebe6ff),
+    muted: adaptive(0x5e6a63ff, 0xa3b0a8ff),
+    danger: adaptive(0xb0443aff, 0xf09684ff),
+    ambientMint: adaptive(0xdceee5a6, 0x2ea0786b),
+    ambientSky: adaptive(0xdcebf7a1, 0x3c76be4d),
+    ambientLow: adaptive(0xfff8e799, 0x1870683d),
+    iconBackground: adaptive(0xd9e4d2ff, 0x22382fff),
+    elevated: adaptive(0xf7f9f5ff, 0x16201cff),
+    border: adaptive(0xdce2d9ff, 0x2c3a34ff),
+    selected: adaptive(0xdcebddff, 0x294c3eff),
+    highlight: adaptive(0xffffffe0, 0xffffff1f),
+    shadow: adaptive(0x294b3b0a, 0x0000001f)
+  )
+  static let atlas = Colors(
+    primary: adaptive(0x176b88ff, 0x8ecce2ff),
+    onPrimary: adaptive(0xffffffff, 0x123342ff),
+    page: adaptive(0xedf3f6ff, 0x0a151cff),
+    surface: adaptive(0xffffffff, 0x13242eff),
+    text: adaptive(0x193d51ff, 0xe2edf3ff),
+    muted: adaptive(0x536a77ff, 0xa4bdcaff),
+    danger: adaptive(0xb0443aff, 0xf09684ff),
+    ambientMint: adaptive(0xcde7f0b3, 0x2a9cc27a),
+    ambientSky: adaptive(0xdde2f6a8, 0x4a5fc452),
+    ambientLow: adaptive(0xf8f1e299, 0x157a8a40),
+    iconBackground: adaptive(0xd8e8f0ff, 0x1c3947ff),
+    elevated: adaptive(0xf6f9fbff, 0x162a35ff),
+    border: adaptive(0xcedde5ff, 0x253f4cff),
+    selected: adaptive(0xc7e2edff, 0x275a72ff),
+    highlight: adaptive(0xffffffbb, 0xffffff19),
+    shadow: adaptive(0x193d510a, 0x0000001f)
+  )
+  static func palette(_ name: String) -> Colors { name == "atlas" ? atlas : forest }
   static let radiusSm: CGFloat = 8
   static let radiusMd: CGFloat = 12
   static let radiusLg: CGFloat = 16

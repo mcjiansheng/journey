@@ -1115,6 +1115,7 @@ export function useJourney() {
     clearError,
     retry,
     updateProfile,
+    isCurrentUser: (id) => account?.user?.id === id,
     refreshTrips,
   };
 }

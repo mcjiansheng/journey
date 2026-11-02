@@ -4,6 +4,24 @@ import XCTest
 @testable import Journey
 
 final class JourneyTests: XCTestCase {
+  func testReduceTransparencyRespectsExplicitChoiceAndSystem() {
+    for system in [false, true] {
+      XCTAssertTrue(JourneyAppearance.reduceTransparency("true", system: system))
+      XCTAssertFalse(JourneyAppearance.reduceTransparency("false", system: system))
+      XCTAssertEqual(JourneyAppearance.reduceTransparency("system", system: system), system)
+    }
+  }
+
+  func testAppearancePreferencesUseSharedBooleanSchema() {
+    XCTAssertEqual(PreferenceChoice.string(.null), "system")
+    XCTAssertEqual(PreferenceChoice.string(.string("system")), "system")
+    XCTAssertEqual(PreferenceChoice.string(.bool(true)), "true")
+    XCTAssertEqual(PreferenceChoice.string(.bool(false)), "false")
+    XCTAssertEqual(PreferenceChoice.json("system"), .string("system"))
+    XCTAssertEqual(PreferenceChoice.json("true"), .bool(true))
+    XCTAssertEqual(PreferenceChoice.json("false"), .bool(false))
+  }
+
   func testCoordinates() {
     let w = CLLocationCoordinate2D(latitude: 32.0603, longitude: 118.7969)
     let gcj = Coordinates.gcj02(fromWGS: w)
@@ -505,5 +523,54 @@ extension JourneyTests {
     let start = try XCTUnwrap(formatter.date(from: "2026-03-07T00:30:00-05:00"))
     let end = try XCTUnwrap(formatter.date(from: "2026-03-10T00:30:00-04:00"))
     XCTAssertEqual(TripCreationDate.dayCount(from: start, through: end, timezone: timezone), 4)
+  }
+}
+
+extension JourneyTests {
+  @MainActor func testFailedAppearanceSaveRestoresLocalValuesAndBlocksFastTaps() async throws {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [JourneyMockProtocol.self]
+    let store = JourneyStore(urlSession: URLSession(configuration: configuration), serverURL: "https://journey-preferences-test.invalid")
+    var requests = 0
+    JourneyMockProtocol.handler = { request in
+      XCTAssertEqual(request.url?.path, "/api/me")
+      requests += 1
+      return (503, .object(["error": .object(["message": .string("preferences unavailable")])]))
+    }
+    defer { JourneyMockProtocol.handler = nil }
+    for (key, old, value) in [
+      ("palette", "forest", JSON.string("atlas")),
+      ("theme", "system", JSON.string("dark")),
+      ("reducedTransparency", "false", JSON.bool(true)),
+      ("reducedMotion", "system", JSON.bool(true)),
+    ] {
+      let storageKey = "journey." + key
+      let original = UserDefaults.standard.object(forKey: storageKey)
+      defer {
+        if let original { UserDefaults.standard.set(original, forKey: storageKey) }
+        else { UserDefaults.standard.removeObject(forKey: storageKey) }
+      }
+      UserDefaults.standard.set(old, forKey: storageKey)
+      let task = try XCTUnwrap(store.saveAppearancePreference(key, value))
+      XCTAssertTrue(store.savingAppearance)
+      XCTAssertEqual(UserDefaults.standard.string(forKey: storageKey), PreferenceChoice.string(value))
+      XCTAssertNil(store.saveAppearancePreference("palette", .string("forest")))
+      await task.value
+      XCTAssertFalse(store.savingAppearance)
+      XCTAssertEqual(UserDefaults.standard.string(forKey: storageKey), old)
+      XCTAssertEqual(store.error, "preferences unavailable")
+    }
+    XCTAssertEqual(requests, 4)
+    let original = UserDefaults.standard.object(forKey: "journey.palette")
+    defer {
+      if let original { UserDefaults.standard.set(original, forKey: "journey.palette") }
+      else { UserDefaults.standard.removeObject(forKey: "journey.palette") }
+    }
+    UserDefaults.standard.set("forest", forKey: "journey.palette")
+    JourneyMockProtocol.handler = { _ in throw URLError(.notConnectedToInternet) }
+    let failedNetwork = try XCTUnwrap(store.saveAppearancePreference("palette", .string("atlas")))
+    await failedNetwork.value
+    XCTAssertEqual(UserDefaults.standard.string(forKey: "journey.palette"), "forest")
+    XCTAssertEqual(store.error, "无法连接服务器，设置未保存")
   }
 }

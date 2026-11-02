@@ -4,7 +4,10 @@ import {mkdirSync,writeFileSync} from 'node:fs';
 import {createApp,shutdownServer} from '../../server/index.mjs';
 import {sidebarGeometry} from '../helpers/sidebar-geometry.mjs';
 let app,server,base,seededState;
-const evidence='../.local/evidence/design-review-1101';
+const evidence=`../.local/evidence/design-review-1101/${process.env.JOURNEY_REVIEW_PALETTE || 'forest'}-${process.env.JOURNEY_REVIEW_THEME || 'system'}`;
+test.beforeEach(async ({page}) => {
+ await page.addInitScript(prefs => localStorage.setItem('journey.appearance', JSON.stringify(prefs)), {palette: process.env.JOURNEY_REVIEW_PALETTE || 'forest', theme: process.env.JOURNEY_REVIEW_THEME || 'system'});
+});
 test.beforeAll(async()=>{
  mkdirSync(evidence,{recursive:true});
  app=createApp({distPath:fileURLToPath(new URL('../../dist/',import.meta.url)),databasePath:':memory:',securityPath:':memory:',config:{amapKey:''}});
@@ -12,12 +15,19 @@ test.beforeAll(async()=>{
 });
 test.afterAll(async()=>{if(server)await shutdownServer(server,app)});
 const nav=(page,label)=>page.getByRole('navigation',{name:/^(主导航|手机主导航)$/}).getByRole('button',{name:label,exact:true});
+async function resetFixtureAppearance(page) {
+ const prefs={palette:process.env.JOURNEY_REVIEW_PALETTE||'forest',theme:process.env.JOURNEY_REVIEW_THEME||'system'};
+ const session=await (await page.request.get(base+'/api/session')).json();
+ const result=await page.request.patch(base+'/api/me',{headers:{Origin:base,'X-CSRF-Token':session.csrfToken},data:{preferences:prefs}});
+ expect(result.ok()).toBe(true);
+}
 async function seed(page){
- if(seededState){await page.context().addCookies(seededState.cookies);await page.goto(base);await expect(page.locator('.continue-card')).toBeVisible();return;}
+ if(seededState){await page.context().addCookies(seededState.cookies);await resetFixtureAppearance(page);await page.goto(base);await expect(page.locator('.continue-card')).toBeVisible();return;}
  await page.goto(base);
  const fixture=await page.evaluate(async()=>{
   const auth=await fetch('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:`r3-${crypto.randomUUID()}@example.test`,password:'JourneyReview2026!',displayName:'周晴'})}).then(r=>r.json());
   const headers={'Content-Type':'application/json','X-CSRF-Token':auth.csrfToken};
+  await fetch('/api/me',{method:'PATCH',headers,body:JSON.stringify({preferences:JSON.parse(localStorage.getItem('journey.appearance'))})});
   const createTrip=(name,destination)=>fetch('/api/trips',{method:'POST',headers,body:JSON.stringify({id:crypto.randomUUID(),name,teamMode:'admin',timezone:'Asia/Shanghai',currency:'CNY',dayCount:3,startDate:'2026-11-01',destination})}).then(r=>r.json());
   const snapshot=await createTrip('南京周末 · 秋日漫游','南京');await createTrip('成都慢游','成都');
   const lease=await fetch('/api/clock',{method:'POST',headers,body:JSON.stringify({deviceId:crypto.randomUUID()})}).then(r=>r.json());let elapsed=0;
@@ -39,6 +49,8 @@ async function shot(page,name){await page.screenshot({path:`${evidence}/${name}.
 
 test('sidebar morph keeps every icon fixed across five trips, reversal and reduced motion',async({page})=>{
  await page.setViewportSize({width:1440,height:900});await seed(page);await page.locator('.continue-card').click();
+ await expect(page.locator('.sidebar nav .selection-indicator')).toBeVisible();
+ await page.evaluate(()=>document.fonts.ready);
  await page.evaluate(fn=>{window.sidebarGeometry=eval(`(${fn})`)},sidebarGeometry.toString());
  const samples=await page.evaluate(async()=>{
   const sidebar=document.querySelector('.sidebar');
@@ -74,10 +86,11 @@ for(const width of [1440,390])for(const theme of ['light','dark'])test(`review s
  expect(await page.locator('.trip-card-icon').evaluate(el=>getComputedStyle(el).placeItems)).toBe('center');
  await page.locator('.continue-card').click();await expect(page.locator('.activity-card')).toHaveCount(2);
  await expect(page.locator('.sync-status.synced>svg')).toBeVisible();
- if(width===390){await expect(page.locator('.members-button .avatar:visible')).toHaveCount(1);await expect(page.locator('.member-overflow')).toHaveText('+2')}
- for(const [label,name] of [['行程','itinerary'],['费用','expenses'],['管理','settings']]){await nav(page,label).click();await shot(page,`${name}-${width}-${theme}`);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)}
+ if(width===390){await expect(page.locator('.members-button .avatar:visible')).toHaveCount(1);await expect(page.locator('.member-overflow')).toHaveText('+1')}
+ for(const [label,name] of [['行程','itinerary'],['费用','expenses'],['旅程设置','settings']]){await nav(page,label).click();await shot(page,`${name}-${width}-${theme}`);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)}
+ const effective=process.env.JOURNEY_REVIEW_THEME==='system'||!process.env.JOURNEY_REVIEW_THEME?theme:process.env.JOURNEY_REVIEW_THEME;
  const auto=await page.locator('.app-shell').evaluate(el=>({page:getComputedStyle(el).backgroundImage,selected:getComputedStyle(el.querySelector('.sidebar nav button.selected')).backgroundColor}));
- await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+ await page.evaluate(theme=>document.documentElement.dataset.theme=theme,effective);
  expect(await page.locator('.app-shell').evaluate(el=>({page:getComputedStyle(el).backgroundImage,selected:getComputedStyle(el.querySelector('.sidebar nav button.selected')).backgroundColor}))).toEqual(auto);
  await page.locator('.members-button').click();await expect(page.locator('.member-more')).toHaveCount(2);
  for(const row of await page.locator('.member-row:has(.member-more)').all()){

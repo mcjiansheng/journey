@@ -10,10 +10,10 @@ import org.junit.Test
 class NativeFlowTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
-    private fun waitText(text: String) {
+    private fun waitText(text: String, substring: Boolean = false) {
         compose.waitUntil(30000) {
             compose
-                .onAllNodesWithText(text, useUnmergedTree = true)
+                .onAllNodesWithText(text, substring = substring, useUnmergedTree = true)
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         }
@@ -39,6 +39,66 @@ class NativeFlowTest {
     }
 
     @Test
+    fun palettesAndFlatSettingsScreenshots() {
+        val args = InstrumentationRegistry.getArguments()
+        val identifier = args.getString("identifier")
+        val password = args.getString("password")
+        val trip = args.getString("tripName")
+        assumeTrue("Pass fixture account and tripName", identifier != null && password != null && trip != null)
+        compose.waitUntil(30000) {
+            compose.onAllNodesWithText("邮箱或手机号").fetchSemanticsNodes().isNotEmpty() ||
+                compose.onAllNodesWithContentDescription("我的设置").fetchSemanticsNodes().isNotEmpty()
+        }
+        if (compose.onAllNodesWithText("邮箱或手机号").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("邮箱或手机号").performTextInput(identifier!!)
+            compose.onNodeWithText("密码").performTextInput(password!!)
+            compose.onAllNodesWithText("登录").onLast().performClick()
+        }
+        waitText(trip!!)
+        for ((palette, label) in listOf("forest" to "森林绿", "atlas" to "海图蓝")) {
+            for ((theme, choice) in listOf("light" to "浅色", "dark" to "深色")) {
+                compose.onNodeWithContentDescription("我的设置").performClick()
+                compose.onNodeWithText("外观").performClick()
+                compose.onNodeWithText(label).performClick()
+                compose.waitUntil(15000) { compose.onAllNodes(hasText(label) and isSelected()).fetchSemanticsNodes().isNotEmpty() }
+                compose.onNodeWithText(choice).performClick()
+                compose.waitUntil(15000) { compose.onAllNodes(hasText(choice) and isSelected()).fetchSemanticsNodes().isNotEmpty() }
+                if (compose.onAllNodes(isToggleable() and isOn()).fetchSemanticsNodes().isNotEmpty()) {
+                    compose.onNode(isToggleable()).performScrollTo().performClick()
+                    compose.waitUntil(15000) { compose.onAllNodes(isToggleable() and isOff()).fetchSemanticsNodes().isNotEmpty() }
+                }
+                capture("android-$palette-$theme-appearance")
+                compose.onNodeWithContentDescription("返回").performClick()
+                capture("android-$palette-$theme-settings-home")
+                compose.onNodeWithContentDescription("关闭").performClick()
+                capture("android-$palette-$theme-home")
+                compose.onNodeWithText(trip).performClick()
+                waitText("行程")
+                compose.onNode(hasText("行程", substring = false) and hasClickAction()).performClick()
+                waitText("添加活动")
+                capture("android-$palette-$theme-itinerary")
+                compose.onNodeWithContentDescription("我的设置").performClick()
+                compose.onNodeWithText("外观").performClick()
+                compose.onNode(isToggleable()).performScrollTo().performClick()
+                compose.waitUntil(15000) { compose.onAllNodes(isToggleable() and isOn()).fetchSemanticsNodes().isNotEmpty() }
+                capture("android-$palette-$theme-flat-appearance")
+                compose.onNodeWithText("完成").performClick()
+                capture("android-$palette-$theme-flat-itinerary")
+                compose.onNode(hasText("旅程设置", substring = false) and hasClickAction()).performClick()
+                waitText("同步给", substring = true)
+                capture("android-$palette-$theme-trip-settings")
+                compose.onNodeWithContentDescription("我的设置").performClick()
+                compose.onNodeWithText("外观").performClick()
+                compose.onNode(isToggleable()).performScrollTo().performClick()
+                compose.waitUntil(15000) { compose.onAllNodes(isToggleable() and isOff()).fetchSemanticsNodes().isNotEmpty() }
+                compose.onNodeWithText("完成").performClick()
+                compose.onNodeWithContentDescription("返回旅程列表").performClick()
+                waitText(trip)
+            }
+        }
+    }
+
+    @Test
     fun r3LightAndDarkScreenshots() {
         val args = InstrumentationRegistry.getArguments()
         val identifier = args.getString("identifier")
@@ -47,11 +107,11 @@ class NativeFlowTest {
         assumeTrue("Pass fixture account and tripName", identifier != null && password != null && trip != null)
         compose.waitUntil(30000) {
             compose.onAllNodesWithText("邮箱或手机号").fetchSemanticsNodes().isNotEmpty() ||
-                compose.onAllNodesWithContentDescription("个人设置").fetchSemanticsNodes().isNotEmpty()
+                compose.onAllNodesWithContentDescription("我的设置").fetchSemanticsNodes().isNotEmpty()
         }
-        if (compose.onAllNodesWithContentDescription("个人设置").fetchSemanticsNodes().isNotEmpty()) {
-            compose.onNodeWithContentDescription("个人设置").performClick()
-            compose.onNodeWithText("退出账号").performScrollTo().performClick()
+        if (compose.onAllNodesWithContentDescription("我的设置").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithContentDescription("我的设置").performClick()
+            compose.onNodeWithText("退出登录").performScrollTo().performClick()
             waitText("邮箱或手机号")
         }
         compose.onNodeWithText("邮箱或手机号").performTextInput(identifier!!)
@@ -59,10 +119,11 @@ class NativeFlowTest {
         compose.onAllNodesWithText("登录").onLast().performClick()
         waitText(trip!!)
         for ((theme, choice) in listOf("light" to "浅色", "dark" to "深色")) {
-            compose.onNodeWithContentDescription("个人设置").performClick()
+            compose.onNodeWithContentDescription("我的设置").performClick()
             compose.onNodeWithText("外观").performClick()
             compose.onAllNodesWithText(choice).onLast().performClick()
-            compose.onNodeWithText("保存设置").performClick()
+            compose.waitUntil(10000) { compose.onAllNodesWithText("完成").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("完成").performClick()
             compose.waitUntil(10000) { compose.onAllNodes(isDialog()).fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithText("我的旅程").assertExists()
             capture("android-$theme-home")
@@ -87,8 +148,8 @@ class NativeFlowTest {
             compose.onNodeWithText("费用", substring = false).performClick()
             waitText("添加费用")
             capture("android-$theme-ledger")
-            compose.onNodeWithText("管理", substring = false).performClick()
-            waitText("旅程管理")
+            compose.onNodeWithText("旅程设置", substring = false).performClick()
+            waitText("旅程设置")
             capture("android-$theme-management")
             compose.onNodeWithContentDescription("返回旅程列表").performClick()
             waitText(trip)
@@ -130,8 +191,8 @@ class NativeFlowTest {
         compose.onNodeWithText("金额", substring = false).performTextInput("12.50")
         compose.onNodeWithText("完成", substring = false).performClick()
         waitText(title)
-        compose.onNodeWithText("管理", substring = false).performClick()
-        waitText("旅程管理")
+        compose.onNodeWithText("旅程设置", substring = false).performClick()
+        waitText("旅程设置")
         capture("android-management")
         compose.onNodeWithText("行程", substring = false).performClick()
         waitText("添加活动")

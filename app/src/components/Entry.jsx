@@ -474,11 +474,11 @@ export function Home({ journey: j, onCreate, onJoin, onSettings, onSync }) {
           <Compass />
           同行<span>JOURNEY</span>
         </a>
-        <button className="profile-button" onClick={onSettings}>
+        <button className="profile-button" aria-label="我的设置" onClick={onSettings}>
           <span className="avatar">
             {j.user?.displayName?.slice(0, 1) || <UserRound size={18} />}
           </span>
-          <span>{j.user?.displayName || '个人设置'}</span>
+          <span>{j.user?.displayName || '我的设置'}</span>
         </button>
       </header>
       <main id="main" className="home-main">

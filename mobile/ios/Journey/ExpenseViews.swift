@@ -32,6 +32,7 @@ enum Money {
   }
 }
 struct ExpensesView: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @State private var adding = false
   @State private var editing: JSON?
@@ -60,7 +61,7 @@ struct ExpensesView: View {
       Section(store.trip["name"].string) {
         ForEach(totals, id: \.self) { currency in
           VStack(alignment: .leading, spacing: 7) {
-            if totals.count > 1 { Text(currency).font(.caption).foregroundStyle(Palette.muted) }
+            if totals.count > 1 { Text(currency).font(.caption).foregroundStyle(palette.muted) }
             Text(
               Money.display(
                 .number(
@@ -79,7 +80,7 @@ struct ExpensesView: View {
                         && $0["payload"]["payment"]["status"].string == "estimated"
                     }.reduce(0) { $0 + $1["payload"]["payment"]["amountMinor"].number }),
                   currency: currency)
-            ).font(.subheadline).foregroundStyle(Palette.muted)
+            ).font(.subheadline).foregroundStyle(palette.muted)
           }.padding(.vertical, 9)
         }
       }
@@ -109,20 +110,20 @@ struct ExpensesView: View {
                     Text(
                       item["payload"]["title"].string.isEmpty
                         ? "未命名费用" : item["payload"]["title"].string
-                    ).foregroundStyle(Palette.text)
+                    ).foregroundStyle(palette.text)
                     if item["payload"]["payment"]["status"].string == "estimated" {
-                      Text("预计").font(.caption).foregroundStyle(Palette.muted)
+                      Text("预计").font(.caption).foregroundStyle(palette.muted)
                     }
                     if !item["payload"]["notes"].string.isEmpty {
                       Text(item["payload"]["notes"].string).font(.caption).foregroundStyle(
-                        Palette.muted
+                        palette.muted
                       ).lineLimit(1)
                     }
                     if let activity = store.objects.first(where: {
                       $0.id == item["payload"]["activityId"].string
                     }) {
                       Text(activity["payload"]["title"].string).font(.caption).foregroundStyle(
-                        Palette.muted)
+                        palette.muted)
                     }
                   }
                   Spacer()
@@ -130,7 +131,7 @@ struct ExpensesView: View {
                     Money.display(
                       item["payload"]["payment"]["amountMinor"],
                       currency: item["payload"]["payment"]["currency"].string)
-                  ).monospacedDigit().foregroundStyle(Palette.accent)
+                  ).monospacedDigit().foregroundStyle(palette.accent)
                 }
               }.buttonStyle(.plain)
               LifecycleActions(object: item, edit: { editing = item })
@@ -150,7 +151,7 @@ struct ExpensesView: View {
             adding = true
           } label: {
             Label("添加费用", systemImage: "plus")
-          }.tint(Palette.accent)
+          }.tint(palette.accent)
         }
       }.sheet(isPresented: $adding) { ExpenseEditor() }.sheet(item: $editing) {
         ExpenseEditor(object: $0)
@@ -160,13 +161,14 @@ struct ExpensesView: View {
     Button(title) { selectedDate = date }.font(.subheadline).padding(.horizontal, 12).padding(
       .vertical, 8
     )
-    .background(selectedDate == date ? Palette.accent.opacity(0.16) : .clear, in: Capsule())
+    .background(selectedDate == date ? palette.accent.opacity(0.16) : .clear, in: Capsule())
     .fontWeight(selectedDate == date ? .semibold : .regular).buttonStyle(.plain)
-    .foregroundStyle(selectedDate == date ? Palette.accent : Palette.muted)
+    .foregroundStyle(selectedDate == date ? palette.accent : palette.muted)
   }
 
 }
 struct ExpenseEditor: View {
+  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @Environment(\.dismiss) var dismiss
   var object: JSON? = nil

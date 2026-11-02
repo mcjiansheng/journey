@@ -67,7 +67,7 @@ for(const width of [390,1440])test(`all locations show activities and favorites,
  await filter.click();await page.locator('fieldset').filter({has:page.getByText('显示',{exact:true})}).getByRole('button',{name:'全部',exact:true}).click();
  await page.locator('.map-panel').getByRole('button',{name:'完成',exact:true}).click();
  const nav=page.getByRole('navigation',{name:width<=760?'手机主导航':'主导航',exact:true});await nav.getByRole('button',{name:'行程',exact:true}).click();
- if(width<=760)await page.getByRole('combobox',{name:'当前计划日'}).selectOption({label:'第2天 11/02'});else await page.getByRole('tab',{name:/第2天/}).click();await nav.getByRole('button',{name:'地图',exact:true}).click();
+ if(width<=760)await page.getByRole('combobox',{name:'当前计划日'}).selectOption(await page.getByRole('option',{name:/^第2天/}).getAttribute('value'));else await page.getByRole('tab',{name:/第2天/}).click();await nav.getByRole('button',{name:'地图',exact:true}).click();
  await expect(page.getByRole('button',{name:'地图路线日期',exact:true})).toContainText('第2天路线');await expect(page.locator('.route-marker')).toHaveCount(1);
  await expect(page.locator('.route-marker')).toHaveAttribute('aria-label','第二天博物馆');expect(await page.evaluate(()=>window.__layerFits.length)).toBe(1);
 });
@@ -88,4 +88,19 @@ test('cancelling a favorite offers undo and restores the same place',async({page
  await page.getByRole('button',{name:'撤销',exact:true}).click();
  await expect(page.getByRole('button',{name:'已收藏',exact:true})).toBeDisabled();
  await expect(page.getByRole('heading',{name:'想去的咖啡馆',exact:true})).toBeVisible();
+});
+
+test('map panels share palette and reduced-transparency tokens including system dark',async({page})=>{
+ await page.setViewportSize({width:1440,height:900});await setup(page);
+ for(const palette of ['forest','atlas'])for(const theme of ['light','dark','system'])for(const flat of [false,true]){
+  await page.emulateMedia({colorScheme:theme==='light'?'light':'dark',reducedMotion:'reduce'});
+  await page.evaluate(p=>Object.assign(document.documentElement.dataset,p),{palette,theme,transparency:String(flat)});
+  const actual=await page.locator('.map-panel.glass').evaluate(el=>{
+   const s=getComputedStyle(el),sample=document.createElement('span');sample.style.background='var(--glass)';document.body.append(sample);const expected=getComputedStyle(sample).backgroundColor;sample.remove();return{background:s.backgroundColor,filter:s.backdropFilter,expected};
+  });
+  expect(actual.background).toBe(actual.expected);expect(actual.filter).toBe(flat?'none':'blur(16px)');
+  await page.getByRole('button',{name:'地图路线日期',exact:true}).click();
+  expect(await page.locator('.map-route-menu').evaluate(el=>getComputedStyle(el).backgroundColor)).not.toMatch(/rgba/);
+  await page.getByRole('button',{name:'地图路线日期',exact:true}).click();
+ }
 });

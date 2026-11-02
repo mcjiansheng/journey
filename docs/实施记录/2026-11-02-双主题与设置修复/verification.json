@@ -1,0 +1,60 @@
+{
+  "task": "2026-11-02 双主题与设置修复",
+  "baseCommit": "10d4dd2",
+  "branch": "dev",
+  "web": {
+    "unit": {
+      "total": 103,
+      "passed": 102,
+      "skipped": 1,
+      "failed": 0
+    },
+    "contrastChecks": 72,
+    "paletteMatrix": {
+      "palettes": [
+        "forest",
+        "atlas"
+      ],
+      "modes": [
+        "light",
+        "dark",
+        "system"
+      ],
+      "viewportWidths": [
+        320,
+        390,
+        768,
+        1440
+      ],
+      "passed": 66
+    },
+    "personalSettingsPassed": 6,
+    "mapLayersPassed": 5,
+    "webkitPassed": 4,
+    "finalMaterialAndNavigationPassed": 3,
+    "format": "passed",
+    "productionBuild": "passed",
+    "buildId": "91ebfffd99a56477"
+  },
+  "ios": {
+    "unitPassed": 22,
+    "uiScreenshots": 36,
+    "uiTestPassed": 2,
+    "simulator": "iPhone 18 Pro / iOS 27.0",
+    "build": "passed",
+    "finalFlatScreenshotTest": "passed",
+    "finalFlatDurationSeconds": 110.129
+  },
+  "android": {
+    "unitPassed": 28,
+    "unitSkipped": 1,
+    "assembleDebug": "passed",
+    "assembleDebugAndroidTest": "passed",
+    "lintDebug": "passed",
+    "uiScreenshots": 28,
+    "uiTestPassed": 1,
+    "emulator": "Journey_API_35 / API 35",
+    "durationSeconds": 54.93
+  },
+  "archivedScreenshots": 135
+}

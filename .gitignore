@@ -4,6 +4,7 @@
 .DS_Store
 node_modules/
 __pycache__/
+hs_err_pid*.log
 
 # 原型与界面可视化仅保留在本地。
 /prototype*/
@@ -33,3 +34,10 @@ __pycache__/
 /mobile/ios/**/xcuserdata/
 /mobile/ios/*.xcuserstate
 /mobile/ios/*.log
+/mobile/ios/Config/*.local.xcconfig
+/mobile/ios/*.xcresult/
+/mobile/ios/*.xcarchive/
+/mobile/ios/*.ipa
+
+# Deliverable installation packages and validation logs.
+/outputs/2026-11-02-release/

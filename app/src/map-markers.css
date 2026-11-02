@@ -79,7 +79,7 @@
   pointer-events: none;
 }
 .place-marker:focus-visible {
-  outline: 3px solid #4b967d;
+  outline: 3px solid var(--focus-ring, #4b967d);
   outline-offset: 2px;
 }
 @media (hover: hover) and (pointer: fine) {

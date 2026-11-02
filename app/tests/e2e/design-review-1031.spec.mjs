@@ -38,7 +38,7 @@ for(const width of [1440,390])for(const theme of ['light','dark'])test(`review l
  await expect(page.locator('.activity-card')).toHaveCount(2);
  expect(await page.locator('.activity-card').first().evaluate(el=>getComputedStyle(el).backdropFilter)).toBe('none');
  await page.screenshot({path:`../.local/evidence/design-review-1031/itinerary-${width}-${theme}.png`});
- if(width===390){const first=await page.locator('.activity-card').first().boundingBox();expect(first.y).toBeLessThan(240);await expect(page.locator('.members-button .avatar-stack')).toBeVisible();}
+ if(width===390){const first=await page.locator('.activity-card').first().boundingBox();expect(first.y).toBeLessThan(240);await expect(page.locator('.members-button .avatar-stack')).toBeHidden();await expect(page.getByRole('button',{name:'我的设置',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'查看 1 位同行伙伴',exact:true})).toBeVisible();}
  await nav(page,'费用').click();await expect(page.locator('.ledger-currency-totals')).toContainText('1,427.00');await expect(page.locator('.ledger-currency-totals')).not.toContainText('CNY');
  await expect(page.locator('.expense-date-group>h3').filter({hasText:'未记录日期'})).toHaveCount(1);
  await expect(page.locator('.expense-row')).toHaveCount(3);

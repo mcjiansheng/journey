@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useId } from 'react';
 import { X, Loader2, ArrowLeft, ChevronDown } from 'lucide-react';
+import { reducedMotion } from '../usePageNavigation.js';
 export function IconButton({ icon: Icon, label, ...props }) {
   return (
     <button type="button" className="icon-button" aria-label={label} title={label} {...props}>
@@ -26,6 +27,15 @@ export function Modal({
       dialog = ref.current;
     modalDepth++;
     document.documentElement.classList.add('has-modal');
+    // Entrance belongs to opening the dialog. Restoring motion later must not
+    // replay it on a dialog that is already visible.
+    const finishEntrance = (event) => {
+      if (event.target === dialog && event.animationName === 'modal-enter')
+        delete dialog.dataset.enter;
+    };
+    dialog.addEventListener('animationend', finishEntrance);
+    dialog.addEventListener('animationcancel', finishEntrance);
+    if (!reducedMotion()) dialog.dataset.enter = '';
     dialog.showModal();
     const target =
       initialFocus === 'title'
@@ -33,6 +43,9 @@ export function Modal({
         : dialog.querySelector(initialFocus === 'input' ? 'input,select,textarea' : initialFocus);
     (target || titleRef.current)?.focus({ preventScroll: true });
     return () => {
+      dialog.removeEventListener('animationend', finishEntrance);
+      dialog.removeEventListener('animationcancel', finishEntrance);
+      delete dialog.dataset.enter;
       dialog.close();
       modalDepth--;
       if (modalDepth === 0) document.documentElement.classList.remove('has-modal');

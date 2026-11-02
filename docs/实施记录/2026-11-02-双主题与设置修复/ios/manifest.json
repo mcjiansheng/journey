@@ -1,0 +1,338 @@
+[
+  {
+    "attachments": [
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-dark-glass-trip-settings.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-dark-glass-trip-settings_0_0CF6DACF-0476-4F27-9951-CE0683B3DA9A.png",
+        "timestamp": 1793553981.679
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-dark-glass-itinerary.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-dark-glass-itinerary_0_5C0397B1-06F0-4792-8A20-DCAE4840F40D.png",
+        "timestamp": 1793553979.129
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-dark-glass-home.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-dark-glass-home_0_47EB47DD-2DCF-45D2-8619-1772B3DCBE9B.png",
+        "timestamp": 1793553977.388
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-dark-glass-appearance.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-dark-glass-appearance_0_19B456CF-D811-4F66-AD35-76340A03A453.png",
+        "timestamp": 1793553974.982
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-light-glass-trip-settings.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-light-glass-trip-settings_0_F28AF25B-7A85-4CF7-A870-D1E93274F96F.png",
+        "timestamp": 1793553937.634
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-light-glass-itinerary.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-light-glass-itinerary_0_27056850-5A7E-4A4E-AC48-C5B16D6AB718.png",
+        "timestamp": 1793553935.003
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-light-glass-home.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-light-glass-home_0_468E467B-80FB-4704-A1A6-798FCCA71C07.png",
+        "timestamp": 1793553933.167
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-light-glass-appearance.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-light-glass-appearance_0_D43AF3C5-A740-4BCD-9631-780C54A52573.png",
+        "timestamp": 1793553930.815
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-dark-glass-trip-settings.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-dark-glass-trip-settings_0_7E12143D-14C4-4C61-8C9B-1E434B60E1AE.png",
+        "timestamp": 1793553883.005
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-dark-glass-itinerary.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-dark-glass-itinerary_0_778DEE5C-8FFB-453B-A80E-6B2026345F0D.png",
+        "timestamp": 1793553879.216
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-dark-glass-home.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-dark-glass-home_0_7736D446-47F5-4DB5-9343-45FCC6D1F36B.png",
+        "timestamp": 1793553873.953
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-dark-glass-appearance.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-dark-glass-appearance_0_942E2D6C-3123-44E0-B38A-09E785D96CB6.png",
+        "timestamp": 1793553867.713
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-light-glass-trip-settings.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-light-glass-trip-settings_0_5B6C3A7B-DF66-4B52-86ED-A57CF453A064.png",
+        "timestamp": 1793553815.891
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-light-glass-itinerary.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-light-glass-itinerary_0_B7841727-9F87-4BE5-9E8E-6A16E8D50D9F.png",
+        "timestamp": 1793553813.004
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-light-glass-home.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-light-glass-home_0_BD475D4C-017F-440B-B1FF-75C1BE0F7584.png",
+        "timestamp": 1793553811.264
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-light-glass-appearance.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-light-glass-appearance_0_0A526182-21C4-4E54-B1FE-0D5604475C92.png",
+        "timestamp": 1793553809.182
+      }
+    ],
+    "testIdentifier": "JourneyUITests/testPaletteSettingsScreenshots()",
+    "testIdentifierURL": "test://com.apple.xcode/Journey/JourneyUITests/JourneyUITests/testPaletteSettingsScreenshots"
+  },
+  {
+    "attachments": [
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-dark-flat-trip-settings.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-dark-flat-trip-settings_0_127314BC-CF4D-4B97-A600-E0DBA1C06752.png",
+        "timestamp": 1793554780.289
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-dark-flat-itinerary.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-dark-flat-itinerary_0_EE672000-D481-414B-B8BD-BB5C57ECA900.png",
+        "timestamp": 1793554777.697
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-dark-flat-home.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-dark-flat-home_0_265EEB53-970D-4AE0-A0B5-FBC4372A03C0.png",
+        "timestamp": 1793554776.189
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-dark-flat-settings.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-dark-flat-settings_0_FB830C0F-A659-48C3-BE16-E6468541129F.png",
+        "timestamp": 1793554775.283
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-dark-flat-appearance.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-dark-flat-appearance_0_EAA725CA-06CF-48B4-8AF3-BC4DB070AF13.png",
+        "timestamp": 1793554774.376
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-light-flat-trip-settings.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-light-flat-trip-settings_0_C3B7DD86-CD6D-48E2-ACCC-4281C5442A30.png",
+        "timestamp": 1793554759.074
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-light-flat-itinerary.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-light-flat-itinerary_0_32079B3B-1874-4FAF-8469-FDC34089EDA3.png",
+        "timestamp": 1793554756.238
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-light-flat-home.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-light-flat-home_0_54607BB6-1BC0-4792-B3D3-962D2F876278.png",
+        "timestamp": 1793554754.499
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-light-flat-settings.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-light-flat-settings_0_2A6F540C-8C06-4DB6-A0E0-C81ED458B687.png",
+        "timestamp": 1793554753.522
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-atlas-light-flat-appearance.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-atlas-light-flat-appearance_0_2AB7966D-9D8C-4893-9DA7-B02E694A6007.png",
+        "timestamp": 1793554752.245
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-dark-flat-trip-settings.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-dark-flat-trip-settings_0_11D4A29D-9BE4-43D1-A821-A8CC315FCA66.png",
+        "timestamp": 1793554736.63
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-dark-flat-itinerary.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-dark-flat-itinerary_0_D12B9F97-9C20-4B75-BE2E-123FD87163EB.png",
+        "timestamp": 1793554733.746
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-dark-flat-home.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-dark-flat-home_0_BE7E58CA-2C4F-4F5D-924A-6B89568CB982.png",
+        "timestamp": 1793554731.742
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-dark-flat-settings.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-dark-flat-settings_0_7304673B-14D1-49B9-9CDC-7641B5529B5F.png",
+        "timestamp": 1793554730.344
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-dark-flat-appearance.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-dark-flat-appearance_0_61BBED0F-5B08-4E3F-AA54-652F2CE4E5DF.png",
+        "timestamp": 1793554729.143
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-light-flat-trip-settings.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-light-flat-trip-settings_0_536FDE5E-0B5F-49B4-984E-C4DC340F3397.png",
+        "timestamp": 1793554713.277
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-light-flat-itinerary.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-light-flat-itinerary_0_D1B05C64-7C78-4A71-A025-9D2AA9562EE2.png",
+        "timestamp": 1793554709.881
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-light-flat-home.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-light-flat-home_0_844DF8B3-9AD1-4CA7-B383-A2486D0E2FBC.png",
+        "timestamp": 1793554707.794
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-light-flat-settings.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-light-flat-settings_0_BEE859F1-AABE-43F4-BF94-D947CBF83E71.png",
+        "timestamp": 1793554706.554
+      },
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "ios-palettes-forest-light-flat-appearance.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "ios-palettes-forest-light-flat-appearance_0_EFE6D715-836C-45D9-8D9C-D989B1EC246E.png",
+        "timestamp": 1793554705.521
+      }
+    ],
+    "testIdentifier": "JourneyUITests/testFlatPaletteSettingsScreenshots()",
+    "testIdentifierURL": "test://com.apple.xcode/Journey/JourneyUITests/JourneyUITests/testFlatPaletteSettingsScreenshots"
+  }
+]

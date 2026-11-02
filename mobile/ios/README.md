@@ -12,7 +12,7 @@ SwiftUI 原生客户端，最低 iOS 17。直接打开 `Journey.xcodeproj`，选
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
   -project mobile/ios/Journey.xcodeproj -scheme Journey \
   -configuration Debug -sdk iphonesimulator \
-  -destination 'platform=iOS Simulator,id=41BE5356-97FF-41D6-9644-84ADDFCE2CCE' \
+  -destination 'platform=iOS Simulator,id=88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A' \
   -derivedDataPath .local/ios CODE_SIGNING_ALLOWED=NO test
 
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
@@ -23,7 +23,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 
 真实 UI 验收先启动 `node mobile/tools/dev-server.mjs --seed`。测试读取它生成的 `.local/mobile-acceptance/fixture.json`，通过正常密码登录，打开南京周末，检查四个原生页面，保存活动、手动路程与费用。没有 fixture 时，UI 测试报告跳过；单元测试继续运行。
 
-开发签名在 Xcode 的 Signing & Capabilities 中选择自己的团队；工程未保存个人团队标识。签名需要本 App 的开发描述文件。
+开发签名使用 `Config/Signing.local.xcconfig`，内容为 `DEVELOPMENT_TEAM = 你的团队标识`。此文件已加入忽略；共享的 `Config/Signing.xcconfig` 按需读取它，模拟器和 CI 无需创建。Xcode 的 Signing & Capabilities 会显示继承的团队，重新生成工程也会保留本机签名配置。
 
 ### 真机与本地后端
 
@@ -58,7 +58,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -xctestrun "
 
 - 密码登录、注册、Keychain 会话恢复，Cookie、Origin 与 CSRF 按现有后端执行。
 - 旅程列表、创建（日期范围、团队模式、币种与时区）、邀请码和链接预览、加入旅程。
-- 原生 TabView：行程、地图、费用、管理；亮色使用薄荷背景与深绿强调色，暗色使用深绿背景与亮薄荷强调色；iOS 26 起使用原生 Liquid Glass 按钮与玻璃悬浮导航。
+- 原生 TabView：行程、地图、费用、旅程设置。森林绿与海图蓝分别支持浅色、深色和跟随系统；iOS 26 起默认使用原生 Liquid Glass 按钮与玻璃悬浮导航。应用内或系统开启减少透明效果后，卡片、导航、按钮使用实底，去掉高光和阴影，保留选中底色。
 - 按天安排活动，编辑时间、跨日结束、地点、缓冲、备注与链接，调整日期与活动顺序。精确时间仅在精确活动槽位重排，灵活活动保留位置。
 - MapKit 地图、收藏、地点搜索与手动地点、添加行程、系统地图导航。地图首次根据地点范围定位；共享刷新保留用户相机位置。
 - 共享路程展示和编辑，支持步行、驾车、骑行、公交，手动时间和现有代理估算。路线折线从 GCJ-02 转为 WGS84 后绘制。路程签名与网页兼容；端点变化后提示重新查询。
@@ -68,7 +68,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -xctestrun "
 
 ## 保存与同步
 
-活动、费用和路程编辑后自动保存，右上角统一为“完成”，左上角“收起”和下拉关闭保留输入。未填写完整的内容保留为本机草稿，重新添加或编辑时可恢复；完全空白的新建表单不生成条目。管理页的旅程名称和目的地失焦保存，时区选择后保存。卡片点按编辑，更多菜单集中放置“不参加 / 希望删除 / 删除”；删除后可撤销。主题颜色由根目录 `design/tokens.json` 生成的 `Journey/DesignTokens.swift` 提供。
+活动、费用和路程编辑后自动保存，右上角统一为“完成”，左上角“收起”和下拉关闭保留输入。未填写完整的内容保留为本机草稿，重新添加或编辑时可恢复；完全空白的新建表单不生成条目。管理页的旅程名称和目的地失焦保存，时区选择后保存。卡片点按编辑，更多菜单集中放置“不参加 / 希望删除 / 删除”；删除后可撤销。主题颜色由根目录 `design/tokens.json` 生成的 `Journey/DesignTokens.swift` 提供，通过 SwiftUI Environment 同时更新保留的四个页面。我的设置按外观、辅助功能、通知与提示、保存与同步、账号分页；首页与旅程内右上角头像均可进入。主题色、明暗、减少透明效果和减少动态效果使用 `/api/me` 的账号偏好，同时缓存到本机用于启动；本机账号缓存也保存更新后的偏好。
 
 `JourneyStore` 是 MainActor 上唯一的会话与队列所有者。本机缓存按服务器和账号分别保存；队列与草稿以原子写入保存，文件采用系统数据保护。账号切换先读取目标账号缓存，再一次安装会话；读取失败清空当前可见账号状态并保留原文件。
 
@@ -80,9 +80,25 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -xctestrun "
 
 ## 当前未覆盖
 
-- 邀请二维码扫描与二维码展示，通知开关，以及网页中的更多外观/触感选项。
+- 邀请二维码扫描与二维码展示、后台通知、提示音与触感偏好。通知与提示页展示当前前台自动更新行为；原生地图没有网页桌面侧栏，无对应的自动收起设置。
 - MapKit 地图瓦片来自系统地图；离线地图包未提供。高德在线搜索和自动估算需要现有服务器地图代理可用。
 - 前台轮询用于协作更新；未提供后台同步或推送。
 - UI 自动验收使用隔离的本地真实后端。iPhone 17 Pro Max / iOS 27.0.1 已完成无线安装、启动和 14 项单元测试；本次真机 UI runner 在建立控制连接时退出，登录后的页面验收尚未完成。线上多人长时并发和外网地图代理验收仍待完成。
 
 单元测试覆盖 GCJ/WGS 转换、时钟突变、费用精度、跨夏令时日期、混排排序、生命周期与多数表态投影、范围外计划日、快照版本、网页路程签名、未知回执恢复，以及账号缓存损坏隔离。
+
+## 双主题截图验收
+
+准备本地后端 fixture 后，单台模拟器执行以下用例。用例通过设置卡片切换账号偏好，覆盖森林绿/海图蓝、浅色/深色、默认/减少透明效果，并检查旅程内头像入口。截图作为 XCTest attachment 保存在结果包中。
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
+  -project mobile/ios/Journey.xcodeproj -scheme Journey \
+  -configuration Debug -sdk iphonesimulator \
+  -destination 'platform=iOS Simulator,id=88CA760F-2D1D-4BB0-8FBE-DCEBE850EF0A' \
+  -derivedDataPath /private/tmp/journey-ios-palettes -parallel-testing-enabled NO \
+  -only-testing:JourneyUITests/JourneyUITests/testPaletteSettingsScreenshots \
+  -resultBundlePath /private/tmp/journey-ios-palette-ui.xcresult CODE_SIGNING_ALLOWED=NO test
+```
+
+只检查减少透明效果时，把过滤参数改为 `-only-testing:JourneyUITests/JourneyUITests/testFlatPaletteSettingsScreenshots`，覆盖两套主题色 × 浅色/深色，共 20 张截图。

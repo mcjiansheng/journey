@@ -262,7 +262,7 @@ for(const width of [1440,1024,390,320])test(`sync and return controls retain the
    return {home:{x:returnBox.x,y:returnBox.y,width:returnBox.width,height:returnBox.height},sameHome:home===document.querySelector(innerWidth<=760?'.header-home':'.sidebar .back-home'),homeVisible:returnStyle.display!=='none'&&returnStyle.visibility==='visible'&&Number(returnStyle.opacity)===1,homeGap:innerWidth>760?nav.getBoundingClientRect().top-returnBox.bottom:null,text:label.textContent,sameNode:status===document.querySelector('.sync-status'),bubble:{x:bubble.x,y:bubble.y,width:bubble.width,height:bubble.height},label:{x:text.x,y:text.y,width:text.width,height:text.height},icon:{x:icon.x,y:icon.y,width:icon.width,height:icon.height},centerError:Math.abs((icon.left+(text.width?text.right:icon.right))/2-(button.left+button.width/2))};
   };
   const before=measure(),frames=[];
-  for(const name of ['地图','费用','管理','行程','地图','行程']){
+  for(const name of ['地图','费用','旅程设置','行程','地图','行程']){
    nav.querySelector(`[aria-label="${name}"]`).click();
    const until=performance.now()+(frames.length>50?65:350);
    while(performance.now()<until){await new Promise(requestAnimationFrame);frames.push(measure())}

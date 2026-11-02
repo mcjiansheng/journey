@@ -1,0 +1,65 @@
+{
+  "baseCommit": "1b616ca",
+  "webUnit": {
+    "passed": 102,
+    "skipped": 1,
+    "failed": 0
+  },
+  "contrastChecks": 72,
+  "webBrowser": {
+    "designMatrix": 22,
+    "settingsAndMotion": 9,
+    "memberHeaderScenarios": 3
+  },
+  "ios": {
+    "xcode": "27.1",
+    "simulator": "iPhone 18 Pro, iOS 27.0",
+    "unitPassed": 22,
+    "uiPassed": 1,
+    "screenshots": 40
+  },
+  "android": "Source review only; no new build in this run",
+  "production": "No main merge or production deployment",
+  "screenshots": [
+    {
+      "file": "ios-trip-settings.png",
+      "caption": "iOS 旅程设置：范围说明与字段标签"
+    },
+    {
+      "file": "ios-atlas-dark-flat.png",
+      "caption": "iOS 海图蓝深色、减少透明效果与跟随系统预览"
+    },
+    {
+      "file": "ios-forest-light.png",
+      "caption": "iOS 森林绿浅色预览"
+    },
+    {
+      "file": "web-atlas-home.png",
+      "caption": "网页海图蓝首页书页图案"
+    },
+    {
+      "file": "web-mobile-settings.png",
+      "caption": "手机网页：同伴头像与旅程设置"
+    },
+    {
+      "file": "web-mobile-dark.png",
+      "caption": "手机网页海图蓝深色"
+    },
+    {
+      "file": "web-solo-header.png",
+      "caption": "单人旅程显示伙伴图标，避免重复头像"
+    },
+    {
+      "file": "web-notifications.png",
+      "caption": "通知与提示说明与分类选中效果"
+    },
+    {
+      "file": "motion-chrome-restored.png",
+      "caption": "Chrome 恢复跟随系统后弹窗保持原位"
+    },
+    {
+      "file": "motion-webkit-restored.png",
+      "caption": "WebKit 手机宽度恢复跟随系统后弹窗保持原位"
+    }
+  ]
+}
