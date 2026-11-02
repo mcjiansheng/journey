@@ -2236,7 +2236,7 @@ body {
     inset 0 1px 0 var(--surface-highlight),
     0 24px 90px var(--optical-shadow);
 }
-.modal[open] {
+.modal[open][data-enter] {
   animation: modal-enter 0.18s ease-out;
 }
 .modal-head {

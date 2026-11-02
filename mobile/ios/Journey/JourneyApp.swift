@@ -581,7 +581,7 @@ struct AppearanceSettingsView: View {
             Button {
               store.saveAppearancePreference("theme", .string(value))
             } label: {
-              SettingsPreview(title: value == "system" ? "跟随系统" : value == "dark" ? "深色" : "浅色", colors: DesignTokens.palette(paletteName), selected: theme == value, previewScheme: value == "dark" ? .dark : value == "light" ? .light : colorScheme)
+              SettingsPreview(title: value == "system" ? "跟随系统" : value == "dark" ? "深色" : "浅色", colors: DesignTokens.palette(paletteName), selected: theme == value, previewScheme: value == "dark" ? .dark : value == "light" ? .light : nil, split: value == "system")
             }.buttonStyle(.plain).accessibilityIdentifier("settings.theme." + value)
               .accessibilityAddTraits(theme == value ? [.isSelected] : [])
           }
@@ -608,17 +608,29 @@ struct SettingsPreview: View {
   var colors: DesignTokens.Colors
   var selected: Bool
   var previewScheme: ColorScheme? = nil
+  /// “跟随系统”：左半浅色、右半深色，与网页一致，一眼看出会自动切换。
+  var split = false
+  private var mock: some View {
+    HStack(spacing: 6) {
+      RoundedRectangle(cornerRadius: 3).fill(colors.selected).frame(width: 15)
+      VStack(spacing: 6) {
+        Capsule().fill(colors.primary).frame(height: 5).padding(.trailing, 16)
+        RoundedRectangle(cornerRadius: 4).fill(colors.surface).frame(height: 18)
+        RoundedRectangle(cornerRadius: 4).fill(colors.surface).frame(height: 18)
+      }
+    }.padding(10).frame(height: 85).background(colors.page, in: RoundedRectangle(cornerRadius: 10))
+  }
   var body: some View {
     VStack(spacing: 10) {
-      HStack(spacing: 6) {
-        RoundedRectangle(cornerRadius: 3).fill(colors.selected).frame(width: 15)
-        VStack(spacing: 6) {
-          Capsule().fill(colors.primary).frame(height: 5).padding(.trailing, 16)
-          RoundedRectangle(cornerRadius: 4).fill(colors.surface).frame(height: 18)
-          RoundedRectangle(cornerRadius: 4).fill(colors.surface).frame(height: 18)
+      if split {
+        ZStack {
+          mock.environment(\.colorScheme, .light)
+          mock.environment(\.colorScheme, .dark)
+            .mask { HStack(spacing: 0) { Color.clear; Color.black } }
         }
-      }.padding(10).frame(height: 85).background(colors.page, in: RoundedRectangle(cornerRadius: 10))
-        .environment(\.colorScheme, previewScheme ?? colorScheme)
+      } else {
+        mock.environment(\.colorScheme, previewScheme ?? colorScheme)
+      }
       Text(title).font(.caption.weight(.semibold)).foregroundStyle(colors.text)
       Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(colors.primary)
     }.frame(maxWidth: .infinity).padding(8)

@@ -17,7 +17,11 @@ fun ManagementScreen(s: JourneyStore, onInvite: () -> Unit, onRename: () -> Unit
     val admin = owner || me?.optBoolean("isAdmin") == true
     var confirmLeave by remember { mutableStateOf(false) }
     var remove by remember { mutableStateOf<JSONObject?>(null) }
-    Heading("旅程设置", "修改会同步给全部 ${members.size} 位成员")
+    // 与网页、iOS 一致：按“除自己以外的同伴”计数；只有自己时给出邀请提示
+    val others = (members.size - 1).coerceAtLeast(0)
+    Heading("旅程设置",
+        if (others > 0) "修改会同步给其他 $others 位同伴"
+        else "目前只有你一人。邀请同伴后，这里的修改会同步给他们")
     Panel {
         Text(trip.s("name"), style = MaterialTheme.typography.titleLarge)
         Text("${trip.s("startDate","日期待定")} · ${trip.optInt("dayCount")} 天")

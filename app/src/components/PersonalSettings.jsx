@@ -1,4 +1,11 @@
-import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
+import React, {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import {
   ArrowLeft,
   Bell,
@@ -13,6 +20,8 @@ import {
 } from 'lucide-react';
 import { Modal, Field, AsyncButton, errorMessage } from './ui.jsx';
 import SyncSettings from './SyncSettings.jsx';
+import SelectionTrack from './SelectionTrack.jsx';
+import { reducedMotion } from '../usePageNavigation.js';
 import {
   getFeedbackPreferences,
   setFeedbackPreferences,
@@ -64,7 +73,7 @@ function Segmented({ title, description, value, onChange, disabled }) {
     <fieldset className="personal-segment-setting">
       <legend>{title}</legend>
       <p className="muted">{description}</p>
-      <div className="personal-segments">
+      <SelectionTrack className="personal-segments" activeKey={value}>
         {[
           ['system', '跟随系统'],
           [false, '关'],
@@ -73,6 +82,7 @@ function Segmented({ title, description, value, onChange, disabled }) {
           <button
             type="button"
             key={String(key)}
+            className={value === key ? 'selected' : ''}
             aria-pressed={value === key}
             disabled={disabled}
             onClick={() => onChange(key)}
@@ -80,7 +90,7 @@ function Segmented({ title, description, value, onChange, disabled }) {
             {label}
           </button>
         ))}
-      </div>
+      </SelectionTrack>
     </fieldset>
   );
 }
@@ -135,11 +145,31 @@ export default function PersonalSettings({ journey: j, onClose, initialCategory 
     };
   }, []);
   const heading = useRef(null);
+  const indexPanel = useRef(null);
+  const categoryPanel = useRef(null);
+  const previousCategory = useRef(category);
   useEffect(() => {
     setPrefs(mergeAccountAppearance(readAppearance(), j.user?.preferences));
   }, [j.user?.preferences]);
   useEffect(() => {
     if (category) heading.current?.focus();
+  }, [category]);
+  useLayoutEffect(() => {
+    if (previousCategory.current === category) return;
+    previousCategory.current = category;
+    if (reducedMotion()) return;
+    const panel =
+      category === null && matchMedia('(max-width: 760px)').matches
+        ? indexPanel.current
+        : categoryPanel.current;
+    const animation = panel.animate(
+      [
+        { opacity: 0, transform: 'translateY(5px)' },
+        { opacity: 1, transform: 'translateY(0)' },
+      ],
+      { duration: 160, easing: 'cubic-bezier(.2,.7,.2,1)' },
+    );
+    return () => animation.cancel();
   }, [category]);
   const available = categories.filter(([id]) => id !== 'sync' || j.user);
   const selected = category || 'appearance';
@@ -218,9 +248,9 @@ export default function PersonalSettings({ journey: j, onClose, initialCategory 
     >
       <p className="personal-scope muted">只对你自己生效，在所有旅程中通用</p>
       <div className="personal-layout">
-        <aside className="personal-index">
+        <aside className="personal-index" ref={indexPanel}>
           {profile}
-          <nav aria-label="设置分类">
+          <SelectionTrack as="nav" aria-label="设置分类" activeKey={selected}>
             {available.map(([id, title, Icon]) => (
               <React.Fragment key={id}>
                 {(id === 'appearance' || id === 'sync') && (
@@ -243,7 +273,7 @@ export default function PersonalSettings({ journey: j, onClose, initialCategory 
                 </button>
               </React.Fragment>
             ))}
-          </nav>
+          </SelectionTrack>
           {j.user && (
             <button
               className="text-button danger personal-logout"
@@ -254,7 +284,7 @@ export default function PersonalSettings({ journey: j, onClose, initialCategory 
             </button>
           )}
         </aside>
-        <section className="personal-category" aria-label={label}>
+        <section className="personal-category" aria-label={label} ref={categoryPanel}>
           <button className="text-button personal-back" onClick={() => setCategory(null)}>
             <ArrowLeft size={18} />
             我的设置
@@ -360,6 +390,7 @@ export default function PersonalSettings({ journey: j, onClose, initialCategory 
               )}
               <Switch
                 title="轻提示音"
+                description="点击按钮等控件时，播放一声简短的提示音。"
                 checked={prefs.interactionSound ?? getFeedbackPreferences().sound}
                 disabled={saving}
                 onChange={(value) => preference('interactionSound', value)}
@@ -368,12 +399,16 @@ export default function PersonalSettings({ journey: j, onClose, initialCategory 
                 <div className="personal-mobile-only">
                   <Switch
                     title="触感反馈"
+                    description="点击按钮等控件时，手机轻微振动一下。"
                     checked={prefs.interactionHaptics ?? getFeedbackPreferences().haptics}
                     disabled={saving}
                     onChange={(value) => preference('interactionHaptics', value)}
                   />
                 </div>
               )}
+              <p className="personal-footnote muted">
+                提醒只在“同行”页面打开时出现，不会在关闭页面后推送。
+              </p>
             </>
           )}
           {selected === 'map' && (

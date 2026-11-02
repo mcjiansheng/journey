@@ -67,8 +67,10 @@
   border-radius: 12px;
 }
 .personal-index nav button.selected {
-  background: var(--optical-selected);
   color: var(--accent);
+}
+.personal-index nav .selection-indicator {
+  border-radius: 12px;
 }
 .personal-index nav button > span {
   flex: 1;
@@ -223,8 +225,28 @@
   color: var(--text);
 }
 .personal-segments button[aria-pressed='true'] {
-  background: var(--optical-selected);
   color: var(--accent);
+}
+.personal-segments .selection-indicator {
+  border: 0;
+  border-radius: 7px;
+  box-shadow: none;
+  background: var(--optical-selected);
+}
+.personal-segments .selection-indicator[data-ready] {
+  transition:
+    transform 180ms var(--navigation-ease),
+    width 180ms var(--navigation-ease),
+    height 180ms var(--navigation-ease);
+}
+.personal-segments button,
+.personal-index nav button {
+  transition: color 150ms ease;
+}
+.personal-choice-field button {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 .personal-setting-row {
   min-height: 56px;
@@ -256,6 +278,11 @@
   align-items: center;
   gap: 8px;
   padding: 10px 0;
+}
+.personal-footnote {
+  margin: 16px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
 }
 .personal-error {
   padding: 8px 24px;
@@ -305,6 +332,9 @@
   .personal-index nav button.selected {
     color: var(--text);
     background: transparent;
+  }
+  .personal-index nav .selection-indicator {
+    display: none;
   }
   .personal-index nav small {
     display: block;

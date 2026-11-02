@@ -31,7 +31,9 @@
 :root[data-palette='atlas'] .continue-card .trip-art {
   border-left: 7px solid var(--accent);
   border-radius: var(--radius-md) var(--radius-xl) var(--radius-xl) var(--radius-md);
-  background: var(--surface);
+  /* 卡片底色已是 --surface，书页需要自带浅蓝底和描边才看得出来 */
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--accent);
 }
 :root[data-palette='atlas'] .trip-card-icon {

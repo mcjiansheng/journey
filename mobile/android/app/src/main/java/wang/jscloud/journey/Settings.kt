@@ -17,6 +17,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -42,12 +44,12 @@ fun ProfileSheet(s: JourneyStore, initialCategory: String = "", close: () -> Uni
             Column {
                 TopAppBar(
                     title = { Text(category.ifEmpty { "我的设置" }) },
+                    // 首页只放一个“关闭”；进入分类后左上角返回上一级，右上角“完成”直接关掉设置
                     navigationIcon = {
-                        IconButton({ if (category.isNotEmpty()) category = "" else close() }) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回")
-                        }
+                        if (category.isEmpty()) IconButton(close) { Icon(Icons.Outlined.Close, "关闭") }
+                        else IconButton({ category = "" }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") }
                     },
-                    actions = { TextButton(close) { Text("关闭") } },
+                    actions = { if (category.isNotEmpty()) TextButton(close) { Text("完成") } },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = p.page),
                 )
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -75,7 +77,7 @@ fun ProfileSheet(s: JourneyStore, initialCategory: String = "", close: () -> Uni
                                 )
                             }
                             TextButton({ s.action { s.logout(); close() } }, enabled = !s.busy) {
-                                Text("退出账号", color = p.danger)
+                                Text("退出登录", color = p.danger)
                             }
                         }
                         "外观" -> {
@@ -89,18 +91,29 @@ fun ProfileSheet(s: JourneyStore, initialCategory: String = "", close: () -> Uni
                             Text("明暗", style = MaterialTheme.typography.titleMedium)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 listOf("system", "light", "dark").forEach { value ->
-                                    AppearancePreview(themeLabel(value), DesignTokens.palette(paletteName,
-                                        if (value == "system") androidx.compose.foundation.isSystemInDarkTheme() else value == "dark"),
-                                        theme == value, Modifier.weight(1f), enabled = !s.busy) { setPreference("theme", value) }
+                                    // “跟随系统”左半浅色、右半深色，与网页、iOS 一致
+                                    AppearancePreview(themeLabel(value), DesignTokens.palette(paletteName, value == "dark"),
+                                        theme == value, Modifier.weight(1f), enabled = !s.busy,
+                                        splitDark = if (value == "system") DesignTokens.palette(paletteName, true) else null,
+                                    ) { setPreference("theme", value) }
                                 }
                             }
+                            // Android 没有系统级“减少透明度”设置，“跟随系统”无从跟随，所以用开关（与“只有开/关→开关”的规则一致）
                             Panel {
-                                Text("减少透明效果", style = MaterialTheme.typography.titleMedium)
-                                Text("使用不透明的实底卡片和面板，不显示毛玻璃和高光。", color = p.muted)
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(if (preferences.opt("reducedTransparency") == true) "已开启" else "已关闭", Modifier.weight(1f))
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text("减少透明效果", style = MaterialTheme.typography.titleMedium)
+                                        Text("使用不透明的实底卡片和面板，不显示毛玻璃和高光。", color = p.muted,
+                                            style = MaterialTheme.typography.bodyMedium)
+                                    }
                                     Switch(preferences.opt("reducedTransparency") == true,
-                                        { setPreference("reducedTransparency", it) }, enabled = !s.busy)
+                                        { setPreference("reducedTransparency", it) }, enabled = !s.busy,
+                                        colors = SwitchDefaults.colors(
+                                            checkedTrackColor = p.primary, checkedThumbColor = p.onPrimary,
+                                            uncheckedTrackColor = p.page, uncheckedThumbColor = p.muted,
+                                            uncheckedBorderColor = p.muted,
+                                        ))
                                 }
                             }
                         }
@@ -145,28 +158,39 @@ fun ProfileSheet(s: JourneyStore, initialCategory: String = "", close: () -> Uni
     }
 }
 
+@Composable
+private fun PreviewMock(colors: DesignTokens.Colors, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().height(68.dp).background(colors.page, RoundedCornerShape(8.dp)),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.width(16.dp).fillMaxHeight().background(colors.surface, RoundedCornerShape(4.dp)).padding(3.dp)) {
+            Box(Modifier.fillMaxWidth().height(7.dp).background(colors.primary, RoundedCornerShape(2.dp)))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.fillMaxWidth(.7f).height(6.dp).background(colors.primary, RoundedCornerShape(3.dp)))
+            repeat(2) {
+                Box(Modifier.fillMaxWidth().weight(1f).background(colors.surface, RoundedCornerShape(4.dp)).padding(5.dp)) {
+                    Box(Modifier.fillMaxWidth(.6f).height(4.dp).background(colors.muted, RoundedCornerShape(2.dp)))
+                }
+            }
+        }
+    }
+}
+
 private fun themeLabel(value: String) = when (value) { "dark" -> "深色"; "light" -> "浅色"; else -> "跟随系统" }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppearancePreview(label: String, colors: DesignTokens.Colors, selected: Boolean,
-    modifier: Modifier, enabled: Boolean, onClick: () -> Unit) {
+    modifier: Modifier, enabled: Boolean, splitDark: DesignTokens.Colors? = null, onClick: () -> Unit) {
     Surface(selected = selected, onClick = onClick, enabled = enabled, modifier = modifier,
         color = colors.page, contentColor = colors.text, shape = RoundedCornerShape(16.dp),
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) colors.primary else colors.border)) {
         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(Modifier.fillMaxWidth().height(68.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Column(Modifier.width(16.dp).fillMaxHeight().background(colors.surface, RoundedCornerShape(4.dp)).padding(3.dp)) {
-                    Box(Modifier.fillMaxWidth().height(7.dp).background(colors.primary, RoundedCornerShape(2.dp)))
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.fillMaxWidth(.7f).height(6.dp).background(colors.primary, RoundedCornerShape(3.dp)))
-                    repeat(2) {
-                        Box(Modifier.fillMaxWidth().weight(1f).background(colors.surface, RoundedCornerShape(4.dp)).padding(5.dp)) {
-                            Box(Modifier.fillMaxWidth(.6f).height(4.dp).background(colors.muted, RoundedCornerShape(2.dp)))
-                        }
-                    }
-                }
+            Box {
+                PreviewMock(colors)
+                if (splitDark != null) PreviewMock(splitDark, Modifier.drawWithContent {
+                    clipRect(left = size.width / 2f) { this@drawWithContent.drawContent() }
+                })
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))

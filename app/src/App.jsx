@@ -136,6 +136,9 @@ export default function App() {
     j.goHome();
   }
   const statusText = syncStatusText[j.status] || '正在连接';
+  const tripMembers = j.snapshot?.members || [];
+  const otherMembers = tripMembers.filter((m) => m.userId !== j.user?.id);
+  const selfMembers = tripMembers.filter((m) => m.userId === j.user?.id);
   if (!j.ready)
     return (
       <div className="loading-screen">
@@ -269,20 +272,21 @@ export default function App() {
                   <span>{statusText}</span>
                 </button>
                 <button
-                  className="members-button"
+                  className={`members-button ${otherMembers.length ? '' : 'solo'}`}
                   onClick={() => setModal('team')}
                   aria-label={`查看 ${j.snapshot.members.length} 位同行伙伴`}
                 >
                   <div className="avatar-stack">
-                    {j.snapshot.members.slice(0, 3).map((m) => (
+                    {/* 同伴排在前面：手机端只显示第一个头像，自己的头像已在右侧“我的设置”入口 */}
+                    {[...otherMembers, ...selfMembers].slice(0, 3).map((m) => (
                       <span className="avatar" key={m.userId}>
                         {m.displayName.slice(0, 1)}
                       </span>
                     ))}
                   </div>
-                  {j.snapshot.members.length > 1 && (
+                  {otherMembers.length > 1 && (
                     <span className="member-overflow" aria-hidden="true">
-                      +{j.snapshot.members.length - 1}
+                      +{otherMembers.length - 1}
                     </span>
                   )}
                   <Users size={18} />

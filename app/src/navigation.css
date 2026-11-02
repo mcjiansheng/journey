@@ -552,6 +552,13 @@
     font-size: var(--fs-caption);
     color: var(--muted);
   }
+  /* 只有自己一人时，不再重复显示自己的头像，改为显示同行伙伴图标 */
+  .app-shell .members-button.solo .avatar-stack {
+    display: none;
+  }
+  .app-shell .members-button.solo > svg {
+    display: block;
+  }
   .continue-card .trip-art {
     width: 56px;
     height: 56px;

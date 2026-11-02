@@ -353,7 +353,11 @@ export default function Settings({ journey: j, onTeam, onDeleted, onDates, onPer
   return (
     <div className="page settings-page">
       <h1 className="workspace-heading">旅程设置</h1>
-      <p className="muted">修改会同步给全部 {j.snapshot.members.length} 位同伴</p>
+      <p className="muted">
+        {j.snapshot.members.length > 1
+          ? `修改会同步给其他 ${j.snapshot.members.length - 1} 位同伴`
+          : '目前只有你一人。邀请同伴后，这里的修改会同步给他们'}
+      </p>
       <Section title="当前旅程">
         <div className="form-grid">
           <Field label="旅程名称">

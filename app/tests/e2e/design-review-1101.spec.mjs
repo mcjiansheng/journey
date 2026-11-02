@@ -86,7 +86,7 @@ for(const width of [1440,390])for(const theme of ['light','dark'])test(`review s
  expect(await page.locator('.trip-card-icon').evaluate(el=>getComputedStyle(el).placeItems)).toBe('center');
  await page.locator('.continue-card').click();await expect(page.locator('.activity-card')).toHaveCount(2);
  await expect(page.locator('.sync-status.synced>svg')).toBeVisible();
- if(width===390){await expect(page.locator('.members-button .avatar:visible')).toHaveCount(1);await expect(page.locator('.member-overflow')).toHaveText('+2')}
+ if(width===390){await expect(page.locator('.members-button .avatar:visible')).toHaveCount(1);await expect(page.locator('.member-overflow')).toHaveText('+1')}
  for(const [label,name] of [['行程','itinerary'],['费用','expenses'],['旅程设置','settings']]){await nav(page,label).click();await shot(page,`${name}-${width}-${theme}`);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)}
  const effective=process.env.JOURNEY_REVIEW_THEME==='system'||!process.env.JOURNEY_REVIEW_THEME?theme:process.env.JOURNEY_REVIEW_THEME;
  const auto=await page.locator('.app-shell').evaluate(el=>({page:getComputedStyle(el).backgroundImage,selected:getComputedStyle(el.querySelector('.sidebar nav button.selected')).backgroundColor}));
