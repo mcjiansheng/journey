@@ -59,3 +59,27 @@ test('invalid JSON in an explicit map file retains its parse error',()=>withConf
  process.env.AMAP_CONFIG_FILE=path;
  assert.throws(()=>loadConfig(),SyntaxError);
 }));
+
+test('the default map file falls back to amap-test.json when amap.json is absent',()=>withConfigFiles(()=>{
+ mkdirSync('.local');
+ writeFileSync('.local/amap-test.json',JSON.stringify({key:'fallback-test-key',securityJsCode:'fallback-test-secret'}));
+ const config=loadConfig();
+ assert.equal(config.amapKey,'fallback-test-key');
+ assert.equal(config.amapSecurityJsCode,'fallback-test-secret');
+}));
+
+test('the default map file falls back to parent directory when running from a subdirectory',()=>withConfigFiles(directory=>{
+ mkdirSync('.local');
+ writeFileSync('.local/amap-test.json',JSON.stringify({key:'parent-test-key',securityJsCode:'parent-test-secret'}));
+ const subDir=join(directory,'app');
+ mkdirSync(subDir);
+ const previousCwd=process.cwd();
+ try {
+  process.chdir(subDir);
+  const config=loadConfig();
+  assert.equal(config.amapKey,'parent-test-key');
+  assert.equal(config.amapSecurityJsCode,'parent-test-secret');
+ } finally {
+  process.chdir(previousCwd);
+ }
+}));
