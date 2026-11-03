@@ -8,6 +8,7 @@ struct ManageView: View {
   @State private var zone = ""
   @State private var profile = false
   @State private var leave = false
+  @State private var archiveConfirm = false
   @State private var purge = false
   @FocusState private var focused: String?
   @State private var saved = false
@@ -45,16 +46,22 @@ struct ManageView: View {
             .multilineTextAlignment(.trailing)
         }
         NavigationLink {
-          JourneyTimeZonePicker(selection: $zone)
+          JourneyTimeZonePicker(selection: $zone, destination: destination)
         } label: {
           LabeledContent("旅程时区", value: JourneyTimeZone.label(zone))
         }
         if saved {
           Label("已保存", systemImage: "checkmark").font(.caption).foregroundStyle(palette.muted)
         }
-        NavigationLink("日期与计划天数") { RescheduleView() }
-        NavigationLink("成员与邀请") { TeamView() }
-        NavigationLink("已删除的内容") { DeletedView() }
+      }
+      Section("日程") {
+        NavigationLink("日期 · \(store.trip["dayCount"].number.formatted()) 天") { RescheduleView() }
+      }
+      Section("成员与权限") {
+        NavigationLink { TeamView() } label: {
+          LabeledContent("成员与邀请", value: store.snapshot["members"].array.count <= 1 ? "仅你一人" : "\(store.snapshot["members"].array.count) 人")
+        }
+
       }
       if store.isOwner {
         Section {
@@ -68,24 +75,22 @@ struct ManageView: View {
                     body: .object(["teamMode": .string(mode)]))
                 }
               }))
-        } footer: {
+        } header: { Text("团队类型") } footer: {
           Text("大家都能添加和编辑行程。")
         }
       }
       Section {
-        LifecycleActions(object: store.trip)
+        NavigationLink("已删除的内容 · \(store.objects.filter { $0["state"].string == "deleted" }.count)") { DeletedView() }
         Button(
           store.cache.trips.first(where: { $0.id == store.trip.id })?["archived"].bool == true
             ? "取消归档" : "归档旅程"
         ) {
-          store.perform {
-            let archived =
-              store.cache.trips.first(where: { $0.id == store.trip.id })?["archived"].bool ?? false
-            try await store.change(
-              "/api/trips/\(store.trip.id)/archive", body: .object(["archived": .bool(!archived)]))
-          }
+          archiveConfirm = true
         }
-        Button("退出旅程", role: .destructive) { leave = true }
+      } header: { Text("整理") } footer: { Text("归档后从我的旅程列表收起，可随时取消。") }
+      Section {
+        if store.isOwner { LifecycleActions(object: store.trip) }
+        Button(store.snapshot["members"].array.count == 1 ? "退出并删除旅程" : "退出旅程", role: .destructive) { leave = true }
       }
       Section {
         Text("想改主题色或提醒方式？点右上角头像打开我的设置。")
@@ -95,6 +100,18 @@ struct ManageView: View {
         Button("返回我的旅程") { store.selectedTrip = nil }
       }
     }.navigationTitle("旅程设置").navigationBarTitleDisplayMode(.large)
+      .confirmationDialog("归档状态", isPresented: $archiveConfirm) {
+        Button(store.cache.trips.first(where: { $0.id == store.trip.id })?["archived"].bool == true ? "取消归档" : "归档旅程") {
+          store.perform {
+            let archived =
+              store.cache.trips.first(where: { $0.id == store.trip.id })?["archived"].bool ?? false
+            try await store.change(
+              "/api/trips/\(store.trip.id)/archive", body: .object(["archived": .bool(!archived)]))
+          }
+
+        }
+      }
+
       .onChange(of: info) { _, value in
         guard !tripID.isEmpty else { return }
         for key in ["name", "destination", "timezone"] where value[key] != baselineInfo[key] {
@@ -307,50 +324,123 @@ struct TeamView: View {
   }
 }
 struct RescheduleView: View {
-  @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @Environment(\.dismiss) var dismiss
   @State private var start = Date()
   @State private var end = Date()
-  @State private var moveActivities = false
+  @State private var reviewing = false
+  @State private var choice = "move"
+  @State private var individual: [String: Int] = [:]
+  var count: Int { (JourneyDate.calendar.dateComponents([.day], from: JourneyDate.calendar.startOfDay(for: start), to: JourneyDate.calendar.startOfDay(for: end)).day ?? 0) + 1 }
+  var activities: [JSON] { store.objects.filter { $0["kind"].string == "activity" && $0["state"].string == "active" } }
+  func ordinal(_ activity: JSON) -> Int? {
+    guard let day = store.allDays.first(where: { $0.id == activity["payload"]["dayId"].string }) else { return nil }
+    let date = day["payload"]["date"].string, old = store.trip["startDate"].string
+    let n = date.isEmpty || old.isEmpty ? Int(day["payload"]["ordinal"].number) : (JourneyDate.calendar.dateComponents([.day], from: JourneyDate.date(old), to: JourneyDate.date(date)).day ?? 0) + 1
+    return date.isEmpty == old.isEmpty && (1...max(1, Int(store.trip["dayCount"].number))).contains(n) ? n : nil
+  }
+  var shifted: Bool { JourneyDate.string(start) != store.trip["startDate"].string }
+  var affected: [JSON] { activities.filter { a in guard let n = ordinal(a) else { return false }; return shifted || n > count } }
+  func target(_ activity: JSON) -> Int? {
+    guard let n = ordinal(activity) else { return nil }
+    if choice == "keep" { return nil }
+    if choice == "individual" { return individual[activity.id] }
+    return min(n, count)
+  }
   var body: some View {
     JourneyForm {
-      DatePicker("出发日期", selection: $start, displayedComponents: .date)
-      DatePicker("结束日期", selection: $end, in: start..., displayedComponents: .date)
-      Toggle("活动随原计划日一起移动", isOn: $moveActivities)
-      Button("保存日期") {
-        store.perform {
-          let count =
-            JourneyDate.calendar.dateComponents(
-              [.day], from: JourneyDate.calendar.startOfDay(for: start),
-              to: JourneyDate.calendar.startOfDay(for: end)
-            ).day! + 1
-          guard (1...365).contains(count) else { throw APIError(message: "请选择 1 至 365 天的日期范围") }
-          let moves: [JSON] =
-            moveActivities
-            ? store.objects.filter { $0["kind"].string == "activity" }.compactMap { activity in
-              guard
-                let day = store.allDays.first(where: {
-                  $0.id == activity["payload"]["dayId"].string
-                })
-              else { return nil }
-              return .object([
-                "activityId": .string(activity.id), "ordinal": day["payload"]["ordinal"],
-              ])
-            } : []
-          try await store.mutate(
-            object: store.trip, kind: "reschedule",
-            patch: .object([
-              "startDate": .string(JourneyDate.string(start)), "dayCount": .integer(count),
-              "moves": .array(moves),
-            ]))
-          dismiss()
+      Section("选择日期") {
+        TripRangeCalendar(start: $start, end: $end, originalStart: JourneyDate.date(store.trip["startDate"].string), originalCount: Int(store.trip["dayCount"].number))
+          .onChange(of: start) { _, _ in reviewing = false }
+          .onChange(of: end) { _, _ in reviewing = false }
+        Text("\(JourneyDate.string(start)) – \(JourneyDate.string(end)) · \(count) 天")
+        Text("原来 \(store.trip["startDate"].string) · \(Int(store.trip["dayCount"].number)) 天").font(.caption)
+      }.environment(\.timeZone, TimeZone(secondsFromGMT: 0)!)
+      if reviewing {
+        Section("已有安排怎么办") {
+          Picker("安排", selection: $choice) {
+            Text(shifted ? "跟着一起移动" : "移到最后一天").tag("move")
+            Text(shifted ? "留在原来的日期" : "放进行程外安排").tag("keep")
+            Text("逐项选择…").tag("individual")
+          }.pickerStyle(.inline)
+          ForEach(choice == "individual" ? affected : Array(affected.prefix(3))) { activity in
+            let n = target(activity)
+            let oldDay = store.allDays.first { $0.id == activity["payload"]["dayId"].string }
+            VStack(alignment: .leading) {
+              Text(activity["payload"]["title"].string)
+              Text("\(oldDay?["payload"]["date"].string ?? "日期待定") → \(n.map { JourneyDate.string(JourneyDate.calendar.date(byAdding: .day, value: $0 - 1, to: start)!) } ?? "保留原日期")").font(.caption)
+              if choice == "individual" {
+                Picker("移到", selection: Binding(get: { individual[activity.id] ?? 0 }, set: { individual[activity.id] = $0 == 0 ? nil : $0 })) {
+                  Text("保留原日期").tag(0)
+                  ForEach(1...max(1, min(count, 365)), id: \.self) { Text("第 \($0) 天").tag($0) }
+                }
+              }
+            }
+          }
         }
       }
-    }.navigationTitle("日期与计划天数").onAppear {
+      Button(!reviewing && !affected.isEmpty ? "下一步" : "完成") {
+        guard reviewing || affected.isEmpty else { choice = "move"; reviewing = true; return }
+        store.perform {
+          guard (1...365).contains(count) else { throw APIError(message: "请选择 1 至 365 天的日期范围") }
+          let moves = activities.compactMap { activity -> JSON? in
+            guard let n = target(activity) else { return nil }
+            return .object(["activityId": .string(activity.id), "ordinal": .integer(n), "date": .string(JourneyDate.string(JourneyDate.calendar.date(byAdding: .day, value: n - 1, to: start)!))])
+          }
+          try await store.mutate(object: store.trip, kind: "reschedule", patch: .object(["startDate": .string(JourneyDate.string(start)), "dayCount": .integer(count), "moves": .array(moves)]))
+          dismiss()
+        }
+      }.disabled(!(1...365).contains(count))
+    }.navigationTitle("调整日期").onAppear {
       start = JourneyDate.date(store.trip["startDate"].string)
-      end = JourneyDate.calendar.date(
-        byAdding: .day, value: max(0, Int(store.trip["dayCount"].number) - 1), to: start)!
+      end = JourneyDate.calendar.date(byAdding: .day, value: max(0, Int(store.trip["dayCount"].number) - 1), to: start)!
     }
+  }
+}
+
+struct TripRangeCalendar: View {
+  @Environment(\.journeyPalette) private var palette
+  @Binding var start: Date
+  @Binding var end: Date
+  var originalStart: Date
+  var originalCount: Int
+  @State private var month = Date()
+  @State private var selectingEnd = false
+  var calendar: Calendar { JourneyDate.calendar }
+  var first: Date { calendar.date(from: calendar.dateComponents([.year, .month], from: month))! }
+  var offset: Int { (calendar.component(.weekday, from: first) + 5) % 7 }
+  var body: some View {
+    VStack(spacing: 12) {
+      HStack {
+        Button { month = calendar.date(byAdding: .month, value: -1, to: month)! } label: { Image(systemName: "chevron.left") }.accessibilityLabel("上个月")
+        Spacer()
+        Text("\(calendar.component(.year, from: first)) 年 \(calendar.component(.month, from: first)) 月")
+        Spacer()
+        Button { month = calendar.date(byAdding: .month, value: 1, to: month)! } label: { Image(systemName: "chevron.right") }.accessibilityLabel("下个月")
+      }
+      Text(selectingEnd ? "再点结束日期" : "点选开始日期").font(.caption).foregroundStyle(palette.muted)
+      LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7), spacing: 5) {
+        ForEach(Array(["一", "二", "三", "四", "五", "六", "日"].enumerated()), id: \.offset) { _, name in Text(name).font(.caption).foregroundStyle(palette.muted) }
+        ForEach(0..<(offset + calendar.range(of: .day, in: .month, for: first)!.count), id: \.self) { index in
+          if index < offset { Color.clear.frame(height: 40) }
+          else {
+            let date = calendar.date(byAdding: .day, value: index - offset, to: first)!
+            let selected = date >= calendar.startOfDay(for: start) && date <= calendar.startOfDay(for: end)
+            let oldEnd = calendar.date(byAdding: .day, value: max(0, originalCount - 1), to: originalStart)!
+            let removed = date >= originalStart && date <= oldEnd && !selected
+            Button {
+              if selectingEnd { let previous = start; start = min(previous, date); end = max(previous, date) }
+              else { start = date; end = date }
+              selectingEnd.toggle()
+            } label: {
+              Text("\(index - offset + 1)").font(.subheadline).frame(maxWidth: .infinity).frame(height: 40)
+                .background(selected ? palette.accent : .clear, in: RoundedRectangle(cornerRadius: 8))
+                .foregroundStyle(selected ? palette.onAccent : palette.text)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(removed ? palette.muted : .clear, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
+            }.buttonStyle(.plain).accessibilityLabel(JourneyDate.string(date)).accessibilityAddTraits(selected ? .isSelected : [])
+          }
+        }
+      }
+    }.onAppear { month = start }
   }
 }

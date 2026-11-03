@@ -1,0 +1,78 @@
+.date-range-picker {
+  max-width: 420px;
+  margin: 0 auto 20px;
+}
+.date-range-month {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.date-range-instruction {
+  margin: 6px 0 12px;
+  color: var(--muted);
+  text-align: center;
+  font-size: var(--fs-caption);
+}
+.date-range-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+.date-range-weekday {
+  padding: 6px 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+}
+.date-range-day {
+  min-width: 0;
+  min-height: 42px;
+  padding: 6px 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-variant-numeric: tabular-nums;
+}
+.date-range-day.other-month {
+  color: var(--muted);
+}
+.date-range-day.in-range {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.date-range-day.original-range {
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.date-range-day.removed-date {
+  border: 1px dashed var(--muted);
+  box-shadow: none;
+}
+.date-range-day.range-endpoint {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  box-shadow: none;
+}
+.date-range-legend {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+}
+.date-range-legend > span {
+  width: 15px;
+  height: 15px;
+  border: 1px dashed var(--muted);
+  border-radius: 3px;
+}
+@media (max-width: 400px) {
+  .date-range-grid {
+    gap: 1px;
+  }
+  .date-range-day {
+    min-height: 40px;
+  }
+}

@@ -46,6 +46,7 @@ test('keyboard reorder crosses precise-time slots and survives reload',async({pa
 
 async function dragAboveFirst(page){
  const handle=page.getByRole('button',{name:'拖动排序：灵活活动'});
+ await handle.locator('xpath=ancestor::article').hover();
  const source=await handle.boundingBox(),target=await page.locator('.activity-card').first().boundingBox();
  await page.mouse.move(source.x+source.width/2,source.y+source.height/2);await page.mouse.down();
  await page.mouse.move(target.x+target.width/2,target.y+4,{steps:8});
@@ -74,12 +75,13 @@ for(const width of [1440,390])test(`compact activity controls and mobile sorting
  const more=card.locator('.activity-more>summary');
  await card.scrollIntoViewIfNeeded();
  await expect(card.getByRole('button',{name:'编辑',exact:true})).toBeHidden();
- if(width===390){await expect(handle).toBeHidden();await page.getByRole('button',{name:'排序',exact:true}).click();await expect(page.locator('.activity-time-lock')).toHaveCount(2)}
+ if(width===390){await expect(handle).toBeHidden();await page.getByRole('button',{name:'当天操作',exact:true}).click();await page.getByRole('button',{name:'调整顺序',exact:true}).click();await expect(page.locator('.activity-time-lock')).toHaveCount(2)}
+ if(width===390){await expect(card.locator('.activity-main')).toBeVisible();await page.getByRole('button',{name:'完成',exact:true}).click();await expect(handle).toBeHidden();return}
+ await card.hover();
  const [dragBox,moreBox]=await Promise.all([handle.boundingBox(),more.boundingBox()]);
  expect(dragBox.width).toBe(44);expect(moreBox.width).toBe(44);
  expect(dragBox.height).toBe(44);expect(moreBox.height).toBe(44);
- expect(Math.abs(dragBox.y-moreBox.y)).toBeLessThan(1);
- expect(moreBox.x-(dragBox.x+dragBox.width)).toBe(4);
+ expect(dragBox.x).toBeLessThan(moreBox.x);
  expect((await card.boundingBox()).height).toBeLessThan(130);
  await more.click();await expect(card.locator('.activity-more-panel')).toBeVisible();
  const menu=await card.locator('.activity-more-panel').boundingBox();

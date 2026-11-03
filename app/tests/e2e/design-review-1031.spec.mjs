@@ -42,7 +42,7 @@ for(const width of [1440,390])for(const theme of ['light','dark'])test(`review l
  await nav(page,'费用').click();await expect(page.locator('.ledger-currency-totals')).toContainText('1,427.00');await expect(page.locator('.ledger-currency-totals')).not.toContainText('CNY');
  await expect(page.locator('.expense-date-group>h3').filter({hasText:'未记录日期'})).toHaveCount(1);
  await expect(page.locator('.expense-row')).toHaveCount(3);
- await page.getByRole('group',{name:'按日期查看'}).getByRole('button',{name:'第1天',exact:true}).click();await expect(page.locator('.expense-row')).toHaveCount(1);
+ await page.getByRole('group',{name:'按日期查看'}).getByRole('button',{name:/^第 1 天 · /}).click();await expect(page.locator('.expense-row')).toHaveCount(1);
  await page.getByRole('group',{name:'按日期查看'}).getByRole('button',{name:'全部',exact:true}).click();
  await page.screenshot({path:`../.local/evidence/design-review-1031/ledger-${width}-${theme}.png`});
  await nav(page,'地图').click();await expect(page.locator('.map-offline-places')).toBeVisible();await expect(page.getByRole('button',{name:'定位到我'})).toHaveCount(0);
@@ -59,6 +59,5 @@ test('mobile outside activities retain route editing when the current day is emp
  await page.setViewportSize({width:390,height:844});await seed(page,{outside:true});
  await expect(page.getByText('这一天还没有安排',{exact:true})).toBeVisible();
  await page.getByText('行程外安排',{exact:true}).click();
- const route=page.locator('.outside .route-add').last();await expect(route).toBeHidden();
- await page.getByRole('button',{name:'排序',exact:true}).click();await expect(route).toBeVisible();await route.click();await expect(page.getByRole('dialog')).toBeVisible();
+ const route=page.locator('.outside .route-add').last();await expect(route).toBeVisible();await route.click();await expect(page.getByRole('dialog')).toBeVisible();
 });

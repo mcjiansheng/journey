@@ -44,6 +44,10 @@ export const palettePreviews = {
       'pointer-edge': '#ffffff70',
       'button-highlight': '#ffffff28',
       'focus-ring': '#4b967d',
+      'map-accent': '#246b58',
+      'map-accent-soft': '#e5eee5',
+      'map-route': '#18786b',
+      'map-route-marker': '#294c68',
     },
     dark: {
       primary: '#8fcbb0',
@@ -87,6 +91,10 @@ export const palettePreviews = {
       'pointer-edge': '#d8fff426',
       'button-highlight': '#ffffff28',
       'focus-ring': '#4b967d',
+      'map-accent': '#246b58',
+      'map-accent-soft': '#e5eee5',
+      'map-route': '#18786b',
+      'map-route-marker': '#294c68',
     },
   },
   atlas: {
@@ -133,6 +141,10 @@ export const palettePreviews = {
       'pointer-edge': '#ffffff70',
       'button-highlight': '#ffffff28',
       'focus-ring': '#2f86a6',
+      'map-accent': '#176b88',
+      'map-accent-soft': '#e1eff4',
+      'map-route': '#1f7fa3',
+      'map-route-marker': '#1b3442',
     },
     dark: {
       primary: '#8ecce2',
@@ -176,6 +188,10 @@ export const palettePreviews = {
       'pointer-edge': '#d8f1ff26',
       'button-highlight': '#ffffff28',
       'focus-ring': '#6fb9d6',
+      'map-accent': '#176b88',
+      'map-accent-soft': '#e1eff4',
+      'map-route': '#1f7fa3',
+      'map-route-marker': '#1b3442',
     },
   },
 };

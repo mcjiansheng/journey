@@ -43,6 +43,10 @@ import SelectionTrack from './components/SelectionTrack.jsx';
 import { reducedMotion } from './usePageNavigation.js';
 import { createMapMarker } from './map-marker.js';
 import PlaceInformation from './components/PlaceInformation.jsx';
+import MarkPicker, { MarkSymbol } from './components/MarkPicker.jsx';
+import { markKey, defaultMark } from './marks.js';
+import { clusterPlaces } from './map-clusters.js';
+import { Modal } from './components/ui.jsx';
 import './map.css';
 import './map-markers.css';
 
@@ -91,6 +95,20 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
     [keyboardOpen, setKeyboardOpen] = useState(false),
     [cameraChoice, setCameraChoice] = useState(null),
     [cameraLoading, setCameraLoading] = useState(false);
+  const [markEditor, setMarkEditor] = useState(null),
+    [clusterList, setClusterList] = useState(null),
+    [mapRender, setMapRender] = useState(0);
+  const markFilter = filter.mark;
+  const setMarkFilter = (mark) => setFilter((previous) => ({ ...previous, mark }));
+  const previousClusters = useRef([]);
+  const presets = snapshot.objects
+    .filter((o) => o.kind === 'markPreset' && o.state === 'active')
+    .sort((a, b) => (a.payload.order || 0) - (b.payload.order || 0));
+  const effectiveMark = (p) => p.mark || defaultMark(document.documentElement.dataset.palette);
+  const presetName = (p) =>
+    presets.find((o) => markKey(o.payload) === markKey(effectiveMark(p)))?.payload.name || '未命名';
+  const rememberMark = (mark) =>
+    localStorage.setItem('journey-mark:' + j.user.id + ':' + trip.id, JSON.stringify(mark));
   const panelAnimation = useRef(null),
     panelHeight = useRef(null),
     filterButton = useRef(null);
@@ -113,6 +131,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
     map = useRef(null),
     markers = useRef([]),
     lines = useRef([]),
+    labels = useRef(null),
     searchSeq = useRef(0),
     selectionSeq = useRef(0),
     pointClickTimer = useRef(null),
@@ -146,6 +165,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
     activities.some((a) => a.payload.place && keyOf(a.payload.place) === keyOf(p));
   const visibleFavorites = favorites.filter(
     (o) =>
+      (!markFilter || markKey(effectiveMark(o.payload)) === markFilter) &&
       (filter.category === '全部' || category(o.payload) === filter.category) &&
       (filter.arranged === '全部' || isArranged(o.payload) === (filter.arranged === '已安排')),
   );
@@ -379,8 +399,14 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
           consumedActivity ? { selectedActivityId: null, dayId: null } : {},
         );
       });
-      instance.on('moveend', () => persistCamera());
-      instance.on('zoomend', () => persistCamera());
+      instance.on('moveend', () => {
+        persistCamera();
+        setMapRender((n) => n + 1);
+      });
+      instance.on('zoomend', () => {
+        persistCamera();
+        setMapRender((n) => n + 1);
+      });
       instance.on('dragstart', () => {
         userMoved = true;
         cameraIntent.current++;
@@ -437,47 +463,186 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
         map.current = null;
         markers.current = [];
         lines.current = [];
+        labels.current = null;
       }
     };
   }, [trip.id, destination, mapEpoch, cameraChoice]);
+  useEffect(() => {
+    const observer = new MutationObserver(() => setMapRender((n) => n + 1));
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-palette'],
+    });
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     if (!active || !map.current || !window.AMap) return;
     const AMap = window.AMap,
       m = map.current;
     m.remove(markers.current);
     m.remove(lines.current);
+    if (labels.current) {
+      m.remove(labels.current);
+      labels.current = null;
+    }
+    const labelNodes = [];
     markers.current = [];
     lines.current = [];
     const add = (p, options = {}) => {
       if (!located(p)) return;
       const node = createMapMarker(p, options);
+      const label = options.selected ? p.name : options.label;
+      if (label && (options.selected || options.labelSide)) {
+        node.querySelector('.marker-label')?.remove();
+        labelNodes.push(
+          new AMap.LabelMarker({
+            position: [p.lng, p.lat],
+            rank: options.selected ? 30 : options.order != null ? 20 : 10,
+            text: {
+              content: [...label].slice(0, 8).join('') + ([...label].length > 8 ? '…' : ''),
+              direction: options.labelSide || 'right',
+              offset: options.labelSide === 'left' ? [-20, 0] : [20, 0],
+              style: { fontSize: 13, fillColor: '#1b3442', strokeColor: '#ffffff', strokeWidth: 3 },
+            },
+          }),
+        );
+      }
       const marker = new AMap.Marker({
         position: [p.lng, p.lat],
         content: node,
         offset: new AMap.Pixel(-22, options.selected ? -44 : -22),
         zIndex: options.selected ? 30 : options.order !== undefined ? 20 : 10,
       });
-      marker.on('click', () => selectRef.current(p, { preservePlace: true, moveCamera: false }));
+      marker.on('click', () =>
+        options.onClick
+          ? options.onClick()
+          : selectRef.current(p, { preservePlace: true, moveCamera: false }),
+      );
       markers.current.push(marker);
     };
     const isSelected = (p) => selected && keyOf(p) === keyOf(selected);
-    if (filter.layer !== '行程')
-      visibleFavorites
-        .filter(
-          (o) =>
-            !isSelected(o.payload) &&
-            !mapActivities.some(
-              ({ activity }) => keyOf(activity.payload.place) === keyOf(o.payload),
-            ),
-        )
-        .forEach((o) => add(o.payload, { saved: true, arranged: isArranged(o.payload) }));
+    const candidates =
+      filter.layer === '行程'
+        ? []
+        : visibleFavorites.filter(
+            (o) =>
+              located(o.payload) &&
+              !isSelected(o.payload) &&
+              !mapActivities.some(
+                ({ activity }) => keyOf(activity.payload.place) === keyOf(o.payload),
+              ),
+          );
+    const points = candidates.map((o) => {
+      const pixel = m.lngLatToContainer([o.payload.lng, o.payload.lat]);
+      return {
+        id: o.id,
+        x: pixel.x,
+        y: pixel.y,
+        name: o.payload.name,
+        mark: effectiveMark(o.payload),
+        presetName: presetName(o.payload),
+        object: o,
+      };
+    });
+    const reserved = mapActivities
+      .filter(
+        ({ activity }) => located(activity.payload.place) && !isSelected(activity.payload.place),
+      )
+      .map(({ activity }) => ({ id: activity.id, place: activity.payload.place, priority: 1 }));
+    if (selected && located(selected))
+      reserved.unshift({ id: 'selected', place: selected, priority: 2 });
+    for (const item of reserved) {
+      const pixel = m.lngLatToContainer([item.place.lng, item.place.lat]);
+      points.push({
+        id: item.id,
+        x: pixel.x,
+        y: pixel.y,
+        name: item.place.name,
+        priority: item.priority,
+        mark: null,
+      });
+    }
+    const groups = clusterPlaces(points, previousClusters.current);
+    previousClusters.current = groups.map((g) => g.points.map((p) => p.id));
+    groups
+      .filter((g) => !g.points[0].priority)
+      .forEach((g) => {
+        const first = g.points[0],
+          items = g.points.map((p) => p.object),
+          count = items.length;
+        const counts = new Map();
+        g.points.forEach((p) =>
+          counts.set(markKey(p.mark), (counts.get(markKey(p.mark)) || 0) + 1),
+        );
+        const sorted = [...counts].sort((a, b) => b[1] - a[1]);
+        const p =
+          count === 1
+            ? first.object.payload
+            : {
+                ...first.object.payload,
+                lng: items.reduce((sum, o) => sum + o.payload.lng, 0) / count,
+                lat: items.reduce((sum, o) => sum + o.payload.lat, 0) / count,
+                name: sorted
+                  .map(
+                    ([key, n]) =>
+                      (presets.find((o) => markKey(o.payload) === key)?.payload.name || '未命名') +
+                      ' ' +
+                      n,
+                  )
+                  .join('，'),
+              };
+        add(p, {
+          saved: true,
+          mark: first.mark,
+          count,
+          label: count === 1 ? p.name : sorted.length === 1 ? first.presetName : null,
+          labelSide: g.labelSide,
+          mixed:
+            sorted.length > 1
+              ? sorted.slice(0, 3).map(([key]) => {
+                  const [icon, color] = key.split(':');
+                  return { icon, color };
+                })
+              : null,
+          arranged: count === 1 && isArranged(p),
+          onClick:
+            count === 1
+              ? null
+              : () => {
+                  if (
+                    m.getZoom() >= 18 ||
+                    Math.max(...g.points.map((p) => Math.hypot(p.x - first.x, p.y - first.y))) < 2
+                  )
+                    setClusterList(items);
+                  else {
+                    const bounds = new AMap.Bounds(
+                      [
+                        Math.min(...items.map((o) => o.payload.lng)),
+                        Math.min(...items.map((o) => o.payload.lat)),
+                      ],
+                      [
+                        Math.max(...items.map((o) => o.payload.lng)),
+                        Math.max(...items.map((o) => o.payload.lat)),
+                      ],
+                    );
+                    m.setBounds(bounds, reducedMotion(), [80, 80, 80, 80], 18);
+                  }
+                },
+        });
+      });
     mapActivities.forEach(({ activity, order }) => {
-      if (!isSelected(activity.payload.place)) add(activity.payload.place, { order });
+      if (located(activity.payload.place) && !isSelected(activity.payload.place))
+        add(activity.payload.place, {
+          order,
+          label: activity.payload.place.name,
+          labelSide: groups.find((g) => g.points[0].id === activity.id)?.labelSide,
+        });
     });
     if (selected)
       add(selected, {
         selected: true,
         saved: favorites.some((o) => keyOf(o.payload) === keyOf(selected)),
+        mark: favorites.find((o) => keyOf(o.payload) === keyOf(selected))?.payload.mark,
       });
     for (let i = 1; filter.layer !== '收藏' && i < routeActivities.length; i++) {
       const from = routeActivities[i - 1],
@@ -503,7 +668,9 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
       lines.current.push(
         new AMap.Polyline({
           path: route.payload.path,
-          strokeColor: '#18786b',
+          strokeColor: getComputedStyle(document.documentElement)
+            .getPropertyValue('--map-route')
+            .trim(),
           strokeWeight: 5,
           strokeOpacity: 0.8,
           showDir: true,
@@ -511,6 +678,11 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
       );
     }
     m.add([...lines.current, ...markers.current]);
+    if (labelNodes.length) {
+      labels.current = new AMap.LabelsLayer({ collision: true, allowCollision: true });
+      labels.current.add(labelNodes);
+      m.add(labels.current);
+    }
     const fit = pendingFit.current;
     if (fit && fit.generation === cameraGeneration.current) {
       pendingFit.current = null;
@@ -528,7 +700,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
         );
       }
     }
-  }, [active, ready, snapshot, routeDay, filter, selected]);
+  }, [active, ready, snapshot, routeDay, filter, selected, mapRender, markFilter]);
   useEffect(() => {
     if (!active || !routeDay || !navigator.onLine || !map.current) return;
     let disposed = false;
@@ -773,7 +945,13 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
         kind: 'create',
         objectId: crypto.randomUUID(),
         objectType: 'favorite',
-        patch: selected,
+        patch: {
+          ...selected,
+          mark:
+            JSON.parse(
+              localStorage.getItem('journey-mark:' + j.user.id + ':' + trip.id) || 'null',
+            ) || defaultMark(document.documentElement.dataset.palette),
+        },
       });
     } catch (e) {
       setError(e.message);
@@ -825,18 +1003,20 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
     else document.activeElement?.blur?.();
   }
   const startActivity = async () => {
+    const { mark: _mark, ...activityPlace } = selected;
     const target = context.map?.addingActivity;
     if (target) {
       const existing = snapshot.objects.find((o) => o.id === target && o.kind === 'activity');
       const draft = context.drafts?.[`activity:${target}`] || existing?.payload || {};
-      const next = { ...draft, place: selected };
+      const next = { ...draft, place: activityPlace };
       j.setDraft(`activity:${target}`, next);
-      if (existing) await j.mutate({ kind: 'patch', objectId: target, patch: { place: selected } });
+      if (existing)
+        await j.mutate({ kind: 'patch', objectId: target, patch: { place: activityPlace } });
       saveMap({ addingActivity: null });
       onEditActivity(existing || null, { ...next, _draftId: target });
     } else
       onEditActivity(null, {
-        place: selected,
+        place: (({ mark, ...place }) => place)(selected),
         title: selected.name,
         ...(routeDay ? { dayId: routeDay } : {}),
       });
@@ -885,6 +1065,48 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
       inert={!active}
     >
       <div ref={canvas} className="map-canvas" />
+      {markEditor && (
+        <MarkPicker
+          journey={j}
+          favorite={markEditor === true ? null : markEditor}
+          remember={rememberMark}
+          onClose={() => setMarkEditor(null)}
+        />
+      )}
+      {clusterList && (
+        <Modal title="选择收藏" onClose={() => setClusterList(null)}>
+          {clusterList.map((o) => (
+            <button
+              className="map-result"
+              key={o.id}
+              onClick={() => {
+                choose(o.payload, { preservePlace: true });
+                setClusterList(null);
+              }}
+            >
+              <MarkSymbol mark={effectiveMark(o.payload)} />
+              {o.payload.name} · {presetName(o.payload)}
+            </button>
+          ))}
+        </Modal>
+      )}
+      {favorites.length > 0 && (
+        <div className="map-legend" aria-label="标记图例">
+          {[...new Set(favorites.map((o) => markKey(effectiveMark(o.payload))))].map((key) => {
+            const items = favorites.filter((o) => markKey(effectiveMark(o.payload)) === key);
+            return (
+              <button
+                key={key}
+                aria-pressed={markFilter === key}
+                onClick={() => setMarkFilter(markFilter === key ? null : key)}
+              >
+                <MarkSymbol mark={effectiveMark(items[0].payload)} />
+                {presetName(items[0].payload)} {items.length}
+              </button>
+            );
+          })}
+        </div>
+      )}
       {cameraLoading && (
         <div className="map-load-error glass" role="status">
           <MapPin size={22} />
@@ -929,6 +1151,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
           {visibleFavorites.length > 0 && (
             <>
               <h2>共享收藏</h2>
+              <button onClick={() => setMarkEditor(true)}>管理预设</button>
               {visibleFavorites.map((o) => (
                 <article key={o.id}>
                   <button onClick={() => choose(o.payload, { preservePlace: true })}>
@@ -1035,6 +1258,32 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
               </SelectionTrack>
             </fieldset>
             <fieldset>
+              <legend>标记</legend>
+              <div className="map-chips">
+                <button
+                  aria-pressed={!filterDraft.mark}
+                  onClick={() => setFilterDraft({ ...filterDraft, mark: null })}
+                >
+                  全部
+                </button>
+                {[...new Set(favorites.map((o) => markKey(effectiveMark(o.payload))))].map(
+                  (key) => {
+                    const o = favorites.find((o) => markKey(effectiveMark(o.payload)) === key);
+                    return (
+                      <button
+                        key={key}
+                        aria-pressed={filterDraft.mark === key}
+                        onClick={() => setFilterDraft({ ...filterDraft, mark: key })}
+                      >
+                        <MarkSymbol mark={effectiveMark(o.payload)} />
+                        {presetName(o.payload)}
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+            </fieldset>
+            <fieldset>
               <legend>类别</legend>
               <SelectionTrack className="map-chips" activeKey={filterDraft.category}>
                 {['全部', '餐饮', '景点', '住宿', '交通', '其他'].map((c) => (
@@ -1122,7 +1371,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                   ...manual,
                 };
                 if (selectedFavorite?.state === 'active')
-                  await j.mutate({ kind: 'patch', objectId: selectedFavorite.id, patch: p });
+                  await j.mutate({ kind: 'patch', objectId: selectedFavorite.id, patch: manual });
                 setSelected(p);
                 setMode('detail');
                 setExpanded(false);
@@ -1297,6 +1546,33 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                     {selectedFavorite?.state === 'active' ? '已收藏' : '收藏'}
                   </button>
                 </div>
+                {selectedFavorite?.state === 'active' && (
+                  <div className="mark-presets">
+                    <span>标记</span>
+                    {presets.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={async () => {
+                          try {
+                            const mark = { icon: p.payload.icon, color: p.payload.color };
+                            await j.mutate({
+                              kind: 'patch',
+                              objectId: selectedFavorite.id,
+                              patch: { mark },
+                            });
+                            rememberMark(mark);
+                          } catch (e) {
+                            setError(e.message);
+                          }
+                        }}
+                      >
+                        <MarkSymbol mark={p.payload} />
+                        {p.payload.name || '未命名'}
+                      </button>
+                    ))}
+                    <button onClick={() => setMarkEditor(selectedFavorite)}>自定义</button>
+                  </div>
+                )}
                 {arranged.length > 0 && (
                   <div className="place-visits">
                     {arranged.map((a) => (
@@ -1359,6 +1635,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
               <div className="map-panel-scroll">
                 <div className="map-panel-title">
                   <h2>共享收藏</h2>
+                  <button onClick={() => setMarkEditor(true)}>管理预设</button>
                   <button
                     onClick={() => {
                       setSelected(null);
@@ -1381,7 +1658,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                       key={o.id}
                       onClick={() => choose(o.payload, { preservePlace: true })}
                     >
-                      <Star size={18} />
+                      <MarkSymbol mark={effectiveMark(o.payload)} />
                       <span>
                         <strong>{o.payload.name}</strong>
                         {o.payload.address && <small>{o.payload.address}</small>}

@@ -29,8 +29,8 @@ async function releaseStorage(page){await page.evaluate(()=>{window.holdWrite=fa
 
 test('empty paid completion validates without creating; unnamed zero and estimated null amounts save',async({page})=>{
  await setup(page);await openNew(page);await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('请填写已支付金额');await page.keyboard.press('Escape');await expect(page.locator('.expense-row')).toHaveCount(0);
- await add(page,'','0');await expect(page.locator('.expense-title')).toHaveText('已支付 · ¥0.00');
- await openNew(page);await page.getByRole('dialog').getByRole('button',{name:'预计',exact:true}).click();await finish(page);await expect(page.locator('.expense-row')).toHaveCount(2);await expect(page.locator('.expense-title').last()).toHaveText('预计 · 金额待定');
+ await add(page,'','0');await expect(page.locator('.expense-title')).toHaveText('已支付');
+ await openNew(page);await page.getByRole('dialog').getByRole('button',{name:'预计',exact:true}).click();await finish(page);await expect(page.locator('.expense-row')).toHaveCount(2);await expect(page.locator('.expense-title').last()).toHaveText('预计');
  await page.reload();await page.getByRole('button',{name:/继续旅程/}).click();await expect(page.locator('.expense-row')).toHaveCount(2);
 });
 test('completion validates paid and currency amounts and keeps input',async({page})=>{
@@ -80,10 +80,52 @@ test('ledger dates, currency prefixes, payment shortcut and deletion undo work t
  const row=page.locator('.expense-row').filter({hasText:'周一预算'});await expect(row.locator('xpath=..').locator('h3 time')).toHaveAttribute('dateTime','2026-11-02');await expect(row.getByRole('button',{name:'删除',exact:true})).toHaveCount(0);
  await row.getByRole('button',{name:'已付',exact:true}).click();await expect(page.locator('.ledger-currency-totals')).not.toContainText('CNY');await expect(page.locator('.ledger-currency-totals')).toContainText('80.00');
  await edit(page,'周一预算');await expect(page.getByLabel('实际金额',{exact:true})).toHaveValue('80');await expect(dialog.getByRole('button',{name:'已支付',exact:true})).toHaveClass('selected');await page.getByLabel('费用日期').fill('2026-11-03');await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(row.locator('xpath=..').locator('h3 time')).toHaveAttribute('dateTime','2026-11-03');
- await openNew(page);await page.getByLabel('费用名称').fill('美元门票');await page.getByLabel('实际金额',{exact:true}).fill('20');await page.getByLabel('币种').selectOption('USD');await page.getByLabel('费用日期').fill('2026-11-02');await finish(page);await expect(page.locator('.ledger-currency-totals>div')).toHaveCount(2);await expect(page.locator('.ledger-currency-totals')).toContainText('USD');await page.getByRole('group',{name:'按日期查看'}).getByRole('button',{name:'第3天',exact:true}).click();await expect(row).toBeVisible();await expect(page.locator('.expense-row')).toHaveCount(1);await expect(page.locator('.ledger-currency-totals')).not.toContainText('USD');await row.getByLabel('周一预算的更多操作').click();await row.getByRole('button',{name:'删除',exact:true}).click();await expect(row).toHaveCount(0);await page.getByRole('button',{name:'撤销',exact:true}).click();await expect(row).toBeVisible();await page.setViewportSize({width:390,height:844});await page.getByRole('group',{name:'按日期查看'}).getByRole('button',{name:'全部',exact:true}).click();await page.screenshot({path:'../.local/evidence/ledger-review-390.png',fullPage:true});
+ await openNew(page);await page.getByLabel('费用名称').fill('美元门票');await page.getByLabel('实际金额',{exact:true}).fill('20');await page.getByLabel('币种').selectOption('USD');await page.getByLabel('费用日期').fill('2026-11-02');await finish(page);await expect(page.locator('.ledger-currency-totals>div')).toHaveCount(2);await expect(page.locator('.ledger-currency-totals')).toContainText('USD');await page.getByRole('group',{name:'按日期查看'}).getByRole('button',{name:/第 3 天 · 11\/03/}).click();await expect(row).toBeVisible();await expect(page.locator('.expense-row')).toHaveCount(1);await expect(page.locator('.ledger-currency-totals')).not.toContainText('USD');await row.getByLabel('周一预算的更多操作').click();await row.getByRole('button',{name:'删除',exact:true}).click();await expect(row).toHaveCount(0);await page.getByRole('button',{name:'撤销',exact:true}).click();await expect(row).toBeVisible();await page.setViewportSize({width:390,height:844});await page.getByRole('group',{name:'按日期查看'}).getByRole('button',{name:'全部',exact:true}).click();await page.screenshot({path:'../.local/evidence/ledger-review-390.png',fullPage:true});
 });
 test('mobile later action closes an empty expense and preserves its unfinished draft',async({page})=>{
  await page.setViewportSize({width:390,height:844});await setup(page);await openNew(page);await page.getByRole('button',{name:'先收起，草稿会保留',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.expense-row')).toHaveCount(0);
  await openNew(page);await page.getByLabel('费用名称').fill('还没填金额');await page.getByRole('button',{name:'先收起，草稿会保留',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.expense-row')).toHaveCount(0);
  await openNew(page);await expect(page.getByLabel('费用名称')).toHaveValue('还没填金额');await expect(page.getByLabel('实际金额',{exact:true})).toHaveValue('');await page.getByLabel('实际金额',{exact:true}).fill('30');await finish(page);await expect(page.locator('.expense-title')).toHaveText('还没填金额');
+});
+
+test('linked expenses follow activity dates, preserve payment dates and navigate to highlighted itinerary cards',async({page})=>{
+ await setup(page);
+ const fixture=await page.evaluate(async()=>{
+  const session=await fetch('/api/session').then(r=>r.json());
+  const headers={'Content-Type':'application/json','X-CSRF-Token':session.csrfToken};
+  const tripId=(await fetch('/api/trips').then(r=>r.json())).trips[0].id;
+  const snapshot=await fetch(`/api/trips/${tripId}`).then(r=>r.json());
+  const lease=await fetch('/api/clock',{method:'POST',headers,body:JSON.stringify({deviceId:crypto.randomUUID()})}).then(r=>r.json());
+  const activityId=crypto.randomUUID();
+  const days=snapshot.objects.filter(o=>o.kind==='day').sort((a,b)=>a.payload.date.localeCompare(b.payload.date));
+  const response=await fetch(`/api/trips/${tripId}/operations`,{method:'POST',headers,body:JSON.stringify({id:crypto.randomUUID(),objectId:activityId,kind:'create',objectType:'activity',patch:{title:'关联午餐',dayId:days[1].id,order:1024,time:{mode:'flexible',period:'afternoon'}},clock:{leaseId:lease.leaseId,elapsedMs:0,uncertaintyMs:0}})});
+  if(!response.ok)throw new Error(await response.text());
+  return {tripId,headers,lease,activityId,days};
+ });
+ await page.reload();await page.getByRole('button',{name:/继续旅程/}).click();
+ await page.getByRole('navigation',{name:/^(主导航|手机主导航)$/}).getByRole('button',{name:'费用',exact:true}).click();
+ await openNew(page);await page.getByLabel('实际金额',{exact:true}).fill('12');
+ await page.getByLabel('关联活动 · 选填').selectOption(fixture.activityId);
+ await expect(page.getByLabel('费用日期')).toHaveValue('2026-11-02');
+ await expect(page.getByText('已按活动所在日填写')).toBeVisible();await finish(page);
+ const following=page.locator('.expense-row').filter({has:page.locator('.expense-title',{hasText:'关联午餐'})});
+ await expect(following.locator('.expense-title')).toHaveText('关联午餐');
+ await expect(following.locator('xpath=..').locator('h3')).toContainText('第 2 天 · 11/02');
+ await openNew(page);await page.getByLabel('费用名称').fill('提前付款');await page.getByLabel('实际金额',{exact:true}).fill('15');
+ await page.getByLabel('关联活动 · 选填').selectOption(fixture.activityId);await page.getByLabel('费用日期').fill('2026-11-01');await finish(page);
+ await expect(page.locator('.sync-status.synced')).toBeVisible();
+ const saved=await page.evaluate(async f=>fetch(`/api/trips/${f.tripId}`).then(r=>r.json()),fixture);
+ expect(saved.objects.find(o=>o.kind==='expense'&&!o.payload.title).payload.date).toBeNull();
+ await page.evaluate(async f=>{
+  const r=await fetch(`/api/trips/${f.tripId}/operations`,{method:'POST',headers:f.headers,body:JSON.stringify({id:crypto.randomUUID(),objectId:f.activityId,kind:'patch',patch:{dayId:f.days[2].id},clock:{leaseId:f.lease.leaseId,elapsedMs:500,uncertaintyMs:0}})});if(!r.ok)throw new Error(await r.text());
+ },fixture);
+ await page.reload();await page.getByRole('button',{name:/继续旅程/}).click();
+ await page.getByRole('navigation',{name:/^(主导航|手机主导航)$/}).getByRole('button',{name:'费用',exact:true}).click();
+ await expect(following.locator('xpath=..').locator('h3')).toContainText('第 3 天 · 11/03');
+ await expect(page.locator('.expense-row').filter({hasText:'提前付款'}).locator('xpath=..').locator('h3')).toContainText('第 1 天 · 11/01');
+ await following.getByRole('button',{name:/关联午餐 · 下午/}).click();
+ const focused=page.locator(`[data-activity-id="${fixture.activityId}"]`);
+ await expect(focused).toBeVisible();await expect(focused).toHaveClass(/activity-focused/);
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await expect(focused).not.toHaveClass(/activity-focused/);
 });

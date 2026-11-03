@@ -1,0 +1,39 @@
+.trip-inline-setting {
+  gap: 16px;
+}
+.trip-inline-setting input {
+  width: min(65%, 420px);
+  text-align: right;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.trip-setting-help {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  font-weight: normal;
+  margin-top: 4px;
+}
+.trip-member-avatars {
+  display: inline-flex;
+}
+.trip-member-avatars .avatar {
+  width: 25px;
+  height: 25px;
+  margin-left: -6px;
+  font-size: var(--fs-caption);
+}
+.trip-exit-group {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--glass);
+}
+.trip-exit-group .object-actions {
+  justify-content: flex-start;
+}
+.timezone-options {
+  max-height: 55vh;
+  overflow-y: auto;
+}

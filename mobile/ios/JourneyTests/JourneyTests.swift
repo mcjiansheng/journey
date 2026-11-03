@@ -4,6 +4,31 @@ import XCTest
 @testable import Journey
 
 final class JourneyTests: XCTestCase {
+  func testExpensesFollowActivitiesAndPreserveExplicitPaymentDates() {
+    let day: JSON = .object(["id": .string("d"), "kind": .string("day"), "state": .string("active"), "payload": .object(["date": .string("2026-11-04")])])
+    let activity: JSON = .object(["id": .string("a"), "kind": .string("activity"), "state": .string("active"), "payload": .object(["title": .string("午餐"), "dayId": .string("d")])])
+    var expense: JSON = .object(["payload": .object(["activityId": .string("a"), "date": .null, "title": .string(""), "payment": .object(["status": .string("paid")])])])
+    var objects = [day, activity]
+    XCTAssertEqual(ExpensePresentation.date(expense, objects: objects), "2026-11-04")
+    XCTAssertEqual(ExpensePresentation.title(expense, objects: objects), "午餐")
+    objects[0]["payload"]["date"] = .string("2026-11-05")
+    XCTAssertEqual(ExpensePresentation.date(expense, objects: objects), "2026-11-05")
+    expense["payload"]["date"] = .string("2026-11-03")
+    XCTAssertEqual(ExpensePresentation.date(expense, objects: objects), "2026-11-03")
+    objects[1]["state"] = .string("deleted")
+    XCTAssertNil(ExpensePresentation.activity(expense, objects: objects))
+    XCTAssertEqual(ExpensePresentation.date(expense, objects: objects), "2026-11-03")
+    expense["payload"]["date"] = .null
+    XCTAssertEqual(ExpensePresentation.date(expense, objects: objects), "")
+    XCTAssertEqual(ExpensePresentation.title(expense, objects: objects), "已支付")
+  }
+  func testExpenseDateHeadings() {
+    let trip: JSON = .object(["startDate": .string("2026-10-30"), "dayCount": .number(9)])
+    XCTAssertTrue(ExpensePresentation.dateLabel("2026-11-04", trip: trip).hasPrefix("第 6 天 · 11/04"))
+    XCTAssertTrue(ExpensePresentation.dateLabel("2026-10-29", trip: trip).hasPrefix("行前支付"))
+    XCTAssertTrue(ExpensePresentation.dateLabel("2026-11-08", trip: trip).hasPrefix("行后支付"))
+  }
+
   func testReduceTransparencyRespectsExplicitChoiceAndSystem() {
     for system in [false, true] {
       XCTAssertTrue(JourneyAppearance.reduceTransparency("true", system: system))
@@ -572,5 +597,42 @@ extension JourneyTests {
     await failedNetwork.value
     XCTAssertEqual(UserDefaults.standard.string(forKey: "journey.palette"), "forest")
     XCTAssertEqual(store.error, "无法连接服务器，设置未保存")
+  }
+}
+
+extension JourneyTests {
+  func testActivityPlaceExcludesFavoriteAndRenderingFields() {
+    let place = FavoriteMark.placePayload(.object(["name": .string("饭店"), "lng": .number(118), "lat": .number(32), "mark": .object(["icon": .string("triangle"), "color": .string("coral")]), "_id": .string("f"), "_priority": .integer(1)]))
+    XCTAssertEqual(Set(place.dictionary.keys), Set(["name", "lng", "lat"]))
+  }
+  func testCoordinateChangesSplitExistingCluster() {
+    let old = [ClusterPoint(id: "a", x: 0, y: 0, mark: "circle:blue"), ClusterPoint(id: "b", x: 20, y: 0, mark: "circle:blue")]
+    let moved = [old[0], ClusterPoint(id: "b", x: 100, y: 0, mark: "circle:blue")]
+    XCTAssertEqual(FavoriteClusters.groups(moved, previous: FavoriteClusters.groups(old)).count, 2)
+  }
+  func testFavoriteClusterThresholdsAndSelection() {
+    func points(_ distance: Double, mixed: Bool = false, selected: Bool = false) -> [ClusterPoint] {
+      [ClusterPoint(id: "a", x: 0, y: 0, mark: "circle:blue", priority: selected ? 1 : 0), ClusterPoint(id: "b", x: distance, y: 0, mark: mixed ? "triangle:coral" : "circle:blue")]
+    }
+    XCTAssertEqual(FavoriteClusters.groups(points(33)).count, 1)
+    XCTAssertEqual(FavoriteClusters.groups(points(35)).count, 2)
+    XCTAssertEqual(FavoriteClusters.groups(points(39), previous: [["a", "b"]]).count, 1)
+    XCTAssertEqual(FavoriteClusters.groups(points(41), previous: [["a", "b"]]).count, 2)
+    XCTAssertEqual(FavoriteClusters.groups(points(23, mixed: true)).count, 1)
+    XCTAssertEqual(FavoriteClusters.groups(points(25, mixed: true)).count, 2)
+    XCTAssertEqual(FavoriteClusters.groups(points(29, mixed: true), previous: [["a", "b"]]).count, 1)
+    XCTAssertEqual(FavoriteClusters.groups(points(31, mixed: true), previous: [["a", "b"]]).count, 2)
+    XCTAssertEqual(FavoriteClusters.groups(points(0, selected: true)).count, 2)
+  }
+  func testPresetProjectionChangesFavoriteMarkAndDeletionKeepsIt() {
+    let old: JSON = .object(["icon": .string("triangle"), "color": .string("coral")])
+    let snap: JSON = .object(["trip": .object(["id": .string("t")]), "objects": .array([
+      .object(["id": .string("f"), "kind": .string("favorite"), "payload": .object(["mark": old])]),
+      .object(["id": .string("p"), "kind": .string("markPreset"), "payload": old, "state": .string("active")])])])
+    let patch = QueuedOperation(tripID: "t", body: .object(["kind": .string("patch"), "objectId": .string("p"), "patch": .object(["icon": .string("circle")])]))
+    let delete = QueuedOperation(tripID: "t", body: .object(["kind": .string("delete"), "objectId": .string("p")]))
+    let result = SnapshotProjection.apply([patch, delete], to: snap, userID: "u")
+    XCTAssertEqual(result["objects"].array[0]["payload"]["mark"]["icon"], .string("circle"))
+    XCTAssertEqual(result["objects"].array[0]["payload"]["mark"]["color"], .string("coral"))
   }
 }

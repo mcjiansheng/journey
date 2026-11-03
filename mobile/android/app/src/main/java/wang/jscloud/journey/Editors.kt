@@ -345,10 +345,18 @@ fun ExpenseSheet(s: JourneyStore, existing: JSONObject?, close: () -> Unit) {
             payment.s("currency"),
             { set("payment", payment.copyJson().put("currency", it.uppercase())) },
         )
-        DateField("日期", data.s("date"), { set("date", it.ifBlank { null }) }, optional = true)
+        val expenseObjects = s.objects("activity") + s.objects("day")
+        DateField("费用日期", expenseDate(expenseObjects, data), { set("date", it.ifBlank { null }) })
+        if (linkedExpenseActivity(expenseObjects, data) != null) {
+            if (data.s("date").isBlank() && expenseDate(expenseObjects, data).isNotBlank()) {
+                Text("已按活动所在日填写", style = MaterialTheme.typography.bodySmall)
+                val today = LocalDate.now(java.time.ZoneId.of(s.snapshot?.o("trip")?.s("timezone") ?: "Asia/Shanghai"))
+                TextButton({ set("date", today.toString()) }) { Text("改为付款当天（${today.format(java.time.format.DateTimeFormatter.ofPattern("MM/dd"))}）") }
+            } else if (data.s("date").isNotBlank()) TextButton({ set("date", null) }) { Text("跟随活动日期") }
+        } else if (data.s("date").isNotBlank()) TextButton({ set("date", null) }) { Text("清除日期") }
         Field("备注", data.s("notes"), { set("notes", it) }, single = false)
         val activities =
-            s.objects("activity").associate { it.s("id") to it.o("payload").s("title") }
+            s.objects("activity").filter { it.s("state") == "active" }.associate { it.s("id") to it.o("payload").s("title") }
         Choice(
             "关联活动",
             activities[data.s("activityId")] ?: "不关联",
@@ -364,7 +372,7 @@ fun ExpenseSheet(s: JourneyStore, existing: JSONObject?, close: () -> Unit) {
 }
 
 @Composable
-fun LedgerScreen(s: JourneyStore, edit: (JSONObject?) -> Unit) {
+fun LedgerScreen(s: JourneyStore, edit: (JSONObject?) -> Unit, onViewActivity: (JSONObject) -> Unit) {
     Heading("费用")
     val rows = s.objects("expense")
     val active = rows.filter { it.s("state") == "active" }
@@ -388,16 +396,17 @@ fun LedgerScreen(s: JourneyStore, edit: (JSONObject?) -> Unit) {
         }
     Button({ edit(null) }) { Text("添加费用") }
     if (rows.isEmpty()) Panel { Text("还没有费用记录") }
+    val objects = s.objects("activity") + s.objects("day")
     var previousDate: String? = null
-    rows.sortedBy { it.o("payload").s("date").ifBlank { "9999" } }.forEach { o ->
+    active.sortedBy { expenseDate(objects, it.o("payload")).ifBlank { "9999" } }.forEach { o ->
         val p = o.o("payload")
-        val date = p.s("date").ifBlank { "日期未记录" }
+        val date = expenseDateLabel(s.snapshot!!.o("trip"), expenseDate(objects, p))
         if (date != previousDate) Text(date, style = MaterialTheme.typography.titleSmall)
         previousDate = date
         val payment = p.o("payment")
         Panel {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(p.s("title").ifBlank { "未命名费用" }, style = MaterialTheme.typography.titleMedium,
+                Text(expenseTitle(objects, p), style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f))
                 Text(if (payment.isNull("amountMinor")) "金额待定"
                     else money(payment.optLong("amountMinor"), payment.s("currency")),
@@ -406,9 +415,12 @@ fun LedgerScreen(s: JourneyStore, edit: (JSONObject?) -> Unit) {
             Text(if (payment.s("status") == "paid") "已支付" else "预计",
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (p.s("notes").isNotBlank()) Text(p.s("notes"), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-            s.objects("activity")
-                .find { it.s("id") == p.s("activityId") }
-                ?.let { Text("关联：" + it.o("payload").s("title")) }
+            if (p.s("activityId").isNotBlank()) {
+                val activity = linkedExpenseActivity(objects, p)
+                if (activity != null) TextButton({ onViewActivity(activity) }) {
+                    Text("↗ " + expenseActivityLabel(activity) + " ›")
+                } else Text("关联活动已删除", style = MaterialTheme.typography.bodySmall)
+            }
             ObjectActions(s, o, onEdit = { edit(o) })
         }
     }
@@ -418,54 +430,57 @@ fun LedgerScreen(s: JourneyStore, edit: (JSONObject?) -> Unit) {
 fun ScheduleSheet(s: JourneyStore, close: () -> Unit) {
     val trip = s.snapshot?.o("trip") ?: return
     var start by remember { mutableStateOf(trip.s("startDate")) }
-    var end by remember {
-        mutableStateOf(
-            if (start.isNotBlank())
-                LocalDate.parse(start).plusDays(trip.optInt("dayCount").toLong() - 1).toString()
-            else ""
-        )
+    var end by remember { mutableStateOf(if (start.isNotBlank()) LocalDate.parse(start).plusDays(trip.optInt("dayCount").toLong() - 1).toString() else "") }
+    var reviewing by remember { mutableStateOf(false) }
+    var choice by remember { mutableStateOf("move") }
+    val individual = remember { mutableStateMapOf<String, Int>() }
+    val days = s.objects("day").associateBy { it.s("id") }
+    val activities = s.objects("activity").filter { it.s("state") == "active" }
+    val a = runCatching { LocalDate.parse(start) }.getOrNull()
+    val z = runCatching { LocalDate.parse(end) }.getOrNull()
+    val n = if (a != null && z != null) ChronoUnit.DAYS.between(a, z).toInt() + 1 else 0
+    val shifted = start != trip.s("startDate")
+    fun ordinal(o: JSONObject): Int? {
+        val day = days[o.o("payload").s("dayId")]?.o("payload") ?: return null
+        val old = trip.s("startDate"); val date = day.s("date")
+        if (old.isBlank() != date.isBlank()) return null
+        val index = if (old.isBlank()) day.optInt("ordinal") else ChronoUnit.DAYS.between(LocalDate.parse(old), LocalDate.parse(date)).toInt() + 1
+        return index.takeIf { it in 1..trip.optInt("dayCount") }
     }
-    var move by remember { mutableStateOf(false) }
+    val affected = activities.filter { ordinal(it)?.let { index -> shifted || index > n } == true }
+    fun target(o: JSONObject): Int? = when (choice) {
+        "keep" -> null
+        "individual" -> individual[o.s("id")]
+        else -> ordinal(o)?.let { minOf(it, n) }
+    }
     Sheet("调整旅程日期", close) {
-        DateField("开始日期", start, { start = it })
-        DateField("结束日期", end, { end = it })
-        Row {
-            Checkbox(move, { move = it })
-            Text("活动跟随原来的第几天移动")
+        TripRangeCalendar(start, end, trip.s("startDate"), trip.optInt("dayCount")) { a, b -> start = a; end = b; reviewing = false }
+        Text("$start – $end · $n 天")
+        Text("原来 ${trip.s("startDate")} · ${trip.optInt("dayCount")} 天")
+        if (reviewing) {
+            Text("已有安排怎么办", style = MaterialTheme.typography.titleMedium)
+            listOf("move" to if (shifted) "跟着一起移动" else "移到最后一天", "keep" to if (shifted) "留在原来的日期" else "放进行程外安排", "individual" to "逐项选择…").forEach { (value, title) ->
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    RadioButton(choice == value, { choice = value }); TextButton({ choice = value }) { Text(title) }
+                }
+            }
+            (if (choice == "individual") affected else affected.take(3)).forEach { o ->
+                val target = target(o)
+                Text(o.o("payload").s("title"))
+                Text("${days[o.o("payload").s("dayId")]?.o("payload")?.s("date")} → ${if (target != null && a != null) a.plusDays(target.toLong() - 1) else "保留原日期"}")
+                if (choice == "individual") SearchableSetupChoice("移到", individual[o.s("id")]?.let { "第 $it 天" } ?: "保留原日期", linkedMapOf("0" to "保留原日期").apply { (1..n.coerceIn(1,365)).forEach { put(it.toString(), "第 $it 天") } }) { value ->
+                    if (value == "0") individual.remove(o.s("id")) else individual[o.s("id")] = value.toInt()
+                }
+            }
         }
         Button({
-            s.action {
-                val a = LocalDate.parse(start)
-                val n = ChronoUnit.DAYS.between(a, LocalDate.parse(end)) + 1
-                require(n in 1..365) { "日期范围需为 1–365 天" }
-                val days = s.objects("day").associateBy { it.s("id") }
-                val moves =
-                    if (move)
-                        s.objects("activity").mapNotNull { o ->
-                            val ordinal =
-                                days[o.o("payload").s("dayId")]?.o("payload")?.optInt("ordinal")
-                                    ?: return@mapNotNull null
-                            obj(
-                                "activityId" to o.s("id"),
-                                "date" to a.plusDays(ordinal.toLong() - 1).toString(),
-                                "ordinal" to ordinal,
-                            )
-                        }
-                    else emptyList()
-                s.mutate(
-                    "reschedule",
-                    trip.s("id"),
-                    patch =
-                        obj(
-                            "startDate" to a.toString(),
-                            "dayCount" to n,
-                            "moves" to JSONArray(moves),
-                        ),
-                )
+            if (!reviewing && affected.isNotEmpty()) { choice = "move"; reviewing = true }
+            else s.action {
+                require(a != null && n in 1..365) { "日期范围需为 1–365 天" }
+                val moves = activities.mapNotNull { o -> target(o)?.let { index -> obj("activityId" to o.s("id"), "date" to a.plusDays(index.toLong() - 1).toString(), "ordinal" to index) } }
+                s.mutate("reschedule", trip.s("id"), patch = obj("startDate" to start, "dayCount" to n, "moves" to JSONArray(moves)))
                 close()
             }
-        }) {
-            Text("保存日期")
-        }
+        }, enabled = a != null && n in 1..365) { Text(if (!reviewing && affected.isNotEmpty()) "下一步" else "完成") }
     }
 }

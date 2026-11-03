@@ -74,6 +74,7 @@ function operationSummary(op, objects) {
       activity: '活动',
       expense: '费用',
       favorite: '地点',
+      markPreset: '标记预设',
       day: '日期',
       route: '路线',
     }[kind] || '内容';
@@ -339,7 +340,22 @@ function optimistic(snapshot, queue) {
       });
     else if (op.kind === 'patch' && obj) {
       if (obj === next.trip) Object.assign(obj, op.patch);
-      else Object.assign(obj.payload, op.patch);
+      else {
+        if (obj.kind === 'markPreset' && (op.patch.icon || op.patch.color)) {
+          const old = obj.payload;
+          for (const f of next.objects)
+            if (
+              f.kind === 'favorite' &&
+              f.payload.mark?.icon === old.icon &&
+              f.payload.mark?.color === old.color
+            )
+              f.payload.mark = {
+                icon: op.patch.icon || old.icon,
+                color: op.patch.color || old.color,
+              };
+        }
+        Object.assign(obj.payload, op.patch);
+      }
     } else if (
       (op.kind === 'delete' || op.kind === 'restore') &&
       obj &&

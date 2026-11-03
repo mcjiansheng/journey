@@ -334,7 +334,13 @@ export default function App() {
                 <Ledger
                   key={`${j.user.id}:${tripId}:${expenseActivityId || 'all'}`}
                   journey={j}
-                  onEditActivity={onEdit}
+                  onViewActivity={(activity) =>
+                    j.setContext({
+                      page: 'itinerary',
+                      dayId: activity.payload.dayId,
+                      focusActivityId: activity.id,
+                    })
+                  }
                   activityId={expenseActivityId}
                   onClearActivityFilter={() => setExpenseActivityId(null)}
                 />

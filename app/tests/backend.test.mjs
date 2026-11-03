@@ -113,3 +113,30 @@ test('appearance preferences merge per field and follow the account into a fresh
   assert.equal((await f.req('/api/me',{actor,method:'PATCH',body:{preferences}})).status,422);
  assert.equal((await f.req('/api/me',{actor,method:'PATCH',body:{unexpected:true}})).status,422);
 });
+test('favorite marks have independent clocks and presets update matching favorites atomically',async t=>{
+ const f=await fixture(t),a=await f.account('marks'),s=await f.trip(a),tid=s.trip.id;
+ const favorite=randomUUID(),preset=randomUUID(),other=randomUUID(),red={icon:'triangle',color:'coral'};
+ assert.equal((await f.op(a,tid,{objectId:favorite,kind:'create',objectType:'favorite',patch:{name:'饭店',mark:red}})).status,200);
+ assert.equal((await f.op(a,tid,{objectId:preset,kind:'create',objectType:'markPreset',patch:{...red,name:'必吃'}})).status,200);
+ assert.equal((await f.op(a,tid,{objectId:other,kind:'create',objectType:'markPreset',patch:{...red,name:'重复'}})).data.error.code,'MARK_PRESET_EXISTS');
+ f.advance(1000);const stale=await f.clock(a);f.advance(1000);
+ assert.equal((await f.op(a,tid,{objectId:favorite,kind:'patch',patch:{name:'饭店新名字'}})).status,200);
+ let r=await f.op(a,tid,{objectId:favorite,kind:'patch',patch:{mark:{icon:'circle',color:'blue'}}},{lease:stale});
+ assert.equal(r.status,200);assert.equal(r.data.snapshot.objects.find(o=>o.id===favorite).payload.mark.color,'blue');
+ f.advance(1000);await f.op(a,tid,{objectId:favorite,kind:'patch',patch:{mark:red}});
+ f.advance(1000);r=await f.op(a,tid,{objectId:preset,kind:'patch',patch:{icon:'circle'}});
+ assert.equal(r.status,200);assert.deepEqual(r.data.snapshot.objects.find(o=>o.id===favorite).payload.mark,{icon:'circle',color:'coral'});
+ r=await f.op(a,tid,{objectId:preset,kind:'delete',generation:0});
+ assert.equal(r.status,200);assert.equal(r.data.snapshot.objects.find(o=>o.id===favorite).payload.mark.icon,'circle');
+});
+test('restoring an old route remains possible after an endpoint changes',async t=>{
+ const f=await fixture(t),a=await f.account('restore-route-mark-regression'),s=await f.trip(a),tid=s.trip.id;
+ const first=randomUUID(),last=randomUUID(),route=randomUUID(),place={name:'车站',lng:118,lat:32,address:'南京'};
+ for(const [objectId,name] of [[first,'起点'],[last,'终点']])assert.equal((await f.op(a,tid,{kind:'create',objectId,objectType:'activity',patch:{title:name,dayId:s.objects[0].id,place}})).status,200);
+ const signature=JSON.stringify([JSON.stringify([first,['',118,32,'南京','车站'],last,['',118,32,'南京','车站']]),'walking']);
+ assert.equal((await f.op(a,tid,{kind:'create',objectId:route,objectType:'route',patch:{fromId:first,toId:last,mode:'walking',minutes:5,manual:true,inputSignature:signature}})).status,200);
+ await f.op(a,tid,{kind:'delete',objectId:route,generation:0});
+ f.advance(1000);await f.op(a,tid,{kind:'patch',objectId:first,patch:{place:{...place,name:'新车站'}}});
+ const result=await f.op(a,tid,{kind:'restore',objectId:route,generation:1});
+ assert.equal(result.status,200);assert.equal(result.data.snapshot.objects.find(o=>o.id===route).state,'active');
+});

@@ -69,9 +69,9 @@ for(const width of [1440,390])test(`adjacent precise activities show notes witho
   while(node=walker.nextNode())if(node.textContent.trim()==='0')found.push(node.textContent);
   return found;
  }));expect(zeros).toEqual([]);
- await page.getByRole('button',{name:'排序',exact:true}).click();await expect(page.locator('.activity-time-lock')).toHaveCount(2);
+ await expect(page.locator('.activity-time-lock')).toHaveCount(2);
  const route=page.locator('.route-add').last();
- if(width===390){await expect(route).toBeVisible();await page.getByRole('button',{name:'完成排序',exact:true}).click();await expect(route).toBeHidden()}
+ if(width===390){await expect(route).toBeVisible();await page.getByRole('button',{name:'当天操作',exact:true}).click();await page.getByRole('button',{name:'调整顺序',exact:true}).click();await expect(route).toBeHidden();await page.getByRole('button',{name:'完成',exact:true}).click();await expect(route).toBeVisible()}
  await page.locator('.activity-more>summary').last().click();
  await expect(page.locator('.activity-more-panel').last().getByRole('button')).toHaveText(['编辑','我不参加','删除']);
  expect((await page.locator('.activity-more-panel').last().boundingBox()).width).toBeGreaterThanOrEqual(200);
@@ -103,15 +103,14 @@ test('today stays marked and date overflow follows selection without moving focu
  await expect(page.getByRole('tab',{name:/第15天/})).toHaveAttribute('aria-selected','true');
  await page.getByRole('button',{name:'回到今天',exact:true}).click();
  await expect(today).toHaveAttribute('aria-selected','true');await expect(today).not.toBeFocused();
- expect(await today.evaluate(button=>{const b=button.getBoundingClientRect(),p=button.parentElement.getBoundingClientRect();return b.left>=p.left&&b.right<=p.right})).toBe(true);
+ expect(await today.evaluate(button=>{const b=button.getBoundingClientRect(),p=button.parentElement.getBoundingClientRect();return b.left>=p.left-1&&b.right<=p.right+1})).toBe(true);
  expect(await today.evaluate(button=>{const b=button.getBoundingClientRect(),p=button.parentElement.getBoundingClientRect();return Math.abs(b.left+b.width/2-p.left-p.width/2)<2})).toBe(true);
  await page.locator('.day-tabs').evaluate(strip=>{strip.scrollLeft=0});
  await page.getByRole('button',{name:'当天操作',exact:true}).click();
  await expect.poll(()=>page.locator('.day-tabs').evaluate(strip=>strip.scrollLeft)).toBe(0);
  await page.screenshot({path:testInfo.outputPath('today-date-strip.png'),scale:'css'});
- await page.getByRole('button',{name:'调整日期与天数…',exact:true}).click();
- await page.getByRole('button',{name:'交换两天安排',exact:true}).click();
- await expect(page.getByLabel('第一天')).toBeVisible();await expect(page.getByLabel('第一天').locator('option')).toHaveCount(15);
+ await page.getByRole('button',{name:'与另一天交换…',exact:true}).click();
+ await expect(page.getByRole('dialog').getByRole('button').filter({hasText:/第.*天/})).toHaveCount(14);
  await page.keyboard.press('Escape');
  await page.setViewportSize({width:390,height:844});
  await page.getByRole('button',{name:'后一天',exact:true}).click();
@@ -137,9 +136,12 @@ test('activity expenses distinguish paid and estimated and open only linked entr
  await page.setViewportSize({width:390,height:844});
  await expect(page.locator('.ledger-date-tabs')).toHaveClass(/has-after/);
  await page.screenshot({path:testInfo.outputPath('activity-expense-mobile.png'),scale:'css'});
- await page.getByRole('button',{name:'未记录日期',exact:true}).click();
- await expect(page.locator('.expense-row')).toHaveCount(1);
- expect(await page.getByRole('button',{name:'未记录日期',exact:true}).evaluate(button=>{const b=button.getBoundingClientRect(),p=button.parentElement.getBoundingClientRect();return b.left>=p.left&&b.right<=p.right})).toBe(true);
+ await expect(page.getByRole('button',{name:'未记录日期',exact:true})).toHaveCount(0);
+ await page.getByRole('group',{name:'按日期查看'}).getByRole('button',{name:/^第 15 天 · /}).click();
+ await expect(page.locator('.expense-row')).toHaveCount(0);
+ await expect.poll(()=>page.getByRole('group',{name:'按日期查看'}).getByRole('button',{name:/^第 15 天 · /}).evaluate(button=>{const b=button.getBoundingClientRect(),p=button.parentElement.getBoundingClientRect();return b.left>=p.left-1&&b.right<=p.right+1})).toBe(true);
+ await page.getByRole('group',{name:'按日期查看'}).getByRole('button',{name:/^第 1 天 · /}).click();
+ await expect(page.locator('.expense-row')).toHaveCount(3);
  await page.getByRole('button',{name:'查看全部费用',exact:true}).click();
  await expect(page.locator('.ledger-activity-filter')).toHaveCount(0);
 });

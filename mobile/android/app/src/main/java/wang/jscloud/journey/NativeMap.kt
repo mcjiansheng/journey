@@ -20,7 +20,16 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.json.JSONArray
 import org.json.JSONObject
 import org.maplibre.android.MapLibre
-import org.maplibre.android.annotations.MarkerOptions
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.Point
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.layers.PropertyFactory.*
+import org.maplibre.android.style.expressions.Expression.*
 import org.maplibre.android.annotations.PolylineOptions
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -30,11 +39,11 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 
 private const val OSM_STYLE =
-    """{"version":8,"sources":{"osm":{"type":"raster","tiles":["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],"tileSize":256,"maxzoom":19,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#EEF2EC"}},{"id":"osm","type":"raster","source":"osm"}]}"""
+    """{"version":8,"glyphs":"https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf","sources":{"osm":{"type":"raster","tiles":["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],"tileSize":256,"maxzoom":19,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#EEF2EC"}},{"id":"osm","type":"raster","source":"osm"}]}"""
 
 @Composable
 fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
-    val routeColor = MaterialTheme.colorScheme.primary.toArgb()
+    val routeColor = android.graphics.Color.parseColor(if (s.user?.o("preferences")?.s("palette") == "atlas") "#1f7fa3" else "#18786b")
     val ctx = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val mapTrip = remember { s.tripId }
@@ -53,14 +62,70 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
     var route by remember { mutableStateOf<JSONObject?>(null) }
     var routeText by remember { mutableStateOf("") }
     var mapError by remember { mutableStateOf("") }
+    var groups by remember { mutableStateOf<List<List<JSONObject>>>(emptyList()) }
+    var clusterList by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var markFilter by remember { mutableStateOf<String?>(null) }
+    var managingPresets by remember { mutableStateOf(false) }
+    var customizing by remember { mutableStateOf<JSONObject?>(null) }
+    val defaultMark = obj("icon" to "circle", "color" to if (s.user?.o("preferences")?.s("palette") == "atlas") "blue" else "green")
+    var lastMark by remember(s.tripId) { mutableStateOf(s.draft("last-favorite-mark") ?: defaultMark) }
+    fun pointMark(p: JSONObject) = p.optJSONObject("mark") ?: defaultMark
+    val presets = s.objects("markPreset").filter { it.s("state") == "active" }.sortedBy { it.o("payload").optDouble("order", 0.0) }
+    fun presetName(p: JSONObject) = presets.firstOrNull { markKey(it.o("payload")) == markKey(pointMark(p)) }?.o("payload")?.s("name").orEmpty().ifBlank { "未命名" }
     var mapReady by remember { mutableStateOf(false) }
     val favorites = s.objects("favorite").filter { it.s("state") == "active" }
     val activities =
         s.objects("activity").filter {
             it.s("state") == "active" && it.o("payload").optJSONObject("place") != null
         }
-    val points = favorites.map { it.o("payload") } + activities.map { it.o("payload").o("place") }
-    val currentPoints by rememberUpdatedState(points)
+    val points = favorites.filter { markFilter == null || markKey(pointMark(it.o("payload"))) == markFilter }.map { it.o("payload").copyJson().put("_id", it.s("id")).put("_priority", if (selected?.let { p -> sameMapPlace(p, it.o("payload")) } == true) 1 else 0) } + activities.mapIndexed { index, activity -> activity.o("payload").o("place").copyJson().put("_id", activity.s("id")).put("_priority", 1).put("_sequence", index + 1) }
+    fun render(map: MapLibreMap) {
+        val style = map.style ?: return
+        val screenPoints = points.filter { !it.isNull("lng") && !it.isNull("lat") }.map { p ->
+            val ll = Coordinates.toWgs(p.optDouble("lng"), p.optDouble("lat"))
+            val screen = map.projection.toScreenLocation(LatLng(ll.second, ll.first))
+            ClusterPoint(p.s("_id"), screen.x.toDouble(), screen.y.toDouble(), markKey(pointMark(p)), p.optInt("_priority"))
+        }
+        val lookup = points.associateBy { it.s("_id") }
+        groups = clusterFavorites(screenPoints, groups.map { group -> group.map { it.s("_id") } }).map { ids -> ids.mapNotNull { lookup[it] } }
+        val features = groups.mapIndexed { index, group ->
+            val coordinates = group.map { Coordinates.toWgs(it.optDouble("lng"), it.optDouble("lat")) }
+            val feature = Feature.fromGeometry(Point.fromLngLat(coordinates.map { it.first }.average(), coordinates.map { it.second }.average()))
+            val marks = group.groupBy { markKey(pointMark(it)) }.values.sortedByDescending { it.size }.take(3)
+            val image = Bitmap.createBitmap(if (marks.size > 1) 100 else 56, 56, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(image)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 34f; typeface = android.graphics.Typeface.DEFAULT_BOLD }
+            marks.forEachIndexed { markIndex, rows ->
+                val mark = pointMark(rows[0]); val symbol = markIcons[mark.s("icon")] ?: "●"
+                val x = 7f + markIndex * 20f
+                paint.color = android.graphics.Color.WHITE; paint.style = Paint.Style.STROKE; paint.strokeWidth = 4f
+                canvas.drawText(symbol, x, 40f, paint)
+                paint.color = android.graphics.Color.parseColor(markColors[mark.s("color")] ?: "#176b88"); paint.style = Paint.Style.FILL
+                canvas.drawText(symbol, x, 40f, paint)
+            }
+            if (group.size == 1 && group[0].has("_sequence")) {
+                paint.color = routeColor; canvas.drawCircle(26f, 27f, 21f, paint)
+                paint.color = android.graphics.Color.WHITE; paint.textSize = 24f; paint.textAlign = Paint.Align.CENTER; canvas.drawText(group[0].optInt("_sequence").toString(), 26f, 35f, paint); paint.textAlign = Paint.Align.LEFT
+            }
+            if (group.any { point -> activities.any { activity -> sameMapPlace(point, activity.o("payload").o("place")) } } && group[0].optInt("_sequence") == 0) { paint.color = android.graphics.Color.WHITE; canvas.drawCircle(image.width - 10f, 46f, 6f, paint); paint.color = routeColor; canvas.drawCircle(image.width - 10f, 46f, 4f, paint) }
+            if (group.size > 1) { paint.textSize = 18f; paint.color = android.graphics.Color.WHITE; paint.style = Paint.Style.STROKE; paint.strokeWidth = 4f; canvas.drawText(group.size.toString(), image.width - 20f, 18f, paint); paint.style = Paint.Style.FILL; paint.color = android.graphics.Color.BLACK; canvas.drawText(group.size.toString(), image.width - 20f, 18f, paint) }
+            val imageId = "favorite-group-$index"
+            style.addImage(imageId, image)
+            feature.addStringProperty("image", imageId)
+            feature.addStringProperty("name", if (group.size == 1) group[0].s("name").let { it.take(8) + if (it.length > 8) "…" else "" } else if (marks.size == 1) presetName(group[0]).let { if (it == "未命名") "" else it } else "")
+            feature.addNumberProperty("group", index)
+            feature.addNumberProperty("priority", -group.maxOf { it.optInt("_priority") })
+            feature
+        }
+        val collection = FeatureCollection.fromFeatures(features)
+        val source = style.getSourceAs<GeoJsonSource>("journey-favorites")
+        if (source == null) {
+            style.addSource(GeoJsonSource("journey-favorites", collection))
+            style.addLayer(SymbolLayer("journey-favorites", "journey-favorites").withProperties(iconImage(get("image")), iconAllowOverlap(true), textField(get("name")), textAllowOverlap(false), textOptional(true), textSize(13f), textOffset(arrayOf(1.6f, 0f)), textAnchor("left"), textColor(android.graphics.Color.BLACK), textHaloColor(android.graphics.Color.WHITE), textHaloWidth(2f), symbolSortKey(get("priority"))))
+        } else source.setGeoJson(collection)
+    }
+    val redraw by rememberUpdatedState<(MapLibreMap) -> Unit>({ render(it) })
+    val currentGroups by rememberUpdatedState(groups)
     DisposableEffect(view, lifecycle) {
         val observer = LifecycleEventObserver { _, e ->
             when (e) {
@@ -91,7 +156,22 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
         view.addOnDidFinishRenderingMapListener { fully -> if (fully) mapReady = true }
         view.getMapAsync { map ->
             nativeMap = map
-            map.setStyle(Style.Builder().fromJson(OSM_STYLE))
+            map.setStyle(Style.Builder().fromJson(OSM_STYLE)) { redraw(map) }
+            map.addOnCameraIdleListener { redraw(map) }
+            map.addOnMapClickListener { ll ->
+                val feature = map.queryRenderedFeatures(map.projection.toScreenLocation(ll), "journey-favorites").firstOrNull()
+                val group = feature?.getNumberProperty("group")?.toInt()?.let { currentGroups.getOrNull(it) }
+                if (group != null) {
+                    if (group.size == 1) selected = group[0]
+                    else {
+                        val locations = group.map { p -> Coordinates.toWgs(p.optDouble("lng"), p.optDouble("lat")).let { LatLng(it.second, it.first) } }
+                        val bounds = org.maplibre.android.geometry.LatLngBounds.Builder().includes(locations).build()
+                        if (map.cameraPosition.zoom >= 18 || (bounds.latitudeSpan < 0.00005 && bounds.longitudeSpan < 0.00005)) clusterList = group
+                        else map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 60))
+                    }
+                    true
+                } else false
+            }
             val p =
                 savedCamera
                     ?: points
@@ -107,10 +187,6 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
                     .target(LatLng(p.optDouble("lat"), p.optDouble("lng")))
                     .zoom(p.optDouble("zoom", 12.0))
                     .build()
-            map.setOnMarkerClickListener { marker ->
-                selected = currentPoints.find { it.s("name") == marker.title }
-                true
-            }
             map.addOnMapLongClickListener { ll ->
                 val gcj = Coordinates.toGcj(ll.longitude, ll.latitude)
                 selected =
@@ -133,14 +209,7 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
     LaunchedEffect(nativeMap, points.map { it.toString() }, route?.toString(), routeColor) {
         nativeMap?.let { map ->
             map.clear()
-            points.forEach { p ->
-                if (!p.isNull("lng") && !p.isNull("lat")) {
-                    val ll = Coordinates.toWgs(p.optDouble("lng"), p.optDouble("lat"))
-                    map.addMarker(
-                        MarkerOptions().position(LatLng(ll.second, ll.first)).title(p.s("name"))
-                    )
-                }
-            }
+            render(map)
             route?.a("path")?.let { path ->
                 val coords =
                     (0 until path.length())
@@ -231,13 +300,14 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
                 Panel {
                     Text(p.s("name"), style = MaterialTheme.typography.titleMedium)
                     if (p.s("address").isNotBlank()) Text(p.s("address"))
+                    val currentFavorite = favorites.firstOrNull { it.s("id") == p.s("_id") || sameMapPlace(it.o("payload"), p) }
                     Row {
-                        TextButton({
-                            s.action { s.mutate("create", objectType = "favorite", patch = p) }
+                        if (currentFavorite == null) TextButton({
+                            s.action { val place = p.copyJson().apply { remove("_id"); remove("_priority"); remove("_sequence"); put("mark", lastMark) }; s.mutate("create", objectType = "favorite", patch = place) }
                         }) {
                             Text("收藏地点")
-                        }
-                        TextButton({ onActivity(p) }) { Text("加入行程") }
+                        } else Text("已收藏")
+                        TextButton({ onActivity(mapPlacePayload(p)) }) { Text("加入行程") }
                         TextButton({
                             origin = p
                             route = null
@@ -245,6 +315,11 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
                         }) {
                             Text("从这里出发")
                         }
+                    }
+                    currentFavorite?.let { favorite ->
+                        Text("标记")
+                        presets.forEach { preset -> TextButton({ s.action { val mark = obj("icon" to preset.o("payload").s("icon"), "color" to preset.o("payload").s("color")); s.mutate("patch", favorite.s("id"), patch = obj("mark" to mark)); lastMark = mark; s.saveDraft("last-favorite-mark", mark) } }) { Text(markTitle(preset.o("payload")) + " " + preset.o("payload").s("name").ifBlank { "未命名" }) } }
+                        TextButton({ customizing = favorite }) { Text("自定义") }
                     }
                     if (origin != null) {
                         Text("从 ${origin!!.s("name")} 到这里")
@@ -294,11 +369,13 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
                     }
                 }
             }
+            Row { TextButton({ managingPresets = true }) { Text("管理预设") } }
+            favorites.groupBy { markKey(pointMark(it.o("payload"))) }.forEach { (key, rows) -> FilterChip(markFilter == key, { markFilter = if (markFilter == key) null else key }, label = { Text(markTitle(pointMark(rows[0].o("payload"))) + " " + presetName(rows[0].o("payload")) + " · ${rows.size}") }) }
             Text("我的收藏", style = MaterialTheme.typography.titleMedium)
             if (favorites.isEmpty()) Text("搜索地点，或长按地图选择一个地方。")
             favorites.forEach { o ->
                 Panel {
-                    TextButton({ selected = o.o("payload") }) { Text(o.o("payload").s("name")) }
+                    TextButton({ selected = o.o("payload").copyJson().put("_id", o.s("id")) }) { Text(markTitle(pointMark(o.o("payload"))) + " " + o.o("payload").s("name")) }
                     ObjectActions(s, o)
                 }
             }
@@ -313,4 +390,16 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
             Spacer(Modifier.height(12.dp))
         }
     }
+    if (managingPresets) MarkPresetManager(s) { managingPresets = false }
+    customizing?.let { favorite -> MarkEditor(s, pointMark(favorite.o("payload")), favorite = favorite, close = { customizing = null }, applied = { lastMark = it; s.launch { s.saveDraft("last-favorite-mark", it) } }) }
+    if (clusterList.isNotEmpty()) AlertDialog(
+        onDismissRequest = { clusterList = emptyList() },
+        title = { Text("${clusterList.size} 个收藏") },
+        text = { Column { clusterList.forEach { point ->
+            TextButton({ selected = point; clusterList = emptyList() }) {
+                Text(markTitle(pointMark(point)) + " " + point.s("name") + " · " + presetName(point))
+            }
+        } } },
+        confirmButton = { TextButton({ clusterList = emptyList() }) { Text("完成") } },
+    )
 }

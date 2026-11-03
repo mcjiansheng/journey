@@ -120,6 +120,7 @@ struct MapPinItem: Identifiable {
   var favorite: JSON?
 }
 struct TripMapView: View {
+  @Environment(\.accessibilityReduceMotion) private var reducedMotion
   @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @State private var camera: MapCameraPosition = .automatic
@@ -128,6 +129,14 @@ struct TripMapView: View {
   @State private var searching = false
   @State private var newActivity: JSON?
   @State private var pendingSearchPlace: JSON?
+  @State private var managingPresets = false
+  @State private var customizing: JSON?
+  @State private var cameraDistance = Double.infinity
+  @State private var groups: [[String]] = []
+  @State private var clusterList: [MapPinItem] = []
+  @State private var showClusterList = false
+  @State private var filter: String?
+  @State private var lastMark: JSON = .null
   @State private var pendingActivityPlace: JSON?
   var pins: [MapPinItem] {
     store.objects.filter {
@@ -140,6 +149,41 @@ struct TripMapView: View {
   }
   var favorites: [JSON] {
     store.objects.filter { $0["kind"].string == "favorite" && $0["state"].string == "active" }
+  }
+  var favoriteMarkDraftKey: String { "\(store.selectedTrip ?? ""):last-favorite-mark" }
+  var defaultMark: JSON { .object(["icon": .string("circle"), "color": .string(store.user["preferences"]["palette"].string == "atlas" ? "blue" : "green")]) }
+  func mark(_ pin: MapPinItem) -> JSON { pin.favorite?["payload"]["mark"].isNull == false ? pin.favorite!["payload"]["mark"] : defaultMark }
+  var presets: [JSON] { store.objects.filter { $0["kind"].string == "markPreset" && $0["state"].string == "active" }.sorted { $0["payload"]["order"].number < $1["payload"]["order"].number } }
+  var visiblePins: [MapPinItem] { pins.filter { $0.favorite == nil || filter == nil || FavoriteMark.key(mark($0)) == filter } }
+  var displayedGroups: [[MapPinItem]] {
+    let lookup = Dictionary(uniqueKeysWithValues: visiblePins.map { ($0.id, $0) })
+    let covered = Set(groups.flatMap { $0 })
+    return groups.map { $0.compactMap { lookup[$0] } }.filter { !$0.isEmpty } + visiblePins.filter { !covered.contains($0.id) }.map { [$0] }
+  }
+  func cluster(_ proxy: MapProxy) {
+    let points = visiblePins.compactMap { pin -> ClusterPoint? in
+      guard let coordinate = Coordinates.coordinate(pin.place), let point = proxy.convert(coordinate, to: .local) else { return nil }
+      return ClusterPoint(id: pin.id, x: point.x, y: point.y, mark: FavoriteMark.key(mark(pin)), priority: pin.favorite == nil || selected?.id == pin.id ? 1 : 0)
+    }
+    groups = FavoriteClusters.groups(points, previous: groups)
+  }
+  func openGroup(_ group: [MapPinItem]) {
+    if group.count == 1 { selected = group[0]; return }
+    let coordinates = group.compactMap { Coordinates.coordinate($0.place) }
+    let lat = coordinates.map(\.latitude), lng = coordinates.map(\.longitude)
+    let height = lat.max()! - lat.min()!, width = lng.max()! - lng.min()!
+    if max(height, width) < 0.00005 || cameraDistance < 150 { clusterList = group; showClusterList = true; return }
+    camera = .region(MKCoordinateRegion(center: .init(latitude: (lat.max()! + lat.min()!) / 2, longitude: (lng.max()! + lng.min()!) / 2), span: .init(latitudeDelta: max(0.0001, height * 1.6), longitudeDelta: max(0.0001, width * 1.6))))
+  }
+  func groupCoordinate(_ group: [MapPinItem]) -> CLLocationCoordinate2D? {
+    let coordinates = group.compactMap { Coordinates.coordinate($0.place) }
+    guard !coordinates.isEmpty else { return nil }
+    return CLLocationCoordinate2D(latitude: coordinates.map(\.latitude).reduce(0,+) / Double(coordinates.count), longitude: coordinates.map(\.longitude).reduce(0,+) / Double(coordinates.count))
+  }
+  func groupName(_ group: [MapPinItem]) -> String {
+    if group.count == 1 { return String(group[0].place["name"].string.prefix(8)) + (group[0].place["name"].string.count > 8 ? "…" : "") }
+    let keys = Set(group.map { FavoriteMark.key(mark($0)) })
+    return keys.count == 1 ? presets.first { FavoriteMark.key($0["payload"]) == keys.first! }?["payload"]["name"].string ?? "" : ""
   }
   func fitInitialCamera() {
     guard fittedTrip != store.selectedTrip else { return }
@@ -162,6 +206,7 @@ struct TripMapView: View {
       Text(store.trip["name"].string).font(.subheadline).foregroundStyle(palette.muted).frame(
         maxWidth: .infinity, alignment: .leading
       ).padding(.horizontal).padding(.bottom, 8)
+      MapReader { proxy in
       Map(position: $camera) {
         ForEach(
           store.objects.filter {
@@ -177,27 +222,41 @@ struct TripMapView: View {
                 ? Coordinates.wgs84(fromGCJ: .init(latitude: c[1].number, longitude: c[0].number))
                 : nil
             }
-          ).stroke(palette.accent, lineWidth: 4)
+          ).stroke(FavoriteMark.color(.object(["color": .string(store.user["preferences"]["palette"].string == "atlas" ? "blue" : "green")])), lineWidth: 4)
         }
-        ForEach(pins) { pin in
-          if let c = Coordinates.coordinate(pin.place) {
-            Annotation(pin.place["name"].string, coordinate: c) {
-              Button {
-                selected = pin
-              } label: {
-                Image(systemName: pin.favorite == nil ? "mappin.circle.fill" : "star.circle.fill")
-                  .font(.title).foregroundStyle(palette.accent).background(
-                    .regularMaterial, in: Circle())
-              }
-            }
+        ForEach(displayedGroups, id: \.first!.id) { group in
+          if let first = group.first, let c = groupCoordinate(group) {
+            Annotation(groupName(group), coordinate: c) {
+              Button { openGroup(group) } label: {
+                HStack(spacing: 1) {
+                  if first.favorite == nil { Text("\((pins.filter { $0.favorite == nil }.firstIndex { $0.id == first.id } ?? 0) + 1)").font(.headline).foregroundStyle(.white).frame(width: 26, height: 26).background(palette.accent, in: Circle()) }
+                  else { ForEach(Array(Dictionary(grouping: group, by: { FavoriteMark.key(mark($0)) }).values.sorted { $0.count > $1.count }.prefix(3)), id: \.first!.id) { values in FavoriteMarkBadge(mark: mark(values[0])) } }
+                  if group.count > 1 { Text("\(group.count)").font(.caption.bold()).foregroundStyle(.black) }
+                }.font(.title2).padding(3).background(.white, in: Capsule())
+                  .overlay(alignment: .bottomTrailing) { if group.contains(where: { pin in store.objects.contains { $0["kind"].string == "activity" && $0["state"].string == "active" && FavoriteMark.samePlace($0["payload"]["place"], pin.place) } }) { Circle().fill(palette.accent).frame(width: 7, height: 7).overlay(Circle().stroke(.white, lineWidth: 1)) } }
+              }.accessibilityLabel(group.count == 1 ? first.place["name"].string : "\(group.count) 个收藏：\(groupName(group))")
+            }.annotationTitles(.automatic)
           }
         }
       }.mapControls {
         MapCompass()
         MapScaleView()
       }.frame(minHeight: 230)
+        .onMapCameraChange(frequency: .onEnd) { context in cameraDistance = context.camera.distance; cluster(proxy) }
+        .animation(reducedMotion ? nil : .easeInOut(duration: 0.15), value: groups)
+        .onChange(of: visiblePins.map { JSON.object(["id": .string($0.id), "place": $0.place, "mark": mark($0), "favorite": .bool($0.favorite != nil)]) }) { _, _ in cluster(proxy) }
+        .onChange(of: selected?.id) { _, _ in cluster(proxy) }
+      }
       JourneyList {
+        Section("标记") {
+          ScrollView(.horizontal) { HStack { ForEach(Array(Dictionary(grouping: favorites, by: { FavoriteMark.key($0["payload"]["mark"].isNull ? defaultMark : $0["payload"]["mark"]) }).keys.sorted()), id: \.self) { key in
+            let rows = favorites.filter { FavoriteMark.key($0["payload"]["mark"].isNull ? defaultMark : $0["payload"]["mark"]) == key }
+            let mark = rows[0]["payload"]["mark"].isNull ? defaultMark : rows[0]["payload"]["mark"]
+            Button { filter = filter == key ? nil : key } label: { HStack { FavoriteMarkBadge(mark: mark); Text((presets.first { FavoriteMark.key($0["payload"]) == key }?["payload"]["name"].string).flatMap { $0.isEmpty ? nil : $0 } ?? "未命名"); Text("\(rows.count)") } }.buttonStyle(.bordered).tint(filter == key ? palette.accent : palette.muted)
+          } } }
+        }
         Section("收藏地点") {
+          Button("管理预设") { managingPresets = true }
           if favorites.isEmpty { Text("收藏沿途想去的地方").foregroundStyle(palette.muted) }
           ForEach(favorites) { o in
             Button {
@@ -209,14 +268,14 @@ struct TripMapView: View {
               }
             } label: {
               VStack(alignment: .leading) {
-                Text(o["payload"]["name"].string)
+                HStack { FavoriteMarkBadge(mark: o["payload"]["mark"].isNull ? defaultMark : o["payload"]["mark"]); Text(o["payload"]["name"].string) }
                 Text(o["payload"]["address"].string).font(.caption).foregroundStyle(palette.muted)
               }
             }
           }
         }
       }.frame(maxHeight: 250)
-    }.onAppear { fitInitialCamera() }.onChange(of: pins.map(\.id)) { _, _ in fitInitialCamera() }
+    }.onAppear { lastMark = store.draft(favoriteMarkDraftKey); fitInitialCamera() }.onChange(of: pins.map(\.id)) { _, _ in fitInitialCamera() }
       .navigationTitle("地图").navigationBarTitleDisplayMode(.large).toolbar {
         Button {
           searching = true
@@ -249,16 +308,25 @@ struct TripMapView: View {
               Text(pin.place["address"].string).foregroundStyle(palette.muted)
             }
             Button("添加到行程") {
-              pendingActivityPlace = pin.place
+              pendingActivityPlace = FavoriteMark.placePayload(pin.place)
               selected = nil
             }
-            if let f = pin.favorite {
+            if let f = favorites.first(where: { $0.id == pin.id || FavoriteMark.samePlace($0["payload"], pin.place) }) {
+              Section("标记") {
+                HStack { Text("已收藏"); FavoriteMarkBadge(mark: f["payload"]["mark"].isNull ? defaultMark : f["payload"]["mark"]) }
+                ForEach(presets) { preset in Button {
+                  store.perform { let mark = JSON.object(["icon": preset["payload"]["icon"], "color": preset["payload"]["color"]]); try await store.mutate(object: f, kind: "patch", patch: .object(["mark": mark])); lastMark = mark; try store.setDraft(favoriteMarkDraftKey, mark) }
+                } label: { HStack { FavoriteMarkBadge(mark: preset["payload"]); Text(preset["payload"]["name"].string.isEmpty ? "未命名" : preset["payload"]["name"].string) } } }
+                Button("自定义") { customizing = f }
+              }
               LifecycleActions(object: f)
             } else {
               Button("收藏地点") {
                 store.perform {
-                  try await store.mutate(kind: "create", type: "favorite", patch: pin.place)
-                  selected = nil
+                  var place = FavoriteMark.placePayload(pin.place); place["mark"] = lastMark.isNull ? defaultMark : lastMark
+                  let id = UUID().uuidString
+                  try await store.mutate(kind: "create", type: "favorite", patch: place, id: id)
+                  selected = MapPinItem(id: id, place: place, favorite: store.objects.first { $0.id == id })
                 }
               }
             }
@@ -270,9 +338,91 @@ struct TripMapView: View {
               }
             }
           }.navigationTitle("地点").toolbar { Button("完成") { selected = nil } }
-        }.presentationDetents([.medium, .large])
-      }.sheet(item: $newActivity) { place in
-        ActivityEditor(dayID: store.days.first?.id ?? "", initialPlace: place)
+        }.presentationDetents([.medium, .large]).sheet(item: $customizing) { favorite in FavoriteMarkEditor(favorite: favorite, initial: favorite["payload"]["mark"].isNull ? defaultMark : favorite["payload"]["mark"], onApply: { mark in lastMark = mark; do { try store.setDraft(favoriteMarkDraftKey, mark) } catch { store.error = error.localizedDescription } }) }
+      }.sheet(isPresented: $managingPresets) { MarkPresetManager() }
+      .sheet(isPresented: $showClusterList) { NavigationStack { JourneyList { ForEach(clusterList) { pin in Button { showClusterList = false; selected = pin } label: { HStack { FavoriteMarkBadge(mark: mark(pin)); Text(pin.place["name"].string) } } } }.navigationTitle("收藏地点") } }
+      .sheet(item: $newActivity) { place in
+        ActivityEditor(dayID: store.days.first?.id ?? "", initialPlace: FavoriteMark.placePayload(place))
       }
+  }
+}
+
+enum FavoriteMark {
+  static let icons = ["circle", "triangle", "square", "diamond", "hexagon", "star", "heart", "flag"]
+  static let colors = ["blue", "green", "coral", "amber", "purple", "rose", "sky", "graphite"]
+  static let hex = ["176b88", "2f7a5a", "c8553d", "b7791f", "7a4f9a", "b8457a", "3f7fbf", "4a5560"]
+  static func placePayload(_ place: JSON) -> JSON {
+    let keys: Set<String> = ["name", "address", "lng", "lat", "provider", "providerPlaceId", "category", "sourceUrl", "fetchedAt", "coordSystem"]
+    return .object(place.dictionary.filter { keys.contains($0.key) })
+  }
+  static func symbol(_ mark: JSON) -> String { (icons.contains(mark["icon"].string) ? mark["icon"].string : "circle") + ".fill" }
+  static func color(_ mark: JSON) -> Color { { let value = Int(hex[colors.firstIndex(of: mark["color"].string) ?? 0], radix: 16)!; return Color(red: Double((value >> 16) & 255) / 255, green: Double((value >> 8) & 255) / 255, blue: Double(value & 255) / 255) }() }
+  static func samePlace(_ a: JSON, _ b: JSON) -> Bool {
+    if !a["providerPlaceId"].string.isEmpty && !b["providerPlaceId"].string.isEmpty { return a["providerPlaceId"] == b["providerPlaceId"] && a["provider"] == b["provider"] }
+    return !a["lng"].isNull && !b["lng"].isNull && a["lng"] == b["lng"] && a["lat"] == b["lat"]
+  }
+  static func key(_ mark: JSON) -> String { mark["icon"].string + ":" + mark["color"].string }
+}
+struct FavoriteMarkBadge: View {
+  var mark: JSON
+  var body: some View { Image(systemName: FavoriteMark.symbol(mark)).foregroundStyle(FavoriteMark.color(mark)).padding(3).background(.white, in: Circle()).accessibilityLabel("\(mark["color"].string) \(mark["icon"].string)") }
+}
+struct FavoriteMarkEditor: View {
+  @EnvironmentObject var store: JourneyStore
+  @Environment(\.dismiss) var dismiss
+  var favorite: JSON? = nil
+  var preset: JSON? = nil
+  var initial: JSON
+  @State private var icon = "circle"
+  @State private var color = "blue"
+  @State private var name = ""
+  @State private var savePreset = false
+  @State private var confirm = false
+  var onApply: ((JSON) -> Void)? = nil
+  var mark: JSON { .object(["icon": .string(icon), "color": .string(color)]) }
+  var used: Int { store.objects.filter { $0["kind"].string == "favorite" && $0["state"].string == "active" && $0["payload"]["mark"] == initial }.count }
+  func save() {
+    store.perform {
+      if let favorite { try await store.mutate(object: favorite, kind: "patch", patch: .object(["mark": mark])) }
+      if let preset {
+        try await store.mutate(object: preset, kind: "patch", patch: .object(["icon": .string(icon), "color": .string(color), "name": .string(String(name.prefix(12)))]))
+      } else if savePreset {
+        try await store.mutate(kind: "create", type: "markPreset", patch: .object(["icon": .string(icon), "color": .string(color), "name": .string(String(name.prefix(12)))]))
+      }
+      onApply?(mark)
+      dismiss()
+    }
+  }
+  var body: some View {
+    NavigationStack {
+      JourneyForm {
+        Section { FavoriteMarkBadge(mark: mark).font(.largeTitle).frame(maxWidth: .infinity) }
+        Section("图标") { Picker("图标", selection: $icon) { ForEach(FavoriteMark.icons, id: \.self) { Image(systemName: $0 + ".fill").tag($0) } }.pickerStyle(.segmented) }
+        Section("颜色") { Picker("颜色", selection: $color) { ForEach(FavoriteMark.colors, id: \.self) { value in Text(["blue":"海图蓝", "green":"森林绿", "coral":"珊瑚红", "amber":"琥珀", "purple":"梅紫", "rose":"玫红", "sky":"天蓝", "graphite":"石墨"][value]!).tag(value) } } }
+        if preset == nil { Toggle("存为预设", isOn: $savePreset) }
+        if preset != nil || savePreset { TextField("它代表什么（选填）", text: $name).onChange(of: name) { _, value in name = String(value.prefix(12)) } }
+      }.navigationTitle(preset == nil ? "自定义标记" : "编辑预设").toolbar {
+        ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+        ToolbarItem(placement: .confirmationAction) { Button("完成") { if preset != nil && mark != initial && used > 0 { confirm = true } else { save() } } }
+      }.confirmationDialog("有 \(used) 个地点在用这个标记，一起改吗？", isPresented: $confirm, titleVisibility: .visible) { Button("一起修改") { save() } }
+    }.onAppear { icon = initial["icon"].string; color = initial["color"].string; name = preset?["payload"]["name"].string ?? "" }
+  }
+}
+struct MarkPresetManager: View {
+  @EnvironmentObject var store: JourneyStore
+  @Environment(\.dismiss) var dismiss
+  @State private var editing: JSON?
+  var presets: [JSON] { store.objects.filter { $0["kind"].string == "markPreset" && $0["state"].string == "active" }.sorted { $0["payload"]["order"].number < $1["payload"]["order"].number } }
+  var body: some View {
+    NavigationStack {
+      JourneyList {
+        ForEach(presets) { preset in
+          HStack { FavoriteMarkBadge(mark: preset["payload"]); Button(preset["payload"]["name"].string.isEmpty ? "未命名" : preset["payload"]["name"].string) { editing = preset }; Spacer(); LifecycleActions(object: preset) }
+        }.onMove { offsets, destination in
+          var rows = presets; rows.move(fromOffsets: offsets, toOffset: destination)
+          store.perform { for (index, preset) in rows.enumerated() { try await store.mutate(object: preset, kind: "patch", patch: .object(["order": .integer(index * 1024)])) } }
+        }
+      }.navigationTitle("管理预设").toolbar { EditButton(); Button("完成") { dismiss() } }
+    }.sheet(item: $editing) { preset in FavoriteMarkEditor(preset: preset, initial: .object(["icon": preset["payload"]["icon"], "color": preset["payload"]["color"]])) }
   }
 }

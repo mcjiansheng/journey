@@ -43,6 +43,10 @@
   --pointer-edge: #ffffff70;
   --button-highlight: #ffffff28;
   --focus-ring: #4b967d;
+  --map-accent: #246b58;
+  --map-accent-soft: #e5eee5;
+  --map-route: #18786b;
+  --map-route-marker: #294c68;
   color-scheme: light;
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -100,6 +104,10 @@
   --pointer-edge: #d8fff426;
   --button-highlight: #ffffff28;
   --focus-ring: #4b967d;
+  --map-accent: #246b58;
+  --map-accent-soft: #e5eee5;
+  --map-route: #18786b;
+  --map-route-marker: #294c68;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -147,6 +155,10 @@
     --pointer-edge: #d8fff426;
     --button-highlight: #ffffff28;
     --focus-ring: #4b967d;
+    --map-accent: #246b58;
+    --map-accent-soft: #e5eee5;
+    --map-route: #18786b;
+    --map-route-marker: #294c68;
     color-scheme: dark;
   }
 }
@@ -194,6 +206,10 @@
   --pointer-edge: #ffffff70;
   --button-highlight: #ffffff28;
   --focus-ring: #2f86a6;
+  --map-accent: #176b88;
+  --map-accent-soft: #e1eff4;
+  --map-route: #1f7fa3;
+  --map-route-marker: #1b3442;
   color-scheme: light;
 }
 :root:where([data-palette='atlas']):where([data-theme='dark']) {
@@ -240,6 +256,10 @@
   --pointer-edge: #d8f1ff26;
   --button-highlight: #ffffff28;
   --focus-ring: #6fb9d6;
+  --map-accent: #176b88;
+  --map-accent-soft: #e1eff4;
+  --map-route: #1f7fa3;
+  --map-route-marker: #1b3442;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -287,6 +307,10 @@
     --pointer-edge: #d8f1ff26;
     --button-highlight: #ffffff28;
     --focus-ring: #6fb9d6;
+    --map-accent: #176b88;
+    --map-accent-soft: #e1eff4;
+    --map-route: #1f7fa3;
+    --map-route-marker: #1b3442;
     color-scheme: dark;
   }
 }

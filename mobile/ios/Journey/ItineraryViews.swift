@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct ItineraryView: View {
+  var focusedActivity: JSON? = nil
+  @State private var highlighted = ""
+  @State private var swapping = false
   @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @State private var dayID = ""
@@ -10,6 +13,7 @@ struct ItineraryView: View {
   @State private var editMode: EditMode = .inactive
   var activities: [JSON] { ActivityOrder.ordered(store.objects, dayID: dayID) }
   var body: some View {
+    ScrollViewReader { scroll in
     JourneyList {
       Section(store.trip["name"].string) {
         Picker("计划日", selection: $dayID) {
@@ -22,13 +26,14 @@ struct ItineraryView: View {
           LifecycleActions(object: store.trip)
         }
       }
+      if editMode == .active { Section { Text("按住 ⋮⋮ 拖动调整顺序；有具体时间的安排会按时间自动排列").font(.caption) } }
       if activities.isEmpty {
         ContentUnavailableView(
           "这一天还很自由", systemImage: "sun.horizon", description: Text("添加想去的地方和想做的事。"))
       }
       ForEach(activities) { activity in
         VStack(alignment: .leading, spacing: 12) {
-          if let route = routeFor(activity) {
+          if editMode != .active, let route = routeFor(activity) {
             Button {
               openRoute(activity)
             } label: {
@@ -38,14 +43,12 @@ struct ItineraryView: View {
               )
               .font(.caption).foregroundStyle(palette.muted)
             }.buttonStyle(.plain).listRowBackground(Color.clear)
-          } else if editMode == .active {
-            Button("添加路程") { openRoute(activity) }.listRowBackground(Color.clear)
           }
           VStack(alignment: .leading, spacing: 9) {
             Button {
               editing = activity
             } label: {
-              VStack(alignment: .leading, spacing: 7) {
+              (editMode == .active ? AnyLayout(HStackLayout(alignment: .center, spacing: 8)) : AnyLayout(VStackLayout(alignment: .leading, spacing: 7))) {
                 let p = activity["payload"]
                 Text(
                   p["time"]["mode"].string == "precise"
@@ -53,25 +56,25 @@ struct ItineraryView: View {
                       .joined(separator: " – ")
                     : p["time"]["period"].string.isEmpty ? "时间灵活" : p["time"]["period"].string
                 ).font(.caption).foregroundStyle(palette.accent)
-                Text(p["title"].string).font(.headline).foregroundStyle(palette.text)
+                Text(p["title"].string).lineLimit(editMode == .active ? 1 : nil).font(.headline).foregroundStyle(palette.text)
                 if !p["place"]["name"].string.isEmpty {
                   Label(p["place"]["name"].string, systemImage: "mappin").font(.subheadline)
                     .foregroundStyle(palette.muted)
                 }
-                if !p["notes"].string.isEmpty {
+                if editMode != .active && !p["notes"].string.isEmpty {
                   Text(p["notes"].string).font(.subheadline).foregroundStyle(palette.muted)
                     .lineLimit(
                       1)
                 }
-                if let url = URL(string: p["url"].string),
+                if editMode != .active, let url = URL(string: p["url"].string),
                   ["https", "http"].contains(url.scheme ?? "")
                 {
                   Link("查看链接", destination: url).font(.caption)
                 }
               }
             }.buttonStyle(.plain)
-            LifecycleActions(
-              object: activity, edit: { editing = activity }, route: { openRoute(activity) })
+            if editMode != .active { LifecycleActions(
+              object: activity, edit: { editing = activity }, route: { openRoute(activity) }) }
           }.contextMenu {
             LifecycleMenu(
               object: activity, edit: { editing = activity }, route: { openRoute(activity) })
@@ -80,7 +83,9 @@ struct ItineraryView: View {
               Button("删除", role: .destructive) { store.deleteWithUndo(activity) }
             }
           }.padding(16).background(JourneyCard())
-        }.listRowBackground(Color.clear)
+        }.id(activity.id).listRowBackground(Color.clear)
+          .overlay(RoundedRectangle(cornerRadius: 16).stroke(highlighted == activity.id ? palette.accent : .clear, lineWidth: 3))
+          .moveDisabled(activity["payload"]["time"]["mode"].string == "precise")
       }.onMove { offsets, dest in
         var items = activities
         items.move(fromOffsets: offsets, toOffset: dest)
@@ -113,9 +118,8 @@ struct ItineraryView: View {
         }.accessibilityLabel("我的旅程")
       }
       ToolbarItem(placement: .topBarTrailing) {
-        Button(editMode == .active ? "完成" : "排序") {
-          editMode = editMode == .active ? .inactive : .active
-        }
+        if editMode == .active { Button("完成") { editMode = .inactive } }
+        else { Menu { Button("调整顺序") { editMode = .active }; Button("与另一天交换…") { swapping = true } } label: { Image(systemName: "ellipsis.circle") } }
       }
       ToolbarItem(placement: .topBarTrailing) {
         Button {
@@ -131,10 +135,27 @@ struct ItineraryView: View {
       isPresented: $adding
     ) { ActivityEditor(dayID: dayID) }.sheet(item: $editing) {
       ActivityEditor(object: $0, dayID: $0["payload"]["dayId"].string)
+    }.sheet(isPresented: $swapping) {
+      NavigationStack {
+        JourneyList { ForEach(store.days.filter { $0.id != dayID }) { day in Button(dayTitle(day, trip: store.trip)) {
+          store.perform {
+            let moves = store.objects.filter { $0["kind"].string == "activity" && $0["state"].string == "active" && [dayID, day.id].contains($0["payload"]["dayId"].string) }.map { activity in JSON.object(["activityId": .string(activity.id), "dayId": .string(activity["payload"]["dayId"].string == dayID ? day.id : dayID)]) }
+            try await store.mutate(object: store.trip, kind: "reschedule", patch: .object(["startDate": store.trip["startDate"], "dayCount": store.trip["dayCount"], "moves": .array(moves)])); swapping = false
+          }
+        } } }.navigationTitle("与哪一天交换").toolbar { Button("取消") { swapping = false } }
+      }
+    }.onChange(of: focusedActivity) { _, activity in
+      guard let activity else { return }
+      dayID = activity["payload"]["dayId"].string
+      highlighted = activity.id
+      Task { @MainActor in try? await Task.sleep(for: .milliseconds(100)); scroll.scrollTo(activity.id, anchor: .center); try? await Task.sleep(for: .seconds(1)); highlighted = "" }
+    }.onAppear {
+      if let activity = focusedActivity { dayID = activity["payload"]["dayId"].string; highlighted = activity.id; Task { @MainActor in try? await Task.sleep(for: .milliseconds(100)); scroll.scrollTo(activity.id, anchor: .center); try? await Task.sleep(for: .seconds(1)); highlighted = "" } }
     }.refreshable {
       do { try await store.refresh() } catch { store.error = error.localizedDescription }
     }
   }
+    }
   func routeFor(_ activity: JSON) -> JSON? {
     store.objects.first {
       $0["kind"].string == "route" && $0["state"].string == "active"

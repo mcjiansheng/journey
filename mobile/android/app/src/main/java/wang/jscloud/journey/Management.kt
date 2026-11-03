@@ -5,30 +5,46 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalContext
 import org.json.JSONObject
 
 @Composable
-fun ManagementScreen(s: JourneyStore, onInvite: () -> Unit, onRename: () -> Unit) {
+fun ManagementScreen(s: JourneyStore, onInvite: () -> Unit, onRename: () -> Unit, onSchedule: () -> Unit) {
     val trip = s.snapshot?.o("trip") ?: return
     val members = s.snapshot?.a("members")?.rows() ?: emptyList()
     val me = members.find { it.s("userId") == s.user?.s("id") }
     val owner = trip.s("ownerId") == s.user?.s("id")
     val admin = owner || me?.optBoolean("isAdmin") == true
     var confirmLeave by remember { mutableStateOf(false) }
+    var archiveConfirm by remember { mutableStateOf(false) }
     var remove by remember { mutableStateOf<JSONObject?>(null) }
     // 与网页、iOS 一致：按“除自己以外的同伴”计数；只有自己时给出邀请提示
     val others = (members.size - 1).coerceAtLeast(0)
     Heading("旅程设置",
         if (others > 0) "修改会同步给其他 $others 位同伴"
         else "目前只有你一人。邀请同伴后，这里的修改会同步给他们")
+    Text("基本信息", style = MaterialTheme.typography.titleMedium)
     Panel {
-        Text(trip.s("name"), style = MaterialTheme.typography.titleLarge)
-        Text("${trip.s("startDate","日期待定")} · ${trip.optInt("dayCount")} 天")
-        Text(trip.s("timezone"))
-        TextButton(onRename) { Text("修改名称与目的地") }
-        if (me?.optBoolean("canInvite") == true || admin)
-            SecondaryButton(onInvite) { Text("邀请同行伙伴") }
+        TripInfoRow(s, "名称", "name")
+        TripInfoRow(s, "目的地", "destination")
+        val deviceZone = java.time.ZoneId.systemDefault().id
+        val destinationZone = knownDestinationTimezone(trip.s("destination"))
+        val zones = linkedMapOf<String, String>().apply {
+            destinationZone?.let { put(it, timezoneLabel(it)) }
+            put(deviceZone, timezoneLabel(deviceZone))
+            java.time.ZoneId.getAvailableZoneIds().sorted().forEach { put(it, timezoneLabel(it)) }
+        }
+        SearchableSetupChoice("时区", timezoneLabel(trip.s("timezone")), zones, selectedId = trip.s("timezone")) { value -> s.action { s.mutate("patch", trip.s("id"), patch = obj("timezone" to value)) } }
+    }
+    Text("日程", style = MaterialTheme.typography.titleMedium)
+    Panel { TextButton(onSchedule) { Text("日期  ${trip.s("startDate", "日期待定")} · ${trip.optInt("dayCount")} 天 ›") } }
+    Text("成员与权限", style = MaterialTheme.typography.titleMedium)
+    Panel {
+        Text(if (members.size <= 1) "成员与邀请 · 仅你一人" else "成员与邀请 · ${members.size} 人")
+        if (me?.optBoolean("canInvite") == true || admin) SecondaryButton(onInvite) { Text("邀请同行伙伴") }
     }
     Text("同行伙伴 · ${members.size}", style = MaterialTheme.typography.titleMedium)
     members.forEach { m ->
@@ -72,26 +88,22 @@ fun ManagementScreen(s: JourneyStore, onInvite: () -> Unit, onRename: () -> Unit
             s.management("/api/trips/${trip.s("id")}/team", "PATCH", obj("teamMode" to mode))
         }
     }, enabled = !s.busy)
-    val archived = s.trips.find { it.s("id") == trip.s("id") }?.optBoolean("archived") ?: false
-    SecondaryButton(
-        {
-            s.action {
-                s.management(
-                    "/api/trips/${trip.s("id")}/archive",
-                    body = obj("archived" to !archived),
-                )
-            }
-        },
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text(if (archived) "取消归档" else "归档到我的列表")
-    }
+    Text("整理", style = MaterialTheme.typography.titleMedium)
+    val deleted = s.objects().filter { it.s("state") == "deleted" }
     Panel {
+        Text("已删除的内容 · ${deleted.size}")
+        deleted.forEach { o -> Text(o.o("payload").s("title").ifBlank { o.o("payload").s("name", "计划内容") }); ObjectActions(s, o) }
+    }
+    val archived = s.trips.find { it.s("id") == trip.s("id") }?.optBoolean("archived") ?: false
+    SecondaryButton({ archiveConfirm = true }, modifier = Modifier.fillMaxWidth()) { Text(if (archived) "取消归档" else "归档旅程") }
+    Text("从我的旅程列表收起，可随时取消", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (archiveConfirm) AlertDialog(onDismissRequest = { archiveConfirm = false }, title = { Text(if (archived) "取消归档？" else "归档旅程？") }, confirmButton = { TextButton({ s.action { s.management("/api/trips/${trip.s("id")}/archive", body = obj("archived" to !archived)); archiveConfirm = false } }) { Text("确认") } }, dismissButton = { TextButton({ archiveConfirm = false }) { Text("取消") } })
+    if (owner) Panel {
         Text(if (trip.s("state") == "deleted") "旅程已删除" else "旅程状态")
         ObjectActions(s, trip.copyJson().put("kind", "trip"))
     }
     Text("想改主题色或提醒方式？点右上角头像打开我的设置。", color = MaterialTheme.colorScheme.onSurfaceVariant)
-    TextButton({ confirmLeave = true }) { Text("退出旅程", color = MaterialTheme.colorScheme.error) }
+    TextButton({ confirmLeave = true }) { Text(if (members.size == 1) "退出并删除旅程" else "退出旅程", color = MaterialTheme.colorScheme.error) }
     if (confirmLeave)
         AlertDialog(
             onDismissRequest = { confirmLeave = false },
@@ -301,4 +313,28 @@ fun RecoveryPanel(s: JourneyStore) {
                     dismissButton = { TextButton({ confirmation = "" }) { Text("取消") } },
                 )
         }
+}
+
+@Composable
+fun TripInfoRow(s: JourneyStore, label: String, key: String) {
+    val trip = s.snapshot?.o("trip") ?: return
+    val tripId = trip.s("id")
+    val accountId = s.user?.s("id")
+    val draftKey = "trip-info-$key"
+    var value by remember(tripId) { mutableStateOf(s.draft(draftKey)?.s("value") ?: trip.s(key)) }
+    var focused by remember { mutableStateOf(false) }
+    var dirty by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f))
+        TextField(value, { value = it; dirty = true; s.launch { s.saveDraft(draftKey, obj("value" to it), tripId, accountId) } },
+            modifier = Modifier.weight(2f).onFocusChanged { state ->
+                if (focused && !state.isFocused && dirty && value.isNotBlank()) s.action {
+                    check(s.tripId == tripId && s.user?.s("id") == accountId) { "旅程已切换，修改仍保存在草稿" }
+                    s.mutate("patch", tripId, patch = obj(key to value), clearDraft = draftKey)
+                    dirty = false
+                }
+                focused = state.isFocused
+            }, singleLine = true, textStyle = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.End),
+            colors = TextFieldDefaults.colors(focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent, unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent))
+    }
 }

@@ -219,7 +219,14 @@ fun projectSnapshot(snapshot: JSONObject, queue: List<JSONObject>, userId: Strin
                 "patch" ->
                     if (target != null) {
                         if (target === trip) target.merge(op.o("patch"))
-                        else target.o("payload").merge(op.o("patch"))
+                        else {
+                            if (target.s("kind") == "markPreset" && (op.o("patch").has("icon") || op.o("patch").has("color"))) {
+                                val old = target.o("payload")
+                                val patch = op.o("patch")
+                                rows.filter { it.s("kind") == "favorite" && it.o("payload").o("mark").s("icon") == old.s("icon") && it.o("payload").o("mark").s("color") == old.s("color") }.forEach { it.o("payload").put("mark", obj("icon" to patch.s("icon", old.s("icon")), "color" to patch.s("color", old.s("color")))) }
+                            }
+                            target.o("payload").merge(op.o("patch"))
+                        }
                     }
                 "delete",
                 "restore" ->
