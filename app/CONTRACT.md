@@ -60,6 +60,6 @@ setContext(patch)（同步更新 React、异步持久化/上传）、setDraft(ke
 
 favorite 增加可空的 mark: { icon, color }。icon 为 circle / triangle / square / diamond / hexagon / star / heart / flag；color 为 blue / green / coral / amber / purple / rose / sky / graphite。mark 使用独立字段时钟；其余地点字段继续使用 $place 组时钟。
 
-operationSchema.objectType 新增 markPreset。payload 为 { icon, color, name, order }，name 可空且最多 12 字，order 默认为 0。活动预设在旅程内按 icon+color 唯一。修改组合时，服务端在操作事务内更新使用旧组合的收藏，并按 mark 时钟合并；名称修改不改变收藏。删除预设保留收藏标记。收藏按组合查找名称，不保存预设引用。
+operationSchema.objectType 新增 markPreset。payload 为 { icon, color, name, order }，name 可空且最多 12 字，order 默认为 0。活动预设在旅程内按 icon+color 唯一。修改组合时，服务端在操作事务内更新使用旧组合的收藏，并按 mark 时钟合并；名称修改不改变收藏。删除预设保留收藏标记。收藏按显式设置的组合查找名称，不保存预设引用。mark=null 表示未设置标记，不参与预设匹配；Web 将其显示为黄色星形（star/amber），新收藏始终以 null 创建。用户应用预设或存为预设时显式写入 mark。
 
 费用 date=null 且关联活动仍有效时，以活动所在计划日日期显示和分组；显式 date 保持付款日期。关联活动被删除后，空日期费用显示“未记录日期”。

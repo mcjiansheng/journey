@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
+  Check,
   Star,
   Plus,
   X,
@@ -109,12 +110,10 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
     if (filter.mark && !presets.some((p) => markKey(p.payload) === filter.mark))
       setFilter((previous) => ({ ...previous, mark: null }));
   }, [filter.mark, snapshot.objects]);
-  const effectiveMark = (p) => p.mark || defaultMark(document.documentElement.dataset.palette);
+  const effectiveMark = (p) => p.mark || defaultMark();
   const presetName = (p) =>
-    presets.find((o) => markKey(o.payload) === markKey(effectiveMark(p)))?.payload.name ||
+    presets.find((o) => markKey(o.payload) === markKey(p.mark))?.payload.name ||
     markLabel(effectiveMark(p));
-  const rememberMark = (mark) =>
-    localStorage.setItem('journey-mark:' + j.user.id + ':' + trip.id, JSON.stringify(mark));
   const panelAnimation = useRef(null),
     panelHeight = useRef(null),
     filterButton = useRef(null);
@@ -161,7 +160,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
     cameraRequest = useRef(0);
   const favorites = snapshot.objects.filter((x) => x.kind === 'favorite' && x.state === 'active');
   const usedPresets = presets.filter((p) =>
-    favorites.some((o) => markKey(effectiveMark(o.payload)) === markKey(p.payload)),
+    favorites.some((o) => markKey(o.payload.mark) === markKey(p.payload)),
   );
   const days = visibleDays(snapshot);
   const activeDayIds = new Set(
@@ -174,7 +173,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
     activities.some((a) => a.payload.place && keyOf(a.payload.place) === keyOf(p));
   const visibleFavorites = favorites.filter(
     (o) =>
-      (!markFilter || markKey(effectiveMark(o.payload)) === markFilter) &&
+      (!markFilter || markKey(o.payload.mark) === markFilter) &&
       (filter.category === '全部' || category(o.payload) === filter.category) &&
       (filter.arranged === '全部' || isArranged(o.payload) === (filter.arranged === '已安排')),
   );
@@ -550,8 +549,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
         name: o.payload.name,
         mark: effectiveMark(o.payload),
         presetName:
-          presets.find((p) => markKey(p.payload) === markKey(effectiveMark(o.payload)))?.payload
-            .name || '',
+          presets.find((p) => markKey(p.payload) === markKey(o.payload.mark))?.payload.name || '',
         object: o,
       };
     });
@@ -650,12 +648,14 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
           labelSide: groups.find((g) => g.points[0].id === activity.id)?.labelSide,
         });
     });
-    if (selected)
+    if (selected) {
+      const favorite = favorites.find((o) => keyOf(o.payload) === keyOf(selected));
       add(selected, {
         selected: true,
-        saved: favorites.some((o) => keyOf(o.payload) === keyOf(selected)),
-        mark: favorites.find((o) => keyOf(o.payload) === keyOf(selected))?.payload.mark,
+        saved: !!favorite,
+        mark: favorite ? effectiveMark(favorite.payload) : undefined,
       });
+    }
     for (let i = 1; filter.layer !== '收藏' && i < routeActivities.length; i++) {
       const from = routeActivities[i - 1],
         to = routeActivities[i];
@@ -959,10 +959,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
         objectType: 'favorite',
         patch: {
           ...selected,
-          mark:
-            JSON.parse(
-              localStorage.getItem('journey-mark:' + j.user.id + ':' + trip.id) || 'null',
-            ) || defaultMark(document.documentElement.dataset.palette),
+          mark: null,
         },
       });
     } catch (e) {
@@ -1099,7 +1096,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
         <div className="map-legend" aria-label="标记图例">
           {usedPresets.map((preset) => {
             const key = markKey(preset.payload);
-            const items = favorites.filter((o) => markKey(effectiveMark(o.payload)) === key);
+            const items = favorites.filter((o) => markKey(o.payload.mark) === key);
             return (
               <button
                 key={key}
@@ -1107,7 +1104,9 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                 onClick={() => setMarkFilter(markFilter === key ? null : key)}
               >
                 <MarkSymbol mark={effectiveMark(items[0].payload)} />
-                {preset.payload.name} {items.length}
+                <span className="map-legend-name">{preset.payload.name}</span>
+                <span className="map-legend-count">{items.length}</span>
+                <Check className="map-legend-check" size={14} aria-hidden="true" />
               </button>
             );
           })}
@@ -1557,7 +1556,6 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                     key={selectedFavorite.id}
                     journey={j}
                     favorite={selectedFavorite}
-                    remember={rememberMark}
                     onManage={() => setMarkEditor(true)}
                   />
                 )}

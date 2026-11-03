@@ -38,10 +38,7 @@ export const colorNames = {
   sky: '天蓝',
   graphite: '石墨',
 };
-export const defaultMark = (palette = 'forest') => ({
-  icon: 'circle',
-  color: palette === 'atlas' ? 'blue' : 'green',
-});
+export const defaultMark = () => ({ icon: 'star', color: 'amber' });
 export const markKey = (mark) => (mark ? mark.icon + ':' + mark.color : 'default');
 
 export const markLabel = (mark) => colorNames[mark.color] + iconNames[mark.icon];

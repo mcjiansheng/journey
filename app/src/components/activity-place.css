@@ -54,8 +54,7 @@
   min-height: 44px;
   padding: 4px 2px;
 }
-.activity-place-results,
-.activity-place-favorites {
+.activity-place-results {
   max-height: 230px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -67,8 +66,7 @@
   border-radius: var(--radius-md);
   background: var(--surface);
 }
-.activity-place-results > li,
-.activity-place-favorites > button {
+.activity-place-results > li {
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -80,32 +78,27 @@
   cursor: pointer;
 }
 .activity-place-results > li[aria-selected='true'],
-.activity-place-results > li:hover,
-.activity-place-favorites > button:hover {
+.activity-place-results > li:hover {
   background: var(--accent-soft);
 }
-.activity-place-results > li > svg,
-.activity-place-favorites > button > svg {
+.activity-place-results > li > svg {
   flex-shrink: 0;
   margin-top: 2px;
   color: var(--accent);
 }
-.activity-place-results span,
-.activity-place-favorites span {
+.activity-place-results span {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
   overflow-wrap: anywhere;
 }
-.activity-place-results strong,
-.activity-place-favorites strong {
+.activity-place-results strong {
   font-size: var(--fs-meta);
   font-weight: 500;
   line-height: 1.5;
 }
-.activity-place-results small,
-.activity-place-favorites small {
+.activity-place-results small {
   font-size: var(--fs-caption);
   line-height: 1.6;
   color: var(--muted);
@@ -124,8 +117,7 @@
   .activity-place-field .activity-place-input > input {
     font-size: 16px;
   }
-  .activity-place-results,
-  .activity-place-favorites {
+  .activity-place-results {
     max-height: 210px;
   }
   .activity-place-actions {

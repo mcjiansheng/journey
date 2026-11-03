@@ -49,8 +49,8 @@ export function MarkOptions({ mark, onChange }) {
   );
 }
 
-export default function FavoriteMarkEditor({ journey: j, favorite, remember, onManage }) {
-  const mark = favorite.payload.mark || defaultMark(document.documentElement.dataset.palette);
+export default function FavoriteMarkEditor({ journey: j, favorite, onManage }) {
+  const mark = favorite.payload.mark || defaultMark();
   const presets = j.snapshot.objects
     .filter((o) => o.kind === 'markPreset' && o.state === 'active')
     .sort((a, b) => (a.payload.order || 0) - (b.payload.order || 0));
@@ -63,7 +63,6 @@ export default function FavoriteMarkEditor({ journey: j, favorite, remember, onM
     setError('');
     try {
       await j.mutate({ kind: 'patch', objectId: favorite.id, patch: { mark: next } });
-      remember(next);
     } catch (e) {
       setError(e.message);
     }
@@ -79,6 +78,7 @@ export default function FavoriteMarkEditor({ journey: j, favorite, remember, onM
         objectId: crypto.randomUUID(),
         patch: { ...mark, name, order: (presets.at(-1)?.payload.order || 0) + 1024 },
       });
+      await j.mutate({ kind: 'patch', objectId: favorite.id, patch: { mark } });
       setSaving(false);
       setName('');
     } catch (e) {
@@ -118,7 +118,7 @@ export default function FavoriteMarkEditor({ journey: j, favorite, remember, onM
               type="button"
               key={p.id}
               aria-label={p.payload.name || '应用预设'}
-              aria-pressed={markKey(p.payload) === markKey(mark)}
+              aria-pressed={markKey(p.payload) === markKey(favorite.payload.mark)}
               onClick={() => change({ icon: p.payload.icon, color: p.payload.color })}
             >
               <MarkGlyph icon={p.payload.icon} style={{ color: markColors[p.payload.color] }} />

@@ -1,0 +1,154 @@
+.modal.favorite-place-picker {
+  width: min(720px, calc(100vw - 32px));
+  height: min(840px, calc(100dvh - 40px));
+  max-height: calc(100dvh - 32px);
+}
+.favorite-place-picker > .modal-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  padding: 0;
+}
+.favorite-place-picker-tools {
+  padding: 20px 24px 0;
+  flex-shrink: 0;
+}
+.favorite-place-picker-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.favorite-place-picker-search > svg {
+  position: absolute;
+  left: 14px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.favorite-place-picker .favorite-place-picker-search > input {
+  padding-left: 42px;
+  width: 100%;
+  min-height: 44px;
+}
+.favorite-place-picker-filters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 2px 6px;
+  scrollbar-width: thin;
+}
+.favorite-place-picker-filters > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+}
+.favorite-place-picker-filters > button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.favorite-place-picker-filters svg {
+  width: 18px;
+  height: 18px;
+}
+.favorite-place-picker-count {
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+}
+.favorite-place-picker-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  margin: 0;
+  padding: 0 16px 16px;
+  scroll-padding: 8px;
+}
+.favorite-place-picker-list > li > button {
+  display: flex;
+  width: 100%;
+  min-height: 68px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  text-align: left;
+  border-radius: var(--radius-md);
+}
+.favorite-place-picker-list > li > button:hover,
+.favorite-place-picker-list > li > button:focus-visible {
+  background: var(--accent-soft);
+}
+.favorite-place-picker-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.favorite-place-picker-mark svg {
+  width: 26px;
+  height: 26px;
+}
+.favorite-place-picker-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+.favorite-place-picker-copy strong {
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  line-height: 1.5;
+}
+.favorite-place-picker-copy small,
+.favorite-place-picker-preset {
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  line-height: 1.6;
+}
+.favorite-place-picker-preset {
+  max-width: 110px;
+  overflow-wrap: anywhere;
+}
+.favorite-place-picker-empty {
+  padding: 48px 16px;
+  color: var(--muted);
+  text-align: center;
+  font-size: var(--fs-meta);
+}
+@media (max-width: 760px) {
+  .modal.favorite-place-picker {
+    width: calc(100vw - 20px);
+    height: calc(var(--visual-height, 100dvh) - 28px - env(safe-area-inset-bottom));
+  }
+  .favorite-place-picker-tools {
+    padding: 16px 16px 0;
+  }
+  .favorite-place-picker-search > input {
+    font-size: 16px;
+  }
+  .favorite-place-picker-list {
+    padding: 0 8px 12px;
+  }
+  .favorite-place-picker-list > li > button {
+    gap: 10px;
+  }
+  .favorite-place-picker-preset {
+    max-width: 66px;
+  }
+}

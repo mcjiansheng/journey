@@ -254,3 +254,81 @@ for(const width of [390,1440])test(`triangle favorite keeps a 44px click target 
  await expect(page.locator('.selected-marker')).toHaveAttribute('aria-label','想去的咖啡馆');
  await expect(editor.getByRole('button',{name:'三角',exact:true})).toHaveAttribute('aria-pressed','true');
 });
+
+test('new favorites keep yellow stars until a preset is explicitly applied',async({page})=>{
+ await page.setViewportSize({width:1440,height:900});await page.emulateMedia({reducedMotion:'reduce'});await setup(page);
+ const editor=page.getByRole('region',{name:'收藏标记',exact:true});
+ async function snapshot(){
+  return page.evaluate(async()=>{
+   const {trips}=await fetch('/api/trips').then(r=>r.json());
+   return fetch(`/api/trips/${trips[0].id}`).then(r=>r.json());
+  });
+ }
+ async function savePreset(name){
+  await editor.getByRole('button',{name:'存为预设',exact:true}).click();
+  await editor.getByRole('textbox',{name:'预设名称（选填）',exact:true}).fill(name);
+  await editor.getByRole('button',{name:'保存',exact:true}).click();
+  await expect(editor.locator('.mark-preset-chips').getByRole('button',{name,exact:true})).toBeVisible();
+  await expect(page.locator('.sync-status.synced')).toBeVisible();
+ }
+ await page.locator('.favorite-marker').click();
+ await editor.getByRole('button',{name:'三角',exact:true}).click();
+ await expect(editor.getByRole('button',{name:'三角',exact:true})).toHaveAttribute('aria-pressed','true');
+ await editor.getByRole('button',{name:'珊瑚红',exact:true}).click();
+ await savePreset('必吃');
+ await editor.locator('.mark-preset-chips').getByRole('button',{name:'必吃',exact:true}).click();
+ await page.getByRole('button',{name:'关闭地点',exact:true}).click();
+ await page.locator('.route-marker[aria-label="第一天公园"]').click();
+ await expect(editor.getByRole('button',{name:'星',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(editor.getByRole('button',{name:'琥珀',exact:true})).toHaveAttribute('aria-pressed','true');
+ await savePreset('待定');
+ expect((await snapshot()).objects.find(o=>o.kind==='favorite'&&o.payload.name==='第一天公园').payload.mark).toEqual({icon:'star',color:'amber'});
+ const starLegend=page.locator('.map-legend').getByRole('button',{name:/待定/});
+ await expect(starLegend).toHaveText(/^待定\s*1$/);
+ await page.evaluate(async()=>{
+  const session=await fetch('/api/session').then(r=>r.json());
+  const {trips}=await fetch('/api/trips').then(r=>r.json());
+  localStorage.setItem(`journey-mark:${session.user.id}:${trips[0].id}`,JSON.stringify({icon:'triangle',color:'coral'}));
+ });
+ for(const [index,name] of ['第一天湖边','第二天博物馆'].entries()){
+  if(index===1){
+   await page.reload();
+   await page.getByRole('button',{name:/继续旅程/}).click();
+   await expect(editor).toBeVisible();
+  }
+  await page.getByRole('button',{name:'关闭地点',exact:true}).click();
+  await page.locator(`.route-marker[aria-label="${name}"]`).click();
+  await page.locator('.map-actions').getByRole('button',{name:'收藏',exact:true}).click();
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('button',{name:'星',exact:true})).toHaveAttribute('aria-pressed','true');
+  await expect(editor.getByRole('button',{name:'琥珀',exact:true})).toHaveAttribute('aria-pressed','true');
+  await expect(editor.locator('.mark-preset-chips [aria-pressed="true"]')).toHaveCount(0);
+  await expect(starLegend).toHaveText(new RegExp('^待定\\s*'+(index+1)+'$'));
+  await expect(page.locator('.sync-status.synced')).toBeVisible();
+  expect((await snapshot()).objects.find(o=>o.kind==='favorite'&&o.payload.name===name).payload.mark).toBeNull();
+  if(index===0){
+   await editor.locator('.mark-preset-chips').getByRole('button',{name:'待定',exact:true}).click();
+   await expect(editor.locator('.mark-preset-chips').getByRole('button',{name:'待定',exact:true})).toHaveAttribute('aria-pressed','true');
+   await expect(starLegend).toHaveText(/^待定\s*2$/);
+   await expect(page.locator('.sync-status.synced')).toBeVisible();
+   expect((await snapshot()).objects.find(o=>o.kind==='favorite'&&o.payload.name===name).payload.mark).toEqual({icon:'star',color:'amber'});
+  }
+ }
+ await page.reload();
+ await page.getByRole('button',{name:/继续旅程/}).click();
+ await expect(editor.getByRole('button',{name:'星',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(editor.getByRole('button',{name:'琥珀',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(editor.locator('.mark-preset-chips [aria-pressed="true"]')).toHaveCount(0);
+ await expect(page.locator('.selected-marker .marker-graphic')).toContainText('★');
+ await expect(page.locator('.selected-marker')).toHaveCSS('color','rgb(183, 121, 31)');
+ expect((await snapshot()).objects.find(o=>o.kind==='favorite'&&o.payload.name==='第二天博物馆').payload.mark).toBeNull();
+ await expect(starLegend).toHaveText(/^待定\s*2$/);
+ await page.screenshot({path:'../.local/evidence/1103-inline-marks/new-default-star.png',fullPage:true});
+ await expect(starLegend.locator('.map-legend-check')).toBeHidden();
+ await starLegend.click();
+ await expect(starLegend).toHaveAttribute('aria-pressed','true');
+ await expect(starLegend.locator('.map-legend-check.lucide-check')).toBeVisible();
+ const radius=await starLegend.evaluate(button=>parseFloat(getComputedStyle(button).borderRadius));
+ expect(radius).toBeGreaterThan(0);
+ await page.screenshot({path:'../.local/evidence/1103-inline-marks/legend-active.png',fullPage:true});
+});

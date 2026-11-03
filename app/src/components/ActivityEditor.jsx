@@ -6,6 +6,7 @@ import './editor-ledger.css';
 import ActivityPlaceField from './ActivityPlaceField.jsx';
 const editableFields = ['title', 'dayId', 'time', 'place', 'buffers', 'notes', 'url'];
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const placeTitle = (place) => (place?.name?.trim() || place?.address?.trim() || '').slice(0, 240);
 const blankTime = { mode: 'flexible', period: '', start: null, end: null, endDayOffset: 0 };
 const minute = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
 const clock = (m) =>
@@ -31,6 +32,7 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
   };
   const draftKey = `activity:${objectId}`,
     fieldsKey = `${draftKey}:editedFields`,
+    titleManualKey = `${draftKey}:titleManual`,
     legacyKey = `${draftKey}:previousInput`;
   const wasExisting = useRef(!!existing).current;
   const latestJourney = useRef(j);
@@ -54,17 +56,38 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
     })(),
   );
   const [legacy, setLegacy] = useState(legacyRef.current);
+  const titleManual = useRef(
+    // A clean draft title is the last saved baseline. Keep a collaborator's newer name.
+    Boolean(
+      existing &&
+      !edited.current.has('title') &&
+      j.context?.drafts?.[draftKey]?.title !== existing.payload.title,
+    ) ||
+      (j.context?.drafts?.[titleManualKey] ??
+        Boolean(
+          existing?.payload.title?.trim() ||
+          j.context?.drafts?.[draftKey]?.title?.trim() ||
+          (initial.title?.trim() && initial.title.trim() !== placeTitle(initial.place)),
+        )),
+  );
   const [draft, setDraftState] = useState(() => {
     const stored = j.context?.drafts?.[draftKey];
-    if (!existing) return stored || fallback;
-    return {
-      ...existing.payload,
-      ...Object.fromEntries(
-        [...edited.current]
-          .filter((key) => stored && key in stored)
-          .map((key) => [key, stored[key]]),
-      ),
-    };
+    const next = !existing
+      ? stored || fallback
+      : {
+          ...existing.payload,
+          ...Object.fromEntries(
+            [...edited.current]
+              .filter((key) => stored && key in stored)
+              .map((key) => [key, stored[key]]),
+          ),
+        };
+    if (!titleManual.current) {
+      const title = placeTitle(next.place);
+      if (title !== next.title) edited.current.add('title');
+      return { ...next, title };
+    }
+    return next;
   });
   const latestDraft = useRef(draft);
   const [notesOpen, setNotesOpen] = useState(!!draft.notes || !!draft.url);
@@ -74,12 +97,14 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
         ...drafts,
         [draftKey]: next,
         [fieldsKey]: [...edited.current],
+        [titleManualKey]: titleManual.current,
         ...(legacyRef.current ? { [legacyKey]: legacyRef.current } : {}),
       }),
       scope,
     );
   }
   function setDraft(next) {
+    if (!titleManual.current) next = { ...next, title: placeTitle(next.place) };
     setError('');
     for (const key of editableFields) {
       if (!same(latestDraft.current[key], next[key])) edited.current.add(key);
@@ -100,6 +125,7 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
           editableFields.filter((key) => key in previous).map((key) => [key, previous[key]]),
         ),
       };
+      titleManual.current = Boolean(next.title.trim());
       setDraft(next);
     }
     j.updateDrafts(
@@ -121,6 +147,7 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
   const serial = useRef(Promise.resolve());
   useEffect(() => {
     mounted.current = true;
+    retainDraft(latestDraft.current);
     j.setContext(
       {
         selection: { type: 'activity', id: objectId },
@@ -132,9 +159,12 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
       mounted.current = false;
     };
   }, []);
-  const update = (key, value) => setDraft({ ...draft, [key]: value });
+  const update = (key, value) => {
+    if (key === 'title') titleManual.current = Boolean(value.trim());
+    setDraft({ ...latestDraft.current, [key]: value });
+  };
   function validGroup(group, p) {
-    if (group === 'title' && !p.title.trim()) return '请填写活动名称。';
+    if (group === 'title' && !p.title.trim()) return '填写名称或选择地点。';
     if (group === 'dayId' && !p.dayId) return '请选择计划日。';
     if (group === 'time' && p.time.mode === 'precise') {
       const t = p.time;
@@ -251,7 +281,9 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
       return;
     }
     setError('');
-    void save([group], p).catch((e) => {
+    const groups =
+      group === 'place' && !titleManual.current && p.title.trim() ? ['place', 'title'] : [group];
+    void save(groups, p).catch((e) => {
       if (mounted.current) setError(errorMessage(e));
     });
   }
@@ -276,6 +308,7 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
             ...drafts,
             [draftKey]: null,
             [fieldsKey]: null,
+            [titleManualKey]: null,
             ...(legacyRef.current ? { [legacyKey]: legacyRef.current } : {}),
           }),
           scope,
@@ -347,7 +380,7 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
       <div className="editor-save-row">
         <p className="editor-save-status" role="status">
           {!draft.title.trim()
-            ? '填写名称后保存'
+            ? '填写名称或选择地点'
             : pendingSaves
               ? '正在保存…'
               : error
@@ -389,7 +422,7 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
               maxLength={240}
               onChange={(e) => update('title', e.target.value)}
               onBlur={() => commit('title')}
-              placeholder="给这项安排起个名字"
+              placeholder="选填，默认使用地点名称"
             />
           </Field>
           <Field label="所在日">
@@ -487,8 +520,11 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
           place={draft.place}
           destination={j.snapshot.trip.destination}
           favorites={active(j.snapshot, 'favorite')}
+          presets={active(j.snapshot, 'markPreset').sort(
+            (a, b) => (a.payload.order || 0) - (b.payload.order || 0),
+          )}
           onChange={(place) => update('place', place)}
-          onCommit={(place) => commit('place', { ...draft, place })}
+          onCommit={(place) => commit('place', { ...latestDraft.current, place })}
           onMap={() => {
             mounted.current = false;
             j.setContext(

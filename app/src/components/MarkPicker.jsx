@@ -17,7 +17,7 @@ export default function MarkPicker({ journey: j, onClose }) {
   const presets = j.snapshot.objects
     .filter((o) => o.kind === 'markPreset' && o.state === 'active')
     .sort((a, b) => (a.payload.order || 0) - (b.payload.order || 0));
-  const [mark, setMark] = useState(defaultMark(document.documentElement.dataset.palette));
+  const [mark, setMark] = useState(defaultMark());
   const [name, setName] = useState(''),
     [editing, setEditing] = useState(null),
     [error, setError] = useState(''),
