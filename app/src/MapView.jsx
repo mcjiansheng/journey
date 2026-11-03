@@ -43,6 +43,7 @@ import SelectionTrack from './components/SelectionTrack.jsx';
 import { reducedMotion } from './usePageNavigation.js';
 import { createMapMarker } from './map-marker.js';
 import PlaceInformation from './components/PlaceInformation.jsx';
+import FavoriteMarkEditor from './components/FavoriteMarkEditor.jsx';
 import MarkPicker, { MarkSymbol } from './components/MarkPicker.jsx';
 import { markKey, defaultMark, markLabel } from './marks.js';
 import { clusterPlaces } from './map-clusters.js';
@@ -1076,14 +1077,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
       inert={!active}
     >
       <div ref={canvas} className="map-canvas" />
-      {markEditor && (
-        <MarkPicker
-          journey={j}
-          favorite={markEditor === true ? null : markEditor}
-          remember={rememberMark}
-          onClose={() => setMarkEditor(null)}
-        />
-      )}
+      {markEditor && <MarkPicker journey={j} onClose={() => setMarkEditor(null)} />}
       {clusterList && (
         <Modal title="选择收藏" onClose={() => setClusterList(null)}>
           {clusterList.map((o) => (
@@ -1559,42 +1553,13 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                   </button>
                 </div>
                 {selectedFavorite?.state === 'active' && (
-                  <div className="mark-presets">
-                    <span className="mark-row-label">标记</span>
-                    <button
-                      className="mark-current"
-                      aria-label="自定义"
-                      onClick={() => setMarkEditor(selectedFavorite)}
-                    >
-                      <MarkSymbol mark={effectiveMark(selectedFavorite.payload)} />
-                      <span>{presetName(selectedFavorite.payload)}</span>
-                      <small>自定义</small>
-                    </button>
-                    {presets.map((p) => (
-                      <button
-                        key={p.id}
-                        aria-pressed={
-                          markKey(effectiveMark(selectedFavorite.payload)) === markKey(p.payload)
-                        }
-                        onClick={async () => {
-                          try {
-                            const mark = { icon: p.payload.icon, color: p.payload.color };
-                            await j.mutate({
-                              kind: 'patch',
-                              objectId: selectedFavorite.id,
-                              patch: { mark },
-                            });
-                            rememberMark(mark);
-                          } catch (e) {
-                            setError(e.message);
-                          }
-                        }}
-                      >
-                        <MarkSymbol mark={p.payload} />
-                        {p.payload.name || markLabel(p.payload)}
-                      </button>
-                    ))}
-                  </div>
+                  <FavoriteMarkEditor
+                    key={selectedFavorite.id}
+                    journey={j}
+                    favorite={selectedFavorite}
+                    remember={rememberMark}
+                    onManage={() => setMarkEditor(true)}
+                  />
                 )}
                 {arranged.length > 0 && (
                   <div className="place-visits">

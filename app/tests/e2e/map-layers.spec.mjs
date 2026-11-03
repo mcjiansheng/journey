@@ -114,14 +114,18 @@ test('favorite names, palette tokens and shared mark preset edit/delete',async({
  await page.evaluate(()=>document.documentElement.dataset.palette='atlas');
  await expect.poll(()=>page.locator('.route-marker .marker-graphic').first().evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(27, 52, 66)');
  await page.locator('.favorite-marker').click();
- await page.getByRole('button',{name:'自定义',exact:true}).click();
- const dialog=page.getByRole('dialog');
- await dialog.getByRole('button',{name:'三角',exact:true}).click();
- await dialog.getByRole('button',{name:'珊瑚红',exact:true}).click();
- await dialog.getByLabel('存为预设').check();
- await dialog.getByLabel('它代表什么（选填）').fill('必吃');
- await dialog.getByRole('button',{name:'完成',exact:true}).click();
- await expect(page.locator('.mark-presets')).toContainText('必吃');
+ const editor=page.getByRole('region',{name:'收藏标记',exact:true});
+ await expect(page.getByRole('button',{name:'自定义',exact:true})).toHaveCount(0);
+ await editor.getByRole('group',{name:'图形',exact:true}).getByRole('button',{name:'三角',exact:true}).click();
+ await expect(editor.getByRole('button',{name:'三角',exact:true})).toHaveAttribute('aria-pressed','true');
+ await editor.getByRole('group',{name:'颜色',exact:true}).getByRole('button',{name:'珊瑚红',exact:true}).click();
+ await expect(editor.getByRole('button',{name:'珊瑚红',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await expect(page.locator('.map-legend')).toHaveCount(0);
+ await editor.getByRole('button',{name:'存为预设',exact:true}).click();
+ await editor.getByRole('textbox',{name:'预设名称（选填）',exact:true}).fill('必吃');
+ await editor.getByRole('button',{name:'保存',exact:true}).click();
+ await expect(page.locator('.mark-preset-chips')).toContainText('必吃');
  await expect(page.locator('.map-legend')).toContainText('必吃');
  await expect(page.locator('.map-legend button')).toHaveCount(1);
  await expect(page.locator('.map-legend')).not.toContainText('未命名');
@@ -138,11 +142,11 @@ test('favorite names, palette tokens and shared mark preset edit/delete',async({
  await page.getByRole('dialog').getByRole('button',{name:'圆',exact:true}).click();
  page.once('dialog',dialog=>dialog.accept());
  await page.getByRole('dialog').getByRole('button',{name:'完成',exact:true}).click();
- await expect(page.locator('.favorite-marker .marker-graphic')).toContainText('●');
+ await expect(page.locator('.favorite-marker .marker-graphic [data-mark-icon="circle"]')).toHaveCount(1);
  await page.locator('.map-panel').getByRole('button',{name:'管理预设',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'删除',exact:true}).click();
  await expect(page.locator('.map-legend')).toHaveCount(0);
- await expect(page.locator('.favorite-marker .marker-graphic')).toContainText('●');
+ await expect(page.locator('.favorite-marker .marker-graphic [data-mark-icon="circle"]')).toHaveCount(1);
  await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
  await page.screenshot({path:'../.local/evidence/1103-map-marks.png',fullPage:true});
 });
@@ -153,27 +157,18 @@ for(const failure of ['422','offline'])test(`favorite marks stay visible locally
   ?route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({error:{code:'VALIDATION',message:'测试服务暂不接受标记'}})})
   :route.abort('failed'));
  await page.locator('.favorite-marker').click();
- await page.getByRole('button',{name:'自定义',exact:true}).click();
- const dialog=page.getByRole('dialog');
- await dialog.getByRole('button',{name:'三角',exact:true}).click();
- await dialog.getByRole('button',{name:'珊瑚红',exact:true}).click();
- await dialog.getByRole('button',{name:'完成',exact:true}).click();
- await expect(dialog).toHaveCount(0);
+ const editor=page.getByRole('region',{name:'收藏标记',exact:true});
+ await editor.getByRole('group',{name:'图形',exact:true}).getByRole('button',{name:'三角',exact:true}).click();
+ await expect(editor.getByRole('button',{name:'三角',exact:true})).toHaveAttribute('aria-pressed','true');
+ await editor.getByRole('group',{name:'颜色',exact:true}).getByRole('button',{name:'珊瑚红',exact:true}).click();
+ await expect(page.getByRole('dialog')).toHaveCount(0);
  await expect(page.locator(failure==='422'?'.sync-status.blocked':'.sync-status.offline')).toBeVisible();
  async function assertMark(){
   await expect(page.locator('.selected-marker .marker-graphic')).toContainText('▲');
-  await expect(page.locator('.mark-current')).toContainText('珊瑚红三角');
-  await expect(page.locator('.mark-current')).toContainText('▲');
+  await expect(editor.getByRole('button',{name:'三角',exact:true})).toHaveAttribute('aria-pressed','true');
+  await expect(editor.getByRole('button',{name:'珊瑚红',exact:true})).toHaveAttribute('aria-pressed','true');
   await expect(page.locator('.map-legend')).toHaveCount(0);
   await expect(page.locator('.place-marker')).toHaveCount(4);
-  const offset=await page.locator('.mark-presets').evaluate(row=>{
-   const label=row.querySelector('.mark-row-label').getBoundingClientRect();
-   return Math.max(...[...row.querySelectorAll('button')].map(button=>{
-    const bounds=button.getBoundingClientRect();
-    return Math.abs(bounds.y+bounds.height/2-label.y-label.height/2);
-   }));
-  });
-  expect(offset).toBeLessThanOrEqual(2);
  }
  async function queue(){
   return page.evaluate(async()=>{
@@ -183,17 +178,79 @@ for(const failure of ['422','offline'])test(`favorite marks stay visible locally
   });
  }
  await assertMark();
- const original=await queue();expect(original).toHaveLength(1);
- expect(original[0].patch.mark).toEqual({icon:'triangle',color:'coral'});
+ const original=await queue();expect(original).toHaveLength(2);
+ expect(original[1].patch.mark).toEqual({icon:'triangle',color:'coral'});
  await page.reload();
  await page.getByRole('button',{name:/继续旅程/}).click();
  await expect(page.locator('.journey-map')).toBeVisible();
  await assertMark();
- const restored=await queue();expect(restored).toHaveLength(1);
- expect(restored[0].id).toBe(original[0].id);
- expect(restored[0].clock).toEqual(original[0].clock);
- expect(restored[0].patch).toEqual(original[0].patch);
+ const restored=await queue();expect(restored).toHaveLength(2);
+ for(let i=0;i<original.length;i++){
+  expect(restored[i].id).toBe(original[i].id);
+  expect(restored[i].clock).toEqual(original[i].clock);
+  expect(restored[i].patch).toEqual(original[i].patch);
+ }
+ await page.getByRole('button',{name:'关闭地点',exact:true}).click();
+ const graphic=page.locator('.favorite-marker .marker-graphic');
+ await expect(graphic.locator('[data-mark-icon="triangle"]')).toHaveCount(1);
+ const surface=await graphic.evaluate(el=>{const style=getComputedStyle(el);return{background:style.backgroundColor,border:style.borderWidth,shadow:style.boxShadow};});
+ expect(surface).toEqual({background:'rgba(0, 0, 0, 0)',border:'0px',shadow:'none'});
  await page.getByRole('button',{name:'筛选地点',exact:true}).click();
  await expect(page.locator('fieldset').filter({has:page.locator('legend').getByText('标记',{exact:true})})).toHaveCount(0);
  await expect(page.locator('.place-marker')).toHaveCount(4);
+});
+
+for(const width of [320,390,1440])for(const theme of ['light','dark'])test(`inline favorite mark editor fits ${width}px in ${theme}`,async({page})=>{
+ await page.setViewportSize({width,height:900});
+ await page.emulateMedia({colorScheme:theme,reducedMotion:'reduce'});
+ await setup(page);
+ await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+ await page.locator('.favorite-marker').click();
+ const editor=page.getByRole('region',{name:'收藏标记',exact:true});
+ await expect(editor.getByRole('group',{name:'图形',exact:true}).getByRole('button')).toHaveCount(8);
+ await expect(editor.getByRole('group',{name:'颜色',exact:true}).getByRole('button')).toHaveCount(8);
+ await editor.getByRole('button',{name:'三角',exact:true}).click();
+ await expect(editor.getByRole('button',{name:'三角',exact:true})).toHaveAttribute('aria-pressed','true');
+ await editor.getByRole('button',{name:'珊瑚红',exact:true}).click();
+ await expect(editor.getByRole('button',{name:'珊瑚红',exact:true})).toHaveAttribute('aria-pressed','true');
+ await editor.getByRole('button',{name:'存为预设',exact:true}).click();
+ await editor.getByRole('textbox',{name:'预设名称（选填）',exact:true}).fill('想去的咖啡馆');
+ await editor.scrollIntoViewIfNeeded();
+ const overflow=await editor.evaluate(editor=>{
+  const bounds=editor.getBoundingClientRect();
+  const controls=[...editor.querySelectorAll('button,input')];
+  return {
+   page:document.documentElement.scrollWidth>innerWidth,
+   editor:editor.scrollWidth>editor.clientWidth,
+   outside:controls.filter(control=>{const rect=control.getBoundingClientRect();return rect.left<bounds.left-1||rect.right>bounds.right+1||rect.left<0||rect.right>innerWidth;}).map(control=>control.getAttribute('aria-label')||control.textContent),
+  };
+ });
+ expect(overflow).toEqual({page:false,editor:false,outside:[]});
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await page.screenshot({path:`../.local/evidence/1103-inline-marks/${width}-${theme}.png`,fullPage:true});
+});
+
+for(const width of [390,1440])test(`triangle favorite keeps a 44px click target outside its shape at ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:900});await setup(page);
+ await page.locator('.favorite-marker').click();
+ const editor=page.getByRole('region',{name:'收藏标记',exact:true});
+ await editor.getByRole('button',{name:'三角',exact:true}).click();
+ await expect(editor.getByRole('button',{name:'三角',exact:true})).toHaveAttribute('aria-pressed','true');
+ await page.getByRole('button',{name:'关闭地点',exact:true}).click();
+ const marker=page.locator('.favorite-marker').filter({has:page.locator('[data-mark-icon="triangle"]')});
+ const bounds=await marker.boundingBox();
+ expect(bounds.width).toBe(44);expect(bounds.height).toBe(44);
+ const graphic=await marker.locator('.marker-graphic').boundingBox();
+ expect(graphic.width).toBe(26);expect(graphic.height).toBe(26);
+ // The upper-right corner is inside the old round marker area but outside the triangle.
+ const position={x:32,y:14};
+ expect(await marker.evaluate((button,position)=>{
+  const bounds=button.getBoundingClientRect(),svg=button.querySelector('[data-mark-icon="triangle"]');
+  const point=new DOMPoint(bounds.x+position.x,bounds.y+position.y).matrixTransform(svg.getScreenCTM().inverse());
+  return svg.querySelector('path').isPointInFill(point);
+ },position)).toBe(false);
+ await marker.click({position});
+ await expect(page.getByRole('heading',{name:'想去的咖啡馆',exact:true})).toBeVisible();
+ await expect(page.locator('.selected-marker')).toHaveAttribute('aria-label','想去的咖啡馆');
+ await expect(editor.getByRole('button',{name:'三角',exact:true})).toHaveAttribute('aria-pressed','true');
 });

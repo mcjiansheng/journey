@@ -1,4 +1,4 @@
-import { markIcons, markColors } from './marks.js';
+import { markIcons, markColors, markPaths } from './marks.js';
 const svgNS = 'http://www.w3.org/2000/svg';
 
 function shape(tag, attributes) {
@@ -64,12 +64,32 @@ export function createMapMarker(
     if (mixed) {
       button.classList.add('mixed-marker');
       for (const item of mixed) {
-        const icon = document.createElement('span');
-        icon.textContent = markIcons[item.icon];
+        const icon = shape('svg', { viewBox: '0 0 24 24', 'data-mark-icon': item.icon });
+        icon.append(
+          shape('path', {
+            d: markPaths[item.icon],
+            fill: 'currentColor',
+            stroke: '#fffefa',
+            'stroke-width': 1.2,
+            'stroke-linejoin': 'round',
+          }),
+        );
         icon.style.color = markColors[item.color];
         graphic.append(icon);
       }
-    } else graphic.textContent = markIcons[mark?.icon || 'circle'];
+    } else {
+      const icon = shape('svg', { viewBox: '0 0 24 24', 'data-mark-icon': mark?.icon || 'circle' });
+      icon.append(
+        shape('path', {
+          d: markPaths[mark?.icon || 'circle'],
+          fill: 'currentColor',
+          stroke: '#fffefa',
+          'stroke-width': 1.2,
+          'stroke-linejoin': 'round',
+        }),
+      );
+      graphic.append(icon);
+    }
   }
   if (count > 1) {
     const badge = document.createElement('span');

@@ -1,13 +1,6 @@
 import React, { useState } from 'react';
-import {
-  markIcons,
-  markColors,
-  iconNames,
-  colorNames,
-  defaultMark,
-  markKey,
-  markLabel,
-} from '../marks.js';
+import { markColors, iconNames, defaultMark, markKey, markLabel } from '../marks.js';
+import { MarkGlyph, MarkOptions } from './FavoriteMarkEditor.jsx';
 import { Modal } from './ui.jsx';
 export function MarkSymbol({ mark }) {
   return (
@@ -16,19 +9,16 @@ export function MarkSymbol({ mark }) {
       aria-label={iconNames[mark?.icon || 'circle']}
       style={{ color: markColors[mark?.color] || 'var(--map-accent)', fontSize: 22 }}
     >
-      {markIcons[mark?.icon || 'circle']}
+      <MarkGlyph icon={mark?.icon || 'circle'} />
     </span>
   );
 }
-export default function MarkPicker({ journey: j, favorite, onClose, remember }) {
+export default function MarkPicker({ journey: j, onClose }) {
   const presets = j.snapshot.objects
     .filter((o) => o.kind === 'markPreset' && o.state === 'active')
     .sort((a, b) => (a.payload.order || 0) - (b.payload.order || 0));
-  const [mark, setMark] = useState(
-    favorite?.payload.mark || defaultMark(document.documentElement.dataset.palette),
-  );
+  const [mark, setMark] = useState(defaultMark(document.documentElement.dataset.palette));
   const [name, setName] = useState(''),
-    [save, setSave] = useState(false),
     [editing, setEditing] = useState(null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
@@ -56,124 +46,67 @@ export default function MarkPicker({ journey: j, favorite, onClose, remember }) 
         return;
       await j.mutate({ kind: 'patch', objectId: editing.id, patch: { ...mark, name } });
     } else {
-      if (save)
-        await j.mutate({
-          kind: 'create',
-          objectType: 'markPreset',
-          objectId: crypto.randomUUID(),
-          patch: { ...mark, name, order: (presets.at(-1)?.payload.order || 0) + 1024 },
-        });
-      if (favorite) await j.mutate({ kind: 'patch', objectId: favorite.id, patch: { mark } });
-      remember?.(mark);
+      await j.mutate({
+        kind: 'create',
+        objectType: 'markPreset',
+        objectId: crypto.randomUUID(),
+        patch: { ...mark, name, order: (presets.at(-1)?.payload.order || 0) + 1024 },
+      });
     }
     onClose();
   }
   return (
-    <Modal title={favorite ? '自定义标记' : '管理预设'} onClose={onClose}>
-      {!favorite &&
-        presets.map((p, i) => (
-          <div className="mark-preset-row" key={p.id}>
-            <button
-              onClick={() => {
-                setEditing(p);
-                setMark({ icon: p.payload.icon, color: p.payload.color });
-                setName(p.payload.name);
-              }}
-            >
-              <MarkSymbol mark={p.payload} />
-              {p.payload.name || markLabel(p.payload)}
-            </button>
-            <button
-              disabled={busy || i === 0}
-              onClick={() =>
-                run(async () => {
-                  const reordered = [...presets];
-                  [reordered[i - 1], reordered[i]] = [reordered[i], reordered[i - 1]];
-                  for (const [order, preset] of reordered.entries())
-                    await j.mutate({
-                      kind: 'patch',
-                      objectId: preset.id,
-                      patch: { order: order * 1024 },
-                    });
-                })
-              }
-            >
-              上移
-            </button>
-            <button
-              disabled={busy}
-              onClick={() =>
-                run(() => j.mutate({ kind: 'delete', objectId: p.id, generation: p.generation }))
-              }
-            >
-              删除
-            </button>
-          </div>
-        ))}
+    <Modal className="mark-manager" title="管理预设" onClose={onClose}>
+      {presets.map((p, i) => (
+        <div className="mark-preset-row" key={p.id}>
+          <button
+            onClick={() => {
+              setEditing(p);
+              setMark({ icon: p.payload.icon, color: p.payload.color });
+              setName(p.payload.name);
+            }}
+          >
+            <MarkSymbol mark={p.payload} />
+            {p.payload.name || markLabel(p.payload)}
+          </button>
+          <button
+            disabled={busy || i === 0}
+            onClick={() =>
+              run(async () => {
+                const reordered = [...presets];
+                [reordered[i - 1], reordered[i]] = [reordered[i], reordered[i - 1]];
+                for (const [order, preset] of reordered.entries())
+                  await j.mutate({
+                    kind: 'patch',
+                    objectId: preset.id,
+                    patch: { order: order * 1024 },
+                  });
+              })
+            }
+          >
+            上移
+          </button>
+          <button
+            disabled={busy}
+            onClick={() =>
+              run(() => j.mutate({ kind: 'delete', objectId: p.id, generation: p.generation }))
+            }
+          >
+            删除
+          </button>
+        </div>
+      ))}
       <div className="mark-preview">
         <MarkSymbol mark={mark} />
         {name || '标记预览'}
       </div>
-      <div className="mark-options" aria-label="图标">
-        {Object.keys(markIcons).map((icon) => (
-          <button
-            key={icon}
-            className="mark-symbol"
-            aria-label={iconNames[icon]}
-            aria-pressed={mark.icon === icon}
-            onClick={() => setMark({ ...mark, icon })}
-          >
-            {markIcons[icon]}
-          </button>
-        ))}
-      </div>
-      <div className="mark-options" aria-label="颜色">
-        {Object.keys(markColors).map((color) => (
-          <button
-            key={color}
-            aria-label={colorNames[color]}
-            aria-pressed={mark.color === color}
-            onClick={() => setMark({ ...mark, color })}
-            style={{ color: markColors[color] }}
-          >
-            ●
-          </button>
-        ))}
-      </div>
-      {!editing && (
-        <label>
-          <input
-            type="checkbox"
-            checked={save || !favorite}
-            onChange={(e) => setSave(e.target.checked)}
-          />
-          存为预设
-        </label>
-      )}
-      {(save || editing || !favorite) && (
-        <label>
-          它代表什么（选填）
-          <input maxLength={12} value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-      )}
+      <MarkOptions mark={mark} onChange={setMark} />
+      <label className="mark-name-field">
+        它代表什么（选填）
+        <input maxLength={12} value={name} onChange={(e) => setName(e.target.value)} />
+      </label>
       {error && <p role="alert">{error}</p>}
-      <button
-        className="primary"
-        disabled={busy}
-        onClick={() =>
-          run(async () => {
-            if (!favorite && !editing) {
-              await j.mutate({
-                kind: 'create',
-                objectType: 'markPreset',
-                objectId: crypto.randomUUID(),
-                patch: { ...mark, name, order: (presets.at(-1)?.payload.order || 0) + 1024 },
-              });
-              onClose();
-            } else await submit();
-          })
-        }
-      >
+      <button className="primary" disabled={busy} onClick={() => run(submit)}>
         完成
       </button>
     </Modal>
