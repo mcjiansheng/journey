@@ -3030,33 +3030,16 @@ body:has(> .site-filing),
       box-shadow 200ms;
   }
   [data-pointer-active]::after {
-    opacity: 1;
-    box-shadow: inset 0 0 0 1px var(--pointer-edge);
+    opacity: var(--pointer-strength, 1);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--pointer-edge) calc(var(--pointer-strength, 1) * 100%), transparent);
   }
-  .primary[data-pointer-active]::after {
+  .primary::after {
     background: radial-gradient(
       120px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
       var(--pointer-highlight),
       transparent 80%
     );
-  }
-  :root[data-theme='dark'] [data-pointer-active]::after {
-    background: radial-gradient(
-      150px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
-      var(--pointer-highlight),
-      transparent 76%
-    );
-    box-shadow: inset 0 0 0 1px var(--pointer-edge);
-  }
-}
-@media (prefers-color-scheme: dark) and (hover: hover) and (pointer: fine) {
-  :root:not([data-theme='light']):not([data-theme='dark']) [data-pointer-active]::after {
-    background: radial-gradient(
-      150px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
-      var(--pointer-highlight),
-      transparent 76%
-    );
-    box-shadow: inset 0 0 0 1px var(--pointer-edge);
   }
 }
 :root[data-motion='true'] [data-pointer-active]::after {

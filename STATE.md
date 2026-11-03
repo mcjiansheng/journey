@@ -1,53 +1,32 @@
-# 项目状态跟踪（STATE.md）
+# 项目状态跟踪
 
 更新时间：2026-11-03
 
 ## 当前步骤
 
-- **所在分支**：`dev`
-- **当前阶段**：已完成本地测试端高德地图配置回退与视口加载修复，全量通过配置单测（106 项单测通过）、设计校验与地图 E2E 验证；修复本地 Vite 开发服务（`5173`）旧进程缓存导致前端白屏的问题，恢复本地端口正常访问。
+- `dev`：修复鼠标光晕移出时跳到中央，以及进入卡片时突然出现的问题。修复与浏览器验收已完成，作为本轮开发分支交付。
 
 ## 已做决定及理由
 
-1. **本地环境与测试子目录多级配置文件回退机制**：
-   - **问题**：本地真实测试配置存于根目录 `.local/amap-test.json`，而服务端默认配置路径仅查找当前工作目录下的 `.local/amap.json`。当在 `app/` 目录执行 `node server/index.mjs` 或运行 E2E 测试时，`process.cwd()` 为 `app/`，导致无法解析父目录 `.local/`，进而导致 `/api/config` 返回空的 `amapKey`，地图在页面报错「地图暂时无法加载」。
-   - **决策**：在 `app/server/config.mjs` 中设置回退候选路径 `['.local/amap.json', '.local/amap-test.json', '../.local/amap.json', '../.local/amap-test.json']`。显式指定 `AMAP_CONFIG_FILE` 时依然保持严格校验（不存在则抛出错误），未显式指定时按序寻找首个存在的本地配置文件。并在本地创建 `.local/amap.json` 作为镜像。
-   - **理由**：既不破坏生产部署使用 `AMAP_CONFIG_FILE` 显式路径的安全性与确定性，又能让本地开发、根目录与 `app/` 子目录下执行测试时实现开箱即用的地图密钥自动加载。
-2. **清理 10 月 19 日遗留的陈旧 Vite 开发进程并重启**：
-   - **问题**：后台存在运行了半个月的 Vite 驻留进程（PID 3078，自 10 月 19 日持续运行）。期间依赖库升级导致内存中的旧 Vite 实例与前端项目 `@vitejs/plugin-react 5.x` 运行时不兼容，客户端注入脚本报错 `/@react-refresh does not provide injectIntoGlobalHook`，导致 React 无法挂载 `#root`，页面呈现只有备案页脚的空白页面。
-   - **决策**：终止陈旧僵尸进程，重新拉起干净的 Vite v7.3.7 开发服务器（端口 `5173`）。
-   - **理由**：清除内存陈旧虚拟模块缓存，恢复 HMR 与前端开发环境。
+- 淡出期间保留最后光心坐标，避免 CSS 回退到 50% 引起中央闪光。
+- 鼠标距卡片边缘 48px 内按距离渐入，光心可位于卡片外；相邻卡片分别计算，避免交界处硬切换。
+- 光晕渐变样式不随激活属性切换；激活属性只控制强度和边缘亮度。
+- 保留触摸、减少动态效果与纯平模式的现有行为；打开弹窗后只响应弹窗内控件。
 
 ## 产出物
 
-- `app/server/config.mjs`：新增本地地图配置自动回退至 `amap-test.json` 及父目录 `../.local/` 的支持。
-- `app/tests/config.test.mjs`：新增 2 项单测，验证 `amap-test.json` 回退与 `app/` 子目录下父目录解析的有效性。
-- `app/dist/`：重新构建并固化前端生产产物，包含最新的地图控件边距与主题样式。
-- `AGENTS.md`：新增项目索引（“什么东西在哪”）及 `STATE.md` 规范。
-- `STATE.md`：更新当前状态、已做决定及验证记录。
-
-## 验证结果
-
-1. **配置单元测试**：`node --test tests/config.test.mjs` 7 项用例全部通过。
-2. **后端全量单测**：`node --test tests/*.test.mjs` 106 项用例全部通过（耗时 1.7s）。
-3. **静态设计与数据校验**：
-   - `node ../scripts/generate-design-tokens.mjs --check`：通过（Design tokens match generated themes）。
-   - `node ../scripts/check-design-contrast.mjs`：通过（72 palette contrast checks passed）。
-   - `node ../scripts/generate-destination-timezones.mjs --check`：通过（Destination timezones match shared data）。
-4. **前端构建**：`vite build && node scripts/finalize-build.mjs` 成功，离线应用壳资源校验无误。
-5. **本地地图真实 E2E 验证**：
-   - `map-selection.spec.mjs`（4 项通过，19.4s）：390px/320px 真实地图选点标记与浮层可见性均正常。
-   - `map-camera-motion.spec.mjs`（7 项通过，58.2s）：390px/1440px 真实地图交互、手势平移、缩放与相机动效均正常。
-6. **本地端口与 UI 渲染验证**：
-   - `127.0.0.1:5173`（前端开发端口）：Chrome 真实加载 `#root` 成功（DOM 字符长度 7881），标题「同行 · 一起安排下一程」，登录卡片与手绘插图正常渲染，无报错。
-   - `127.0.0.1:4177`（后端服务端口）：`/api/config`、高德代理、静态资源及主页服务正常响应。
+- `app/src/feedback.js`、`app/src/styles.css`：光晕坐标与邻近感应修复。
+- `.local/evidence/pointer-glow-1103/`：用户录屏截帧及本轮验收证据。
+- `app/tests/e2e/pointer-glow.spec.mjs`：Chrome/WebKit 深色海图蓝真实鼠标轨迹验收。
+- 验证：项目检查 105 项单测通过、1 项跳过；72 项对比度及构建通过；登录回归 4 项通过；光晕回归 2 项通过；Prettier 和差异检查通过。
+- 浏览器验证覆盖外部渐入、边缘光心、相邻卡片、淡出逐帧坐标、滚动/失焦/触摸、减少动态效果与纯平模式。
 
 ## 风险
 
-- **macOS 沙箱与浏览器 LaunchServices**：沙箱环境下 Chrome/WebKit 会触发 LaunchServices/WindowServer 权限拦截，运行浏览器 E2E 测试时需申请提权运行。
-- **高德地图 Web JS API 密钥特性**：`.local/amap-test.json` 中的 Key 为 JS API 类型，直接调用 REST 接口会报错 10009（USERKEY_PLAT_NOMATCH），必须经由本地代理服务 `_AMapService` 注入 SDK 参数转发。
+- Chrome 与 WebKit 验收通过；WebKit 滚动后可重新产生鼠标事件，按新的指针位置重新点亮光晕。
+- 前次本地高德配置及 Vite 白屏修复保持现状，不在本轮修改范围。
 
 ## 下一步
 
-1. 保持在 `dev` 分支，等待用户进行最终确认。
-2. 取得明确确认后，通过 Pull Request 合并至 `main` 分支。
+- 由用户在本地页面确认光晕渐入与边缘移出的实际手感。
+- 本轮不合并 main，等待用户确认。
