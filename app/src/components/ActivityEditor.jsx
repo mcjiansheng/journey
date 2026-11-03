@@ -418,11 +418,11 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
         <div className="form-grid">
           <Field label="活动名称">
             <input
-              value={draft.title}
+              value={titleManual.current ? draft.title : ''}
               maxLength={240}
               onChange={(e) => update('title', e.target.value)}
               onBlur={() => commit('title')}
-              placeholder="选填，默认使用地点名称"
+              placeholder={placeTitle(draft.place) || '选填，默认使用地点名称'}
             />
           </Field>
           <Field label="所在日">

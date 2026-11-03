@@ -101,27 +101,27 @@ for(const width of [1440,1280,390,320])test(`favorite picker searches and filter
  expect(activityPayload.title).toBe('保留中的活动草稿');expect(activityPayload.time.endDayOffset).toBe(1);
 });
 
-test('choosing favorites fills an empty activity title and follows replacements until manually edited',async({page})=>{
+test('favorite names stay as placeholders until an activity title is manually typed',async({page})=>{
  await page.setViewportSize({width:1440,height:900});const tripId=await setup(page,{title:null});
  const activity=page.locator('.activity-editor-modal'),title=activity.getByLabel('活动名称',{exact:true});
  await expect(title).toHaveValue('');await expect(activity.getByRole('button',{name:'完成',exact:true})).toBeDisabled();
  async function choose(query){
   await openPicker(page);await picker(page).getByLabel('搜索收藏地点',{exact:true}).fill(query);await expect(rows(page)).toHaveCount(1);await rows(page).first().click();await expect(picker(page)).toHaveCount(0);
  }
- await choose('名称命中');await expect(title).toHaveValue('名称命中咖啡馆');
+ await choose('名称命中');await expect(title).toHaveValue('');await expect(title).toHaveAttribute('placeholder','名称命中咖啡馆');
  await expect(activity.getByRole('button',{name:'完成',exact:true})).toBeEnabled();
- await choose('地址命中');await expect(title).toHaveValue('地址命中店');
+ await choose('地址命中');await expect(title).toHaveValue('');await expect(title).toHaveAttribute('placeholder','地址命中店');
  await expect(page.locator('.sync-status.synced')).toBeVisible();
  const first=(await snapshot(page,tripId)).objects.find(o=>o.kind==='activity');expect(first.payload.title).toBe('地址命中店');expect(first.payload.place.name).toBe('地址命中店');
  // Reloading an unfinished editor restores its draft and automatic title mode.
  await page.reload();await page.getByRole('button',{name:/继续旅程/}).click();
- await expect(activity).toBeVisible();await expect(title).toHaveValue('地址命中店');
- await choose('收藏地点03');await expect(title).toHaveValue('收藏地点03');
+ await expect(activity).toBeVisible();await expect(title).toHaveValue('');await expect(title).toHaveAttribute('placeholder','地址命中店');
+ await choose('收藏地点03');await expect(title).toHaveValue('');await expect(title).toHaveAttribute('placeholder','收藏地点03');
  // Re-entering the same place name still counts as a manually written title.
- await title.fill('临时手写');await title.fill('收藏地点03');
+ await title.focus();await title.pressSequentially('临时手写');await expect(title).toHaveValue('临时手写');await title.fill('收藏地点03');
  await choose('收藏地点04');await expect(title).toHaveValue('收藏地点03');
- await title.fill('');await expect(title).toHaveValue('收藏地点04');
- await choose('收藏地点05');await expect(title).toHaveValue('收藏地点05');
+ await title.fill('');await expect(title).toHaveValue('');await expect(title).toHaveAttribute('placeholder','收藏地点04');
+ await choose('收藏地点05');await expect(title).toHaveValue('');await expect(title).toHaveAttribute('placeholder','收藏地点05');
  await title.fill('我的安排');await choose('收藏地点06');await expect(title).toHaveValue('我的安排');
  await activity.getByRole('button',{name:'完成',exact:true}).click();await expect(activity).toHaveCount(0);await expect(page.locator('.sync-status.synced')).toBeVisible();
  const updated=(await snapshot(page,tripId)).objects.find(o=>o.id===first.id).payload;
@@ -133,9 +133,11 @@ test('a completed automatic title preserves a later remote rename when reopened'
  await page.setViewportSize({width:1440,height:900});const tripId=await setup(page,{title:null});
  const activity=page.locator('.activity-editor-modal');
  await openPicker(page);await picker(page).getByLabel('搜索收藏地点',{exact:true}).fill('名称命中');await rows(page).first().click();
- await expect(activity.getByLabel('活动名称',{exact:true})).toHaveValue('名称命中咖啡馆');
+ await expect(activity.getByLabel('活动名称',{exact:true})).toHaveValue('');
+ await expect(activity.getByLabel('活动名称',{exact:true})).toHaveAttribute('placeholder','名称命中咖啡馆');
+ await activity.screenshot({path:'../.local/evidence/1103-favorite-picker/placeholder-1440.png',animations:'disabled'});
  await activity.getByRole('button',{name:'完成',exact:true}).click();await expect(activity).toHaveCount(0);await expect(page.locator('.sync-status.synced')).toBeVisible();
- const object=(await snapshot(page,tripId)).objects.find(o=>o.kind==='activity');
+ const object=(await snapshot(page,tripId)).objects.find(o=>o.kind==='activity');expect(object.payload.title).toBe('名称命中咖啡馆');
  await page.evaluate(async({tripId,objectId})=>{
   const session=await fetch('/api/session').then(r=>r.json());
   const headers={'Content-Type':'application/json','X-CSRF-Token':session.csrfToken};
@@ -157,4 +159,17 @@ test('empty favorites explain the empty list without closing the activity draft'
  await expect(picker(page).getByRole('status')).toHaveText('0 个地点');
  await page.keyboard.press('Escape');await expect(picker(page)).toHaveCount(0);
  await expect(page.locator('.activity-editor-modal').getByLabel('活动名称',{exact:true})).toHaveValue('保留中的活动草稿');
+});
+
+
+test('an untouched mobile name placeholder saves the selected place name',async({page})=>{
+ await page.setViewportSize({width:390,height:844});const tripId=await setup(page,{title:null});
+ const activity=page.locator('.activity-editor-modal'),title=activity.getByLabel('活动名称',{exact:true});
+ await openPicker(page);await picker(page).getByLabel('搜索收藏地点',{exact:true}).fill('地址命中');await rows(page).first().click();
+ await expect(title).toHaveValue('');await expect(title).toHaveAttribute('placeholder','地址命中店');
+ await expect(activity.getByRole('button',{name:'完成',exact:true})).toBeEnabled();
+ await activity.screenshot({path:'../.local/evidence/1103-favorite-picker/placeholder-390.png',animations:'disabled'});
+ await activity.getByRole('button',{name:'完成',exact:true}).click();await expect(activity).toHaveCount(0);await expect(page.locator('.sync-status.synced')).toBeVisible();
+ const saved=(await snapshot(page,tripId)).objects.find(o=>o.kind==='activity').payload;
+ expect(saved.title).toBe('地址命中店');expect(saved.place.name).toBe('地址命中店');expect(Object.hasOwn(saved.place,'mark')).toBe(false);
 });
