@@ -1,9 +1,18 @@
 import React, { useState } from 'react';
-import { markIcons, markColors, iconNames, colorNames, defaultMark, markKey } from '../marks.js';
+import {
+  markIcons,
+  markColors,
+  iconNames,
+  colorNames,
+  defaultMark,
+  markKey,
+  markLabel,
+} from '../marks.js';
 import { Modal } from './ui.jsx';
 export function MarkSymbol({ mark }) {
   return (
     <span
+      className="mark-symbol"
       aria-label={iconNames[mark?.icon || 'circle']}
       style={{ color: markColors[mark?.color] || 'var(--map-accent)', fontSize: 22 }}
     >
@@ -72,7 +81,7 @@ export default function MarkPicker({ journey: j, favorite, onClose, remember }) 
               }}
             >
               <MarkSymbol mark={p.payload} />
-              {p.payload.name || '未命名'}
+              {p.payload.name || markLabel(p.payload)}
             </button>
             <button
               disabled={busy || i === 0}
@@ -109,6 +118,7 @@ export default function MarkPicker({ journey: j, favorite, onClose, remember }) 
         {Object.keys(markIcons).map((icon) => (
           <button
             key={icon}
+            className="mark-symbol"
             aria-label={iconNames[icon]}
             aria-pressed={mark.icon === icon}
             onClick={() => setMark({ ...mark, icon })}

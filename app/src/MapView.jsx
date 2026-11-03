@@ -44,7 +44,7 @@ import { reducedMotion } from './usePageNavigation.js';
 import { createMapMarker } from './map-marker.js';
 import PlaceInformation from './components/PlaceInformation.jsx';
 import MarkPicker, { MarkSymbol } from './components/MarkPicker.jsx';
-import { markKey, defaultMark } from './marks.js';
+import { markKey, defaultMark, markLabel } from './marks.js';
 import { clusterPlaces } from './map-clusters.js';
 import { Modal } from './components/ui.jsx';
 import './map.css';
@@ -98,15 +98,20 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
   const [markEditor, setMarkEditor] = useState(null),
     [clusterList, setClusterList] = useState(null),
     [mapRender, setMapRender] = useState(0);
-  const markFilter = filter.mark;
   const setMarkFilter = (mark) => setFilter((previous) => ({ ...previous, mark }));
   const previousClusters = useRef([]);
   const presets = snapshot.objects
     .filter((o) => o.kind === 'markPreset' && o.state === 'active')
     .sort((a, b) => (a.payload.order || 0) - (b.payload.order || 0));
+  const markFilter = presets.some((p) => markKey(p.payload) === filter.mark) ? filter.mark : null;
+  useEffect(() => {
+    if (filter.mark && !presets.some((p) => markKey(p.payload) === filter.mark))
+      setFilter((previous) => ({ ...previous, mark: null }));
+  }, [filter.mark, snapshot.objects]);
   const effectiveMark = (p) => p.mark || defaultMark(document.documentElement.dataset.palette);
   const presetName = (p) =>
-    presets.find((o) => markKey(o.payload) === markKey(effectiveMark(p)))?.payload.name || '未命名';
+    presets.find((o) => markKey(o.payload) === markKey(effectiveMark(p)))?.payload.name ||
+    markLabel(effectiveMark(p));
   const rememberMark = (mark) =>
     localStorage.setItem('journey-mark:' + j.user.id + ':' + trip.id, JSON.stringify(mark));
   const panelAnimation = useRef(null),
@@ -154,6 +159,9 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
     consumedChoice = useRef(null),
     cameraRequest = useRef(0);
   const favorites = snapshot.objects.filter((x) => x.kind === 'favorite' && x.state === 'active');
+  const usedPresets = presets.filter((p) =>
+    favorites.some((o) => markKey(effectiveMark(o.payload)) === markKey(p.payload)),
+  );
   const days = visibleDays(snapshot);
   const activeDayIds = new Set(
     snapshot.objects.filter((x) => x.kind === 'day' && x.state === 'active').map((x) => x.id),
@@ -540,7 +548,9 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
         y: pixel.y,
         name: o.payload.name,
         mark: effectiveMark(o.payload),
-        presetName: presetName(o.payload),
+        presetName:
+          presets.find((p) => markKey(p.payload) === markKey(effectiveMark(o.payload)))?.payload
+            .name || '',
         object: o,
       };
     });
@@ -585,7 +595,8 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                 name: sorted
                   .map(
                     ([key, n]) =>
-                      (presets.find((o) => markKey(o.payload) === key)?.payload.name || '未命名') +
+                      (presets.find((o) => markKey(o.payload) === key)?.payload.name ||
+                        markLabel(g.points.find((p) => markKey(p.mark) === key).mark)) +
                       ' ' +
                       n,
                   )
@@ -1090,9 +1101,10 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
           ))}
         </Modal>
       )}
-      {favorites.length > 0 && (
+      {usedPresets.length > 0 && (
         <div className="map-legend" aria-label="标记图例">
-          {[...new Set(favorites.map((o) => markKey(effectiveMark(o.payload))))].map((key) => {
+          {usedPresets.map((preset) => {
+            const key = markKey(preset.payload);
             const items = favorites.filter((o) => markKey(effectiveMark(o.payload)) === key);
             return (
               <button
@@ -1101,7 +1113,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                 onClick={() => setMarkFilter(markFilter === key ? null : key)}
               >
                 <MarkSymbol mark={effectiveMark(items[0].payload)} />
-                {presetName(items[0].payload)} {items.length}
+                {preset.payload.name} {items.length}
               </button>
             );
           })}
@@ -1257,32 +1269,32 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                 ))}
               </SelectionTrack>
             </fieldset>
-            <fieldset>
-              <legend>标记</legend>
-              <div className="map-chips">
-                <button
-                  aria-pressed={!filterDraft.mark}
-                  onClick={() => setFilterDraft({ ...filterDraft, mark: null })}
-                >
-                  全部
-                </button>
-                {[...new Set(favorites.map((o) => markKey(effectiveMark(o.payload))))].map(
-                  (key) => {
-                    const o = favorites.find((o) => markKey(effectiveMark(o.payload)) === key);
+            {usedPresets.length > 0 && (
+              <fieldset>
+                <legend>标记</legend>
+                <div className="map-chips">
+                  <button
+                    aria-pressed={!filterDraft.mark}
+                    onClick={() => setFilterDraft({ ...filterDraft, mark: null })}
+                  >
+                    全部
+                  </button>
+                  {usedPresets.map((preset) => {
+                    const key = markKey(preset.payload);
                     return (
                       <button
                         key={key}
                         aria-pressed={filterDraft.mark === key}
                         onClick={() => setFilterDraft({ ...filterDraft, mark: key })}
                       >
-                        <MarkSymbol mark={effectiveMark(o.payload)} />
-                        {presetName(o.payload)}
+                        <MarkSymbol mark={preset.payload} />
+                        {preset.payload.name}
                       </button>
                     );
-                  },
-                )}
-              </div>
-            </fieldset>
+                  })}
+                </div>
+              </fieldset>
+            )}
             <fieldset>
               <legend>类别</legend>
               <SelectionTrack className="map-chips" activeKey={filterDraft.category}>
@@ -1548,10 +1560,22 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                 </div>
                 {selectedFavorite?.state === 'active' && (
                   <div className="mark-presets">
-                    <span>标记</span>
+                    <span className="mark-row-label">标记</span>
+                    <button
+                      className="mark-current"
+                      aria-label="自定义"
+                      onClick={() => setMarkEditor(selectedFavorite)}
+                    >
+                      <MarkSymbol mark={effectiveMark(selectedFavorite.payload)} />
+                      <span>{presetName(selectedFavorite.payload)}</span>
+                      <small>自定义</small>
+                    </button>
                     {presets.map((p) => (
                       <button
                         key={p.id}
+                        aria-pressed={
+                          markKey(effectiveMark(selectedFavorite.payload)) === markKey(p.payload)
+                        }
                         onClick={async () => {
                           try {
                             const mark = { icon: p.payload.icon, color: p.payload.color };
@@ -1567,10 +1591,9 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                         }}
                       >
                         <MarkSymbol mark={p.payload} />
-                        {p.payload.name || '未命名'}
+                        {p.payload.name || markLabel(p.payload)}
                       </button>
                     ))}
-                    <button onClick={() => setMarkEditor(selectedFavorite)}>自定义</button>
                   </div>
                 )}
                 {arranged.length > 0 && (

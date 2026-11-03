@@ -123,8 +123,15 @@ test('favorite names, palette tokens and shared mark preset edit/delete',async({
  await dialog.getByRole('button',{name:'完成',exact:true}).click();
  await expect(page.locator('.mark-presets')).toContainText('必吃');
  await expect(page.locator('.map-legend')).toContainText('必吃');
+ await expect(page.locator('.map-legend button')).toHaveCount(1);
+ await expect(page.locator('.map-legend')).not.toContainText('未命名');
  await expect(page.locator('.sync-status.synced')).toBeVisible();
  await page.getByRole('button',{name:'关闭地点',exact:true}).click();
+ await page.getByRole('button',{name:'筛选地点',exact:true}).click();
+ const markFilters=page.locator('fieldset').filter({has:page.locator('legend').getByText('标记',{exact:true})});
+ await expect(markFilters.getByRole('button')).toHaveCount(2);
+ await expect(markFilters.getByRole('button',{name:/必吃/})).toBeVisible();
+ await page.locator('.map-panel').getByRole('button',{name:'完成',exact:true}).click();
  await page.getByRole('button',{name:'查看收藏列表',exact:true}).click();
  await page.locator('.map-panel').getByRole('button',{name:'管理预设',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/必吃/}).click();
@@ -134,8 +141,59 @@ test('favorite names, palette tokens and shared mark preset edit/delete',async({
  await expect(page.locator('.favorite-marker .marker-graphic')).toContainText('●');
  await page.locator('.map-panel').getByRole('button',{name:'管理预设',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'删除',exact:true}).click();
- await expect(page.locator('.map-legend')).not.toContainText('必吃');
+ await expect(page.locator('.map-legend')).toHaveCount(0);
  await expect(page.locator('.favorite-marker .marker-graphic')).toContainText('●');
  await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).click();
  await page.screenshot({path:'../.local/evidence/1103-map-marks.png',fullPage:true});
+});
+
+for(const failure of ['422','offline'])test(`favorite marks stay visible locally after ${failure} and reload`,async({page})=>{
+ await page.setViewportSize({width:1440,height:900});await setup(page);
+ await page.route('**/api/trips/*/operations',route=>failure==='422'
+  ?route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({error:{code:'VALIDATION',message:'测试服务暂不接受标记'}})})
+  :route.abort('failed'));
+ await page.locator('.favorite-marker').click();
+ await page.getByRole('button',{name:'自定义',exact:true}).click();
+ const dialog=page.getByRole('dialog');
+ await dialog.getByRole('button',{name:'三角',exact:true}).click();
+ await dialog.getByRole('button',{name:'珊瑚红',exact:true}).click();
+ await dialog.getByRole('button',{name:'完成',exact:true}).click();
+ await expect(dialog).toHaveCount(0);
+ await expect(page.locator(failure==='422'?'.sync-status.blocked':'.sync-status.offline')).toBeVisible();
+ async function assertMark(){
+  await expect(page.locator('.selected-marker .marker-graphic')).toContainText('▲');
+  await expect(page.locator('.mark-current')).toContainText('珊瑚红三角');
+  await expect(page.locator('.mark-current')).toContainText('▲');
+  await expect(page.locator('.map-legend')).toHaveCount(0);
+  await expect(page.locator('.place-marker')).toHaveCount(4);
+  const offset=await page.locator('.mark-presets').evaluate(row=>{
+   const label=row.querySelector('.mark-row-label').getBoundingClientRect();
+   return Math.max(...[...row.querySelectorAll('button')].map(button=>{
+    const bounds=button.getBoundingClientRect();
+    return Math.abs(bounds.y+bounds.height/2-label.y-label.height/2);
+   }));
+  });
+  expect(offset).toBeLessThanOrEqual(2);
+ }
+ async function queue(){
+  return page.evaluate(async()=>{
+   const database=await new Promise((resolve,reject)=>{const r=indexedDB.open('journey-v1');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
+   const read=key=>new Promise((resolve,reject)=>{const r=database.transaction('kv').objectStore('kv').get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
+   const user=await read('activeUser'),account=await read(`account:${user}`);database.close();return account.queue;
+  });
+ }
+ await assertMark();
+ const original=await queue();expect(original).toHaveLength(1);
+ expect(original[0].patch.mark).toEqual({icon:'triangle',color:'coral'});
+ await page.reload();
+ await page.getByRole('button',{name:/继续旅程/}).click();
+ await expect(page.locator('.journey-map')).toBeVisible();
+ await assertMark();
+ const restored=await queue();expect(restored).toHaveLength(1);
+ expect(restored[0].id).toBe(original[0].id);
+ expect(restored[0].clock).toEqual(original[0].clock);
+ expect(restored[0].patch).toEqual(original[0].patch);
+ await page.getByRole('button',{name:'筛选地点',exact:true}).click();
+ await expect(page.locator('fieldset').filter({has:page.locator('legend').getByText('标记',{exact:true})})).toHaveCount(0);
+ await expect(page.locator('.place-marker')).toHaveCount(4);
 });

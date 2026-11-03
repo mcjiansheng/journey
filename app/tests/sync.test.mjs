@@ -129,7 +129,7 @@ function recoveryFixture(queue, options={}) {
   const posts=[],storage=new Map();let handler=options.handler,failStorage=false,putCount=0;
   const snapshot=id=>({trip:{id,name:id},objects:id==='t'?(options.objects||[]):[],cursor:1,epoch:1});
   const ok=data=>({ok:true,json:async()=>structuredClone(data)});
-  const sandbox={structuredClone,performance:options.performance||performance,crypto:{randomUUID},previewReschedule,navigator:{onLine:true},
+  const sandbox={structuredClone,performance:options.performance||performance,crypto:{randomUUID},previewReschedule,navigator:{onLine:options.onLine??true},
     window:{addEventListener(){}},document:{addEventListener(){},visibilityState:'hidden'},setTimeout,clearTimeout,setInterval(){},useSyncExternalStore(){},
     openDB:async()=>({put:async(_,value,key)=>{putCount++;if(options.beforePut)await options.beforePut();if(failStorage)throw new Error('full');storage.set(key,structuredClone(value));},delete:async(_,key)=>storage.delete(key)}),
     fetch:async(url,request)=>{
@@ -144,7 +144,7 @@ function recoveryFixture(queue, options={}) {
   const subject=new Script(`(function(){${controllerSource}
     account={user:{id:'A',preferences:{}},trips:[{id:'t',name:'Trip'},{id:'other',name:'Other'}],snapshots:{t:${JSON.stringify(snapshot('t'))}},contexts:{},queue:${JSON.stringify(queue)}};
     csrf='csrf';selected='t';connection='current';lease={leaseId:'lease',uncertaintyMs:2,serverTime:Date.now(),expiresAt:Date.now()+100000};leasePerformance=performance.now();leaseWall=Date.now();renderAccount();
-    return {flush,logout,ensureClock,getRecoveryPaused:()=>recoveryPaused,reapplyPending,discardPending,retryPending,clearError,mutate,captureScope,setContext,updateDrafts,persistLocal,
+    return {flush,refresh,waitForFlush:async()=>{if(flushing)await new Promise(resolve=>flushWaiters.add(resolve));},logout,ensureClock,getRecoveryPaused:()=>recoveryPaused,reapplyPending,discardPending,retryPending,clearError,mutate,captureScope,setContext,updateDrafts,persistLocal,
       expireLease:()=>{lease.expiresAt=lease.serverTime-1;},withLocal:job=>serializeLocal(job),select:id=>{selected=id;renderAccount();},getState:()=>state,getQueue:()=>clone(account.queue),add:op=>{account.queue.push(op);renderAccount();},switchAccount:(queue=[])=>{authEpoch++;account=emptyAccount({id:'B'});account.queue=clone(queue);selected=null;renderAccount();}};
   })()`).runInNewContext(sandbox);
   return {subject,posts,storage,getPutCount:()=>putCount,setHandler:fn=>handler=fn,failStorage:()=>{failStorage=true;},restoreStorage:()=>{failStorage=false;}};
@@ -382,4 +382,44 @@ test('pending draft writes preserve the originating account during a slow write 
   await f.subject.persistLocal();
   assert.equal(f.storage.get('account:B').contexts.t.drafts.title,'B-latest');
   assert.equal(f.storage.get('account:A').contexts.t.drafts.title,'A-latest');
+});
+
+
+test('a rejected preset does not interrupt local favorite mark saving or disappear after snapshot refresh',async()=>{
+  const favorite={id:'favorite',kind:'favorite',state:'active',generation:0,payload:{name:'咖啡馆',mark:{icon:'circle',color:'green'}}};
+  const f=recoveryFixture([],{objects:[favorite],handler:()=>failed('VALIDATION',422)});
+  const mark={icon:'triangle',color:'coral'};
+  const preset=await f.subject.mutate({kind:'create',objectType:'markPreset',objectId:'preset',patch:{...mark,name:'必吃',order:1024}});
+  const update=await f.subject.mutate({kind:'patch',objectId:'favorite',patch:{mark}});
+  await f.subject.waitForFlush();
+  const queue=f.subject.getQueue();
+  assert.equal(queue.length,2);
+  assert.equal(queue[0].blocked,'VALIDATION');
+  assert.equal(queue[1].id,update.id);
+  assert.deepEqual(queue[0].clock,structuredClone(preset.clock));
+  assert.deepEqual(queue[1].clock,structuredClone(update.clock));
+  assert.equal(f.posts.length,1);
+  await f.subject.refresh();
+  const objects=f.subject.getState().snapshot.objects;
+  assert.equal(objects.find(o=>o.id==='preset').payload.name,'必吃');
+  assert.deepEqual(structuredClone(objects.find(o=>o.id==='favorite').payload.mark),mark);
+  assert.deepEqual(f.storage.get('account:A').queue,queue);
+  assert.equal(f.subject.getState().pendingCount,2);
+  assert.equal(f.subject.getState().status,'blocked');
+});
+
+test('offline preset edits keep their name and update favorite marks while retaining the upload queue',async()=>{
+  const mark={icon:'triangle',color:'coral'};
+  const f=recoveryFixture([],{onLine:false,objects:[
+    {id:'preset',kind:'markPreset',state:'active',generation:0,payload:{...mark,name:'必吃',order:1024}},
+    {id:'favorite',kind:'favorite',state:'active',generation:0,payload:{name:'咖啡馆',mark}},
+  ]});
+  const updatedMark={icon:'circle',color:'blue'};
+  const operation=await f.subject.mutate({kind:'patch',objectId:'preset',patch:{...updatedMark,name:'想去'}});
+  const objects=f.subject.getState().snapshot.objects;
+  assert.equal(objects.find(o=>o.id==='preset').payload.name,'想去');
+  assert.deepEqual(structuredClone(objects.find(o=>o.id==='favorite').payload.mark),updatedMark);
+  assert.equal(f.posts.length,0);
+  assert.deepEqual(f.storage.get('account:A').queue,[structuredClone(operation)]);
+  assert.equal(f.subject.getState().status,'offline');
 });

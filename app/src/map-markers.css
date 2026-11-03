@@ -195,3 +195,35 @@
     max-width: 150px;
   }
 }
+
+.mark-symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+}
+.mark-presets,
+.mark-preset-row {
+  align-items: center;
+}
+.mark-row-label {
+  flex: 0 0 auto;
+  line-height: 1.4;
+}
+.mark-presets button,
+.mark-preset-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.mark-current small {
+  color: var(--muted);
+}
+.mark-presets [aria-pressed='true'] {
+  background: var(--optical-selected);
+}

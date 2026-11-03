@@ -43,3 +43,5 @@ export const defaultMark = (palette = 'forest') => ({
   color: palette === 'atlas' ? 'blue' : 'green',
 });
 export const markKey = (mark) => (mark ? mark.icon + ':' + mark.color : 'default');
+
+export const markLabel = (mark) => colorNames[mark.color] + iconNames[mark.icon];
