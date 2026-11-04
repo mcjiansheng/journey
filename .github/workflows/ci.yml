@@ -1,0 +1,40 @@
+name: Web checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.22.1'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Test deployment safety and rollback
+        run: python3 -m unittest discover -s app/ops/tests -p 'test_*.py' -v
+      - name: Install locked dependencies
+        working-directory: app
+        run: npm ci
+      - name: Project checks (tokens, timezones, contrast, unit tests, build)
+        working-directory: app
+        run: npm run check
+      - name: Formatting
+        working-directory: app
+        run: npm run format:check
