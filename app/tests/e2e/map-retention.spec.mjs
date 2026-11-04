@@ -156,7 +156,7 @@ test('activity navigation reuses the map and home releases it before another tri
  let details=0;await page.route('**/_AMapService/v3/place/detail?**',route=>{details++;return fulfillDetail(route);});
  await setup(page,true);await select(page);await navigate(page,'行程',true);
  await selectSecondDay(page);
- await page.locator('.activity-card').filter({hasText:'第二天湖边集合'}).getByRole('button',{name:'地图',exact:true}).click();
+ await page.locator('.activity-card').filter({hasText:'第二天湖边集合'}).getByRole('button',{name:/^在地图查看：/}).click();
  await expect(page.getByRole('heading',{name:'我们约定的东门',exact:true})).toBeVisible();
  await expect(page.locator('.place-address')).toHaveText('东门售票亭旁集合');
  await expect(page.getByRole('button',{name:'地图路线日期',exact:true})).toContainText('第2天路线');
@@ -184,7 +184,7 @@ test('an activity chosen before map initialization completes keeps its selection
  await setup(page,true,{holdComplete:true});
  await expect.poll(()=>page.evaluate(()=>window.__retentionCompletions.length)).toBe(1);
  await navigate(page,'行程',true);await selectSecondDay(page);
- await page.locator('.activity-card').filter({hasText:'第二天湖边集合'}).getByRole('button',{name:'地图',exact:true}).click();
+ await page.locator('.activity-card').filter({hasText:'第二天湖边集合'}).getByRole('button',{name:/^在地图查看：/}).click();
  await expectSameMap(page);
  await page.evaluate(()=>{window.__retentionHoldComplete=false;for(const complete of window.__retentionCompletions.splice(0))complete();});
  await expect(page.getByRole('heading',{name:'我们约定的东门',exact:true})).toBeVisible();
@@ -201,7 +201,7 @@ test('a first activity map entry persists its selected place and route day acros
  await page.route('**/_AMapService/v3/place/detail?**',fulfillDetail);
  await setup(page,true,{coldActivity:true});
  await selectSecondDay(page);
- await page.locator('.activity-card').filter({hasText:'第二天湖边集合'}).getByRole('button',{name:'地图',exact:true}).click();
+ await page.locator('.activity-card').filter({hasText:'第二天湖边集合'}).getByRole('button',{name:/^在地图查看：/}).click();
  await expect(page.getByRole('heading',{name:'我们约定的东门',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'地图路线日期',exact:true})).toContainText('第2天路线');
  await expect(page.locator('.place-information-hours')).toContainText('09:00');

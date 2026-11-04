@@ -4,6 +4,34 @@ import XCTest
 @testable import Journey
 
 final class JourneyTests: XCTestCase {
+  func testActivityLinksCompleteBareDomainsAndTrimPastedLinks() throws {
+    for (input, expected) in [
+      ("ehall.nju.edu.cn", "https://ehall.nju.edu.cn"),
+      ("  https://a.com  ", "https://a.com"),
+      ("www.a.com/path?x=1", "https://www.a.com/path?x=1"),
+      ("example.com:8443/path", "https://example.com:8443/path"),
+      ("例子.中国", "https://例子.中国"),
+      ("https://a.com/my trip", "https://a.com/my trip"),
+      ("HTTP://a.com/path", "http://a.com/path"),
+      ("  ", ""),
+    ] {
+      XCTAssertEqual(try ActivityLink.normalize(input), expected)
+    }
+  }
+
+  func testActivityLinksDistinguishInvalidFormatFromUnsupportedScheme() {
+    for input in ["去东南大学", "a b.com", "https://", "https://a b.com"] {
+      XCTAssertThrowsError(try ActivityLink.normalize(input)) { error in
+        XCTAssertEqual(error.localizedDescription, "链接格式不对，例如 ehall.nju.edu.cn")
+      }
+    }
+    for input in ["javascript:alert(1)", "ftp://a.com"] {
+      XCTAssertThrowsError(try ActivityLink.normalize(input)) { error in
+        XCTAssertEqual(error.localizedDescription, "请输入 http 或 https 链接。")
+      }
+    }
+  }
+
   func testExpensesFollowActivitiesAndPreserveExplicitPaymentDates() {
     let day: JSON = .object(["id": .string("d"), "kind": .string("day"), "state": .string("active"), "payload": .object(["date": .string("2026-11-04")])])
     let activity: JSON = .object(["id": .string("a"), "kind": .string("activity"), "state": .string("active"), "payload": .object(["title": .string("午餐"), "dayId": .string("d")])])

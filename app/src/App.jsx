@@ -58,6 +58,14 @@ export default function App() {
     [edit, setEdit] = useState(null),
     [intent, setIntent] = useState(initialInvite);
   const scrollRef = useRef(null);
+  const editorRef = useRef(null);
+  const [wideEditor, setWideEditor] = useState(() => matchMedia('(min-width: 1280px)').matches);
+  useEffect(() => {
+    const query = matchMedia('(min-width: 1280px)');
+    const update = () => setWideEditor(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
   const [expenseActivityId, setExpenseActivityId] = useState(null);
   const tripId = j.snapshot?.trip?.id;
   useEffect(() => setNotice(null), [j.user?.id, tripId]);
@@ -97,21 +105,24 @@ export default function App() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = j.context?.scroll?.[page] || 0;
   }, [tripId, page]);
-  function onEdit(object, initial = {}) {
-    setEdit({
-      object,
-      initial: {
-        ...initial,
-        _draftId:
-          object?.id || initial._draftId || j.context?.pendingActivityId || crypto.randomUUID(),
-      },
-    });
+  function onEdit(object, initial = {}, trigger = document.activeElement) {
+    const pendingId = j.context?.pendingActivityId;
+    const unfinishedId = j.snapshot.objects.some((o) => o.kind === 'activity' && o.id === pendingId)
+      ? null
+      : pendingId;
+    const nextId = object?.id || initial._draftId || unfinishedId || crypto.randomUUID();
+    if (edit && nextId === (edit.object?.id || edit.initial._draftId)) return;
+    const returnFocus =
+      trigger?.closest('[data-activity-id]')?.querySelector('.activity-main') || trigger;
+    editorRef.current?.requestClose();
+    setEdit({ object, returnFocus, initial: { ...initial, _draftId: nextId } });
   }
   function closeEdit() {
     setEdit(null);
     j.setContext({ selection: null });
   }
   function switchPage(p) {
+    editorRef.current?.requestClose();
     setExpenseActivityId(null);
     if (!tripDeleted)
       j.setContext({
@@ -129,12 +140,22 @@ export default function App() {
     else if (p === 'settings') setModal('personal');
   }
   function home() {
+    editorRef.current?.requestClose();
     setNotice(null);
     if (scrollRef.current)
       j.setContext({ scroll: { ...j.context.scroll, [page]: scrollRef.current.scrollTop } });
     setEdit(null);
     j.goHome();
   }
+  const previousPage = useRef(page);
+  useEffect(() => {
+    if (previousPage.current === 'itinerary' && page !== 'itinerary')
+      editorRef.current?.requestClose();
+    previousPage.current = page;
+  }, [page]);
+  const panelOpen = Boolean(
+    wideEditor && page === 'itinerary' && tripId && !tripDeleted && !editingDayDeleted && edit,
+  );
   const statusText = syncStatusText[j.status] || '正在连接';
   const tripMembers = j.snapshot?.members || [];
   const otherMembers = tripMembers.filter((m) => m.userId !== j.user?.id);
@@ -302,69 +323,84 @@ export default function App() {
                 </button>
               </div>
             </header>
-            <main
-              id="main"
-              className={`main-content ${page === 'map' ? 'map-content' : ''}`}
-              ref={scrollRef}
-              onScroll={(e) => {
-                clearTimeout(scrollRef.timer);
-                const top = e.currentTarget.scrollTop;
-                scrollRef.timer = setTimeout(
-                  () => j.setContext({ scroll: { ...j.context.scroll, [page]: top } }),
-                  180,
-                );
-              }}
-            >
-              {!tripDeleted && (
-                <TripMap
-                  key={`${j.user.id}:${tripId}`}
-                  active={page === 'map'}
+            <div className={`workspace-body${panelOpen ? ' has-activity-panel' : ''}`}>
+              <main
+                id="main"
+                className={`main-content ${page === 'map' ? 'map-content' : ''}`}
+                ref={scrollRef}
+                onScroll={(e) => {
+                  clearTimeout(scrollRef.timer);
+                  const top = e.currentTarget.scrollTop;
+                  scrollRef.timer = setTimeout(
+                    () => j.setContext({ scroll: { ...j.context.scroll, [page]: top } }),
+                    180,
+                  );
+                }}
+              >
+                {!tripDeleted && (
+                  <TripMap
+                    key={`${j.user.id}:${tripId}`}
+                    active={page === 'map'}
+                    journey={j}
+                    onEditActivity={onEdit}
+                  />
+                )}{' '}
+                {tripDeleted ? (
+                  <TripRecovery
+                    journey={j}
+                    onHome={home}
+                    onTeam={() => setModal('team')}
+                    onDeleted={() => setModal('deleted')}
+                  />
+                ) : page === 'map' ? null : page === 'expenses' ? (
+                  <Ledger
+                    key={`${j.user.id}:${tripId}:${expenseActivityId || 'all'}`}
+                    journey={j}
+                    onViewActivity={(activity) =>
+                      j.setContext({
+                        page: 'itinerary',
+                        dayId: activity.payload.dayId,
+                        focusActivityId: activity.id,
+                      })
+                    }
+                    activityId={expenseActivityId}
+                    onClearActivityFilter={() => setExpenseActivityId(null)}
+                  />
+                ) : page === 'settings' ? (
+                  <Settings
+                    journey={j}
+                    onTeam={() => setModal('team')}
+                    onDeleted={() => setModal('deleted')}
+                    onDates={() => setModal('dates')}
+                    onPersonal={() => setModal('personal')}
+                  />
+                ) : (
+                  <Itinerary
+                    selectedActivityId={panelOpen ? edit.object?.id || edit.initial._draftId : null}
+                    journey={j}
+                    onEdit={onEdit}
+                    onDates={() => setModal('dates')}
+                    onDeleted={() => setModal('deleted')}
+                    onViewExpenses={(activityId) => {
+                      setExpenseActivityId(activityId);
+                      j.setContext({ page: 'expenses' });
+                    }}
+                  />
+                )}
+              </main>
+              {tripId && !tripDeleted && !editingDayDeleted && edit && (
+                <ActivityEditor
+                  key={edit.object?.id || edit.initial._draftId || 'new'}
+                  ref={editorRef}
+                  panel={panelOpen}
+                  returnFocus={edit.returnFocus}
                   journey={j}
-                  onEditActivity={onEdit}
-                />
-              )}{' '}
-              {tripDeleted ? (
-                <TripRecovery
-                  journey={j}
-                  onHome={home}
-                  onTeam={() => setModal('team')}
-                  onDeleted={() => setModal('deleted')}
-                />
-              ) : page === 'map' ? null : page === 'expenses' ? (
-                <Ledger
-                  key={`${j.user.id}:${tripId}:${expenseActivityId || 'all'}`}
-                  journey={j}
-                  onViewActivity={(activity) =>
-                    j.setContext({
-                      page: 'itinerary',
-                      dayId: activity.payload.dayId,
-                      focusActivityId: activity.id,
-                    })
-                  }
-                  activityId={expenseActivityId}
-                  onClearActivityFilter={() => setExpenseActivityId(null)}
-                />
-              ) : page === 'settings' ? (
-                <Settings
-                  journey={j}
-                  onTeam={() => setModal('team')}
-                  onDeleted={() => setModal('deleted')}
-                  onDates={() => setModal('dates')}
-                  onPersonal={() => setModal('personal')}
-                />
-              ) : (
-                <Itinerary
-                  journey={j}
-                  onEdit={onEdit}
-                  onDates={() => setModal('dates')}
-                  onDeleted={() => setModal('deleted')}
-                  onViewExpenses={(activityId) => {
-                    setExpenseActivityId(activityId);
-                    j.setContext({ page: 'expenses' });
-                  }}
+                  object={edit.object}
+                  initial={edit.initial}
+                  onClose={closeEdit}
                 />
               )}
-            </main>
+            </div>
             {!tripDeleted && (
               <SelectionTrack
                 as="nav"
@@ -436,15 +472,6 @@ export default function App() {
       {tripId && modal === 'deleted' && (
         <Deleted journey={j} onClose={() => setModal(null)} onEdit={onEdit} />
       )}{' '}
-      {tripId && !tripDeleted && !editingDayDeleted && edit && (
-        <ActivityEditor
-          key={edit.object?.id || edit.initial._draftId || 'new'}
-          journey={j}
-          object={edit.object}
-          initial={edit.initial}
-          onClose={closeEdit}
-        />
-      )}
     </>
   );
 }

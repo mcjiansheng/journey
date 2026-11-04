@@ -7,6 +7,31 @@ import org.junit.Test
 
 class DomainTest {
     @Test
+    fun activityLinksCompleteBareDomainsAndTrimPastedLinks() {
+        val cases = mapOf(
+            "ehall.nju.edu.cn" to "https://ehall.nju.edu.cn",
+            "  https://a.com  " to "https://a.com",
+            "www.a.com/path?x=1" to "https://www.a.com/path?x=1",
+            "example.com:8443/path" to "https://example.com:8443/path",
+            "例子.中国" to "https://例子.中国",
+            "https://a.com/my trip" to "https://a.com/my trip",
+            "HTTP://a.com/path" to "http://a.com/path",
+            "  " to "",
+        )
+        cases.forEach { (input, expected) -> assertEquals(expected, normalizeActivityLink(input).getOrThrow()) }
+    }
+
+    @Test
+    fun activityLinksDistinguishInvalidFormatFromUnsupportedScheme() {
+        for (input in listOf("去东南大学", "a b.com", "https://", "https://a b.com")) {
+            assertEquals("链接格式不对，例如 ehall.nju.edu.cn", normalizeActivityLink(input).exceptionOrNull()?.message)
+        }
+        for (input in listOf("javascript:alert(1)", "ftp://a.com")) {
+            assertEquals("请输入 http 或 https 链接。", normalizeActivityLink(input).exceptionOrNull()?.message)
+        }
+    }
+
+    @Test
     fun gcjAndWgsRoundTrip() {
         val gcj = Coordinates.toGcj(118.7969, 32.0603)
         assertTrue(kotlin.math.abs(gcj.first - 118.7969) > 0.001)

@@ -180,6 +180,34 @@ enum JourneyDate {
   }
 }
 
+enum ActivityLink {
+  static func normalize(_ input: String) throws -> String {
+    let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.isEmpty { return "" }
+    let formatError = APIError(message: "链接格式不对，例如 ehall.nju.edu.cn")
+    let value: String
+    let hostWithPort = trimmed.range(
+      of: #"^[^\s:/?#]+\.[^\s:/?#]+:[0-9]+(?:[/?#]|$)"#, options: .regularExpression)
+    if hostWithPort == nil,
+      let range = trimmed.range(of: #"^[a-zA-Z][a-zA-Z0-9+.-]*:"#, options: .regularExpression)
+    {
+      let scheme = trimmed[range].lowercased()
+      guard scheme == "http:" || scheme == "https:" else {
+        throw APIError(message: "请输入 http 或 https 链接。")
+      }
+      value = scheme + trimmed[range.upperBound...]
+    } else if trimmed.contains("."), trimmed.rangeOfCharacter(from: .whitespacesAndNewlines) == nil {
+      value = "https://" + trimmed
+    } else {
+      throw formatError
+    }
+    guard let host = URLComponents(string: value)?.host, !host.isEmpty,
+      host.rangeOfCharacter(from: .whitespacesAndNewlines) == nil
+    else { throw formatError }
+    return value
+  }
+}
+
 enum ActivityOrder {
   static func ordered(_ objects: [JSON], dayID: String) -> [JSON] {
     let rows = objects.filter {

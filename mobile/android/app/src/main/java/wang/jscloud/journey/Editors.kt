@@ -1,9 +1,14 @@
 package wang.jscloud.journey
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -63,11 +68,12 @@ fun ActivitySheet(
             data = n
         }
     }
+    val link = remember(data.s("url")) { normalizeActivityLink(data.s("url")) }
+    val linkFocus = remember { FocusRequester() }
+    var showLinkError by remember { mutableStateOf(false) }
+    val linkError = if (showLinkError) link.exceptionOrNull()?.message else null
     val valid = data.s("title").isNotBlank() && data.s("title").trim().length <= 240 && data.s("dayId").isNotBlank() &&
         listOf("before", "after").all { data.o("buffers").isNull(it) || data.o("buffers").optDouble(it) >= 0 } &&
-        (data.s("url").isBlank() || runCatching { java.net.URI(data.s("url")).let {
-            it.isAbsolute && it.scheme.lowercase() in listOf("https", "http") && !it.host.isNullOrBlank()
-        } }.getOrDefault(false)) &&
         (data.o("time").s("end").isBlank() || data.o("time").optInt("endDayOffset") > 0 ||
             data.o("time").s("end") >= data.o("time").s("start")) &&
         (data.o("time").s("mode") != "precise" ||
@@ -76,7 +82,7 @@ fun ActivitySheet(
             runCatching { java.time.LocalTime.parse(data.o("time").s("end")) }.isSuccess)
     fun persist(done: (() -> Unit)? = null) {
         if (draftReady) session.save(obj("payload" to data.copyJson()),
-            if (valid) data.copyJson() else null, dirty.toList(), done) { savedDraft, fields ->
+            if (valid) link.getOrNull()?.let { data.copyJson().put("url", it) } else null, dirty.toList(), done) { savedDraft, fields ->
                 fields.forEach { field ->
                     if (data.opt(field)?.toString() == savedDraft.o("payload").opt(field)?.toString()) dirty.remove(field)
                 }
@@ -93,8 +99,13 @@ fun ActivitySheet(
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     Sheet(if (existing == null) "添加活动" else "编辑活动", { persist(close) },
-        onDone = { persist(close) }, doneEnabled = draftReady && valid) {
-        EditorSaveStatus(s, valid)
+        onDone = {
+            if (link.isFailure) {
+                showLinkError = true
+                linkFocus.requestFocus()
+            } else persist(close)
+        }, doneEnabled = draftReady && valid) {
+        EditorSaveStatus(s, valid && link.isSuccess)
         if (oldDraft != null)
             Panel {
                 Text("发现上次未完成的输入")
@@ -205,7 +216,17 @@ fun ActivitySheet(
             },
         )
         Field("备注", data.s("notes"), { set("notes", it) }, single = false)
-        Field("相关链接", data.s("url"), { set("url", it) })
+        OutlinedTextField(
+            value = data.s("url"),
+            onValueChange = { set("url", it) },
+            label = { Text("相关链接") },
+            modifier = Modifier.fillMaxWidth().focusRequester(linkFocus),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+            shape = RoundedCornerShape(14.dp),
+            isError = linkError != null,
+            supportingText = linkError?.let { message -> { Text(message) } },
+        )
 
     }
 }
@@ -453,7 +474,7 @@ fun ScheduleSheet(s: JourneyStore, close: () -> Unit) {
         "individual" -> individual[o.s("id")]
         else -> ordinal(o)?.let { minOf(it, n) }
     }
-    Sheet("调整旅程日期", close) {
+    Sheet("调整日期与天数", close) {
         TripRangeCalendar(start, end, trip.s("startDate"), trip.optInt("dayCount")) { a, b -> start = a; end = b; reviewing = false }
         Text("$start – $end · $n 天")
         Text("原来 ${trip.s("startDate")} · ${trip.optInt("dayCount")} 天")

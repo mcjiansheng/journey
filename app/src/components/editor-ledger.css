@@ -308,3 +308,45 @@
   background-size: 16px 16px;
   background-position: right 14px center;
 }
+
+.workspace-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.workspace-body > .main-content {
+  min-width: 0;
+}
+.modal.activity-editor-panel[open] {
+  position: relative;
+  inset: auto;
+  margin: 0;
+  width: 420px;
+  min-width: 400px;
+  max-width: 440px;
+  flex: 0 0 400px;
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+}
+.activity-editor-panel .form-grid {
+  grid-template-columns: 1fr;
+}
+.activity-editor-panel .modal-head {
+  padding: 18px 20px 14px;
+}
+.activity-editor-panel .modal-body {
+  padding: 20px;
+}
+.has-activity-panel .itinerary-page {
+  padding-inline: 24px;
+}
+@media (min-width: 1440px) {
+  .modal.activity-editor-panel[open] {
+    flex-basis: 420px;
+  }
+}

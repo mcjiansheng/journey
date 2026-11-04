@@ -67,7 +67,7 @@ test('completion validates the entire draft and retains invalid input',async({pa
  await setup(page);await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await expect(complete(page)).toBeDisabled();await expect(page.getByRole('dialog').getByRole('status')).toHaveText('填写名称或选择地点');
  await page.getByLabel('活动名称').fill('校验活动');await page.getByRole('button',{name:'具体时间',exact:true}).click();await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('请填写开始时间');
  await page.getByLabel('开始时间',{exact:true}).fill('10:00');await page.getByLabel('结束时间 · 选填').fill('09:00');await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('结束时间早于开始时间');
- await page.getByLabel('结束时间 · 选填').fill('11:00');await page.getByText('备注与链接',{exact:true}).click();await page.getByLabel('链接',{exact:true}).fill('bad-link');await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('请输入完整链接。');
+ await page.getByLabel('结束时间 · 选填').fill('11:00');await page.getByText('备注与链接',{exact:true}).click();await page.getByLabel('链接',{exact:true}).fill('bad-link');await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('链接格式不对，例如 ehall.nju.edu.cn');
  await page.getByLabel('链接',{exact:true}).fill('https://example.test/');await finish(page);
 });
 

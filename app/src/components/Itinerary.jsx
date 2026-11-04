@@ -21,6 +21,7 @@ import {
   UserMinus,
   UserPlus,
   LockKeyhole,
+  Link,
 } from 'lucide-react';
 import { Field, Modal, Empty, AsyncButton, active, id, errorMessage, money } from './ui.jsx';
 import {
@@ -133,7 +134,9 @@ export function ObjectActions({ journey: j, object: o, prominent = false, onDele
   const label = direct
     ? deleted
       ? '恢复'
-      : '删除'
+      : o.kind === 'day'
+        ? '删除这一天'
+        : '删除'
     : deleted
       ? expression.wishRestore
         ? '撤回恢复意见'
@@ -644,7 +647,14 @@ function SwapDays({ journey: j, source, onClose }) {
   );
 }
 
-export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onViewExpenses }) {
+export default function Itinerary({
+  journey: j,
+  onEdit,
+  onDates,
+  onDeleted,
+  onViewExpenses,
+  selectedActivityId,
+}) {
   const [route, setRoute] = useState(null),
     [dayMenuId, setDayMenuId] = useState(null),
     [dragging, setDragging] = useState(null),
@@ -941,6 +951,10 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
         late = advice.lateMinutes,
         overlap = advice.overlapMinutes;
       const flexible = o.payload.time?.mode !== 'precise';
+      const time = timeLabel(o.payload);
+      const isNext = nextActivity?.id === o.id;
+      const place = o.payload.place;
+      const samePlaceName = place?.name?.trim() === o.payload.title.trim();
       const hasRoute = leg?.state === 'deleted' || Number.isFinite(routePayload?.minutes);
       const showRoute =
         !!prev || !!leg || (o.payload.time?.mode === 'precise' && !!o.payload.time.start);
@@ -1001,31 +1015,14 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
           )}
           <article
             data-activity-id={o.id}
-            className={`activity-card${nextActivity?.id === o.id ? ' next-activity' : ''}${dragging?.id === o.id ? ' dragging' : ''}${dropClass}`}
+            className={`activity-card${isNext ? ' next-activity' : ''}${selectedActivityId === o.id ? ' activity-selected' : ''}${dragging?.id === o.id ? ' dragging' : ''}${dropClass}`}
           >
-            {sortable && flexible && (
-              <button
-                className="drag-handle"
-                aria-label={`拖动排序：${o.payload.title}`}
-                title="拖动调整顺序 · 也可用 ↑ ↓ 键"
-                onPointerDown={(event) => beginDrag(event, o)}
-                onKeyDown={(event) => {
-                  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-                    event.preventDefault();
-                    moveBy(o, event.key === 'ArrowUp' ? -1 : 1).catch(() => {});
-                  }
-                }}
-              >
-                <GripVertical size={18} />
-              </button>
-            )}
-
             <div className="activity-number">{index + 1}</div>
-            <div className="activity-content">
-              <button className="activity-main" onClick={() => onEdit(o)}>
-                {timeLabel(o.payload) && (
-                  <span className="activity-time">
-                    {timeLabel(o.payload)}
+            {time && (
+              <div className="activity-time">
+                <span>{time}</span>
+                {(!flexible || isNext) && (
+                  <span className="activity-time-tags">
                     {!flexible && (
                       <span
                         className="activity-time-lock"
@@ -1034,20 +1031,27 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                         <LockKeyhole size={12} />
                       </span>
                     )}
-                    {nextActivity?.id === o.id && <span className="next-label">下一项</span>}
+                    {isNext && <span className="next-label">下一项</span>}
                   </span>
                 )}
+              </div>
+            )}
+            <div className="activity-content">
+              <button
+                className="activity-main"
+                onClick={(event) => onEdit(o, {}, event.currentTarget)}
+              >
                 <h3>{o.payload.title}</h3>
                 {o.payload.buffers?.before !== null && o.payload.buffers?.before !== undefined && (
                   <small>提前 {o.payload.buffers.before} 分钟到场</small>
                 )}
               </button>
-              {o.payload.place?.name && (
+              {place?.name && (
                 <div className="activity-place-row">
                   <button
-                    className="activity-place"
-                    aria-label="地图"
-                    title={`在地图查看：${o.payload.place.name}`}
+                    className={`activity-place${samePlaceName ? ' activity-place-icon' : ''}`}
+                    aria-label={`在地图查看：${place.name}`}
+                    title={`在地图查看：${place.name}`}
                     onClick={() =>
                       j.setContext({
                         page: 'map',
@@ -1056,16 +1060,16 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                     }
                   >
                     <MapPin size={14} />
-                    <span>{o.payload.place.name}</span>
+                    {!samePlaceName && <span>{place.name}</span>}
                   </button>
-                  {located(o.payload.place) && (
+                  {located(place) && (
                     <a
                       className="activity-navigation"
-                      aria-label={`导航到${o.payload.place.name}`}
-                      title="导航到这里"
+                      aria-label={`导航到${place.name}`}
+                      title={`导航到${place.name}`}
                       target="_blank"
                       rel="noreferrer"
-                      href={`https://uri.amap.com/navigation?to=${o.payload.place.lng},${o.payload.place.lat},${encodeURIComponent(o.payload.place.name)}&mode=car&coordinate=gaode&callnative=1`}
+                      href={`https://uri.amap.com/navigation?to=${place.lng},${place.lat},${encodeURIComponent(place.name)}&mode=car&coordinate=gaode&callnative=1`}
                     >
                       <Navigation size={15} />
                     </a>
@@ -1082,8 +1086,14 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                   {o.payload.notes}
                 </p>
               )}
-              <div className="activity-toolbar">
-                {(expenseSummaries.length > 0 || notParticipating > 0 || wishDelete > 0) && (
+              {o.payload.url && (
+                <a className="activity-link" href={o.payload.url} target="_blank" rel="noreferrer">
+                  <Link size={14} />
+                  <span>{o.payload.url}</span>
+                </a>
+              )}
+              {(expenseSummaries.length > 0 || notParticipating > 0 || wishDelete > 0) && (
+                <div className="activity-toolbar">
                   <div className="activity-opinions">
                     {expenseSummaries.map(({ status, currency, amount, count, known }) => (
                       <button
@@ -1103,48 +1113,64 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                       </span>
                     )}
                   </div>
-                )}
-                <div className="activity-controls">
-                  <details className="activity-more">
-                    <summary aria-label={`活动更多操作：${o.payload.title}`} title="活动更多操作">
-                      <MoreHorizontal size={19} />
-                    </summary>
-                    <div className="activity-more-panel">
-                      <ObjectActions journey={j} object={o}>
-                        <button
-                          className="text-button"
-                          onClick={(event) => {
-                            event.currentTarget.closest('details').open = false;
-                            onEdit(o);
-                          }}
-                        >
-                          <Pencil size={16} />
-                          编辑
-                        </button>
-                        {o.payload.place && (
-                          <button
-                            className="text-button"
-                            onClick={(event) => {
-                              event.currentTarget.closest('details').open = false;
-                              j.setContext({
-                                page: 'map',
-                                map: {
-                                  ...j.context.map,
-                                  dayId: o.payload.dayId,
-                                  selectedActivityId: o.id,
-                                },
-                              });
-                            }}
-                          >
-                            <MapPin size={16} />
-                            在地图查看
-                          </button>
-                        )}
-                      </ObjectActions>
-                    </div>
-                  </details>
                 </div>
-              </div>
+              )}
+            </div>
+            <div className="activity-controls">
+              {sortable && flexible && (
+                <button
+                  className="drag-handle"
+                  aria-label={`拖动排序：${o.payload.title}`}
+                  title="拖动调整顺序 · 也可用 ↑ ↓ 键"
+                  onPointerDown={(event) => beginDrag(event, o)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      moveBy(o, event.key === 'ArrowUp' ? -1 : 1).catch(() => {});
+                    }
+                  }}
+                >
+                  <GripVertical size={18} />
+                </button>
+              )}
+              <details className="activity-more">
+                <summary aria-label={`活动更多操作：${o.payload.title}`} title="活动更多操作">
+                  <MoreHorizontal size={19} />
+                </summary>
+                <div className="activity-more-panel">
+                  <ObjectActions journey={j} object={o}>
+                    <button
+                      className="text-button"
+                      onClick={(event) => {
+                        event.currentTarget.closest('details').open = false;
+                        onEdit(o, {}, event.currentTarget);
+                      }}
+                    >
+                      <Pencil size={16} />
+                      编辑
+                    </button>
+                    {o.payload.place && (
+                      <button
+                        className="text-button"
+                        onClick={(event) => {
+                          event.currentTarget.closest('details').open = false;
+                          j.setContext({
+                            page: 'map',
+                            map: {
+                              ...j.context.map,
+                              dayId: o.payload.dayId,
+                              selectedActivityId: o.id,
+                            },
+                          });
+                        }}
+                      >
+                        <MapPin size={16} />
+                        在地图查看
+                      </button>
+                    )}
+                  </ObjectActions>
+                </div>
+              </details>
             </div>
           </article>
         </React.Fragment>
@@ -1278,7 +1304,7 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
             <button
               className="primary small day-add"
               disabled={!current}
-              onClick={() => onEdit(null, { dayId: current.id })}
+              onClick={(event) => onEdit(null, { dayId: current.id }, event.currentTarget)}
             >
               <Plus size={16} />
               添加活动
@@ -1313,7 +1339,7 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
       {current && (
         <button
           className="primary itinerary-add-fab"
-          onClick={() => onEdit(null, { dayId: current.id })}
+          onClick={(event) => onEdit(null, { dayId: current.id }, event.currentTarget)}
         >
           <Plus size={18} />
           添加活动
@@ -1345,7 +1371,7 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                     setDayMenuId(null);
                   }}
                 >
-                  与另一天交换…
+                  与另一天交换
                 </button>
                 <button
                   className="text-button"
@@ -1355,7 +1381,7 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                   }}
                 >
                   <CalendarDays size={16} />
-                  调整日期与天数…
+                  调整日期与天数
                 </button>
                 {j.snapshot.objects.some((o) => o.kind === 'day' && o.state === 'deleted') && (
                   <button className="text-button" onClick={onDeleted}>
@@ -1378,7 +1404,7 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                   <button
                     className="secondary"
                     disabled={!current}
-                    onClick={() => onEdit(null, { dayId: current.id })}
+                    onClick={(event) => onEdit(null, { dayId: current.id }, event.currentTarget)}
                   >
                     <Plus size={16} />
                     添加第一项安排
@@ -1402,7 +1428,11 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                   );
                 })
                 .map((o) => (
-                  <button className="continuation" key={o.id} onClick={() => onEdit(o)}>
+                  <button
+                    className="continuation"
+                    key={o.id}
+                    onClick={(event) => onEdit(o, {}, event.currentTarget)}
+                  >
                     <span>从前一天延续</span>
                     <strong>{o.payload.title}</strong>
                     <small>{timeLabel(o.payload)}</small>

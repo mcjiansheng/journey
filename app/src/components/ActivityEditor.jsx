@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Modal, Field, id, active, errorMessage } from './ui.jsx';
 import { visibleDays, outsideDays, dayLabel, activityOrderPlan } from '../domain.js';
 import { ObjectActions } from './Itinerary.jsx';
 import './editor-ledger.css';
+import { normalizeActivityUrl } from '../activity-url.js';
 import ActivityPlaceField from './ActivityPlaceField.jsx';
 const editableFields = ['title', 'dayId', 'time', 'place', 'buffers', 'notes', 'url'];
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -11,7 +12,15 @@ const blankTime = { mode: 'flexible', period: '', start: null, end: null, endDay
 const minute = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
 const clock = (m) =>
   `${String(Math.floor((((m % 1440) + 1440) % 1440) / 60)).padStart(2, '0')}:${String(((m % 60) + 60) % 60).padStart(2, '0')}`;
-export default function ActivityEditor({ journey: j, object, initial = {}, onClose }) {
+export default function ActivityEditor({
+  journey: j,
+  object,
+  initial = {},
+  onClose,
+  panel = false,
+  returnFocus,
+  ref,
+}) {
   const scope = useRef(j.captureScope()).current;
   const newId = useRef(object?.id || initial._draftId || id());
   const objectId = object?.id || newId.current;
@@ -140,6 +149,8 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
   }
   const [pendingSaves, setPendingSaves] = useState(0);
   const [error, setError] = useState('');
+  const [urlError, setUrlError] = useState('');
+  const urlInput = useRef(null);
   const [completing, setCompleting] = useState(false);
   const completingRef = useRef(false);
   const mounted = useRef(true);
@@ -160,6 +171,7 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
     };
   }, []);
   const update = (key, value) => {
+    if (key === 'url') setUrlError('');
     if (key === 'title') titleManual.current = Boolean(value.trim());
     setDraft({ ...latestDraft.current, [key]: value });
   };
@@ -179,12 +191,11 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
       )
     )
       return '预留时间请填写非负分钟数。';
-    if (group === 'url' && p.url) {
+    if (group === 'url') {
       try {
-        if (!['http:', 'https:'].includes(new URL(p.url).protocol))
-          return '请输入 http 或 https 链接。';
-      } catch {
-        return '请输入完整链接。';
+        normalizeActivityUrl(p.url);
+      } catch (error) {
+        return error.message;
       }
     }
     return '';
@@ -192,6 +203,8 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
   function save(groups, p) {
     setPendingSaves((n) => n + 1);
     const payload = structuredClone(p);
+    // Only normalize valid links: closing may save another field while a bad link remains a draft.
+    if (!validGroup('url', payload)) payload.url = normalizeActivityUrl(payload.url);
     if (payload.place) {
       if (!payload.place.name.trim() && !payload.place.address.trim()) payload.place = null;
       else if (!payload.place.name.trim()) payload.place.name = payload.place.address.trim();
@@ -203,7 +216,7 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
         if (!payload.title.trim() || !payload.dayId) return;
         for (const key of Object.keys(payload)) {
           const e = validGroup(key, payload);
-          if (e) throw new Error(e);
+          if (e) throw Object.assign(new Error(e), { field: key });
         }
         const plan = activityOrderPlan(latestJourney.current.snapshot, payload, objectId);
         for (const update of plan.updates)
@@ -253,7 +266,8 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
           saved = patch;
         }
       }
-      if (mounted.current) j.setContext({ pendingActivityId: null }, scope);
+      if (mounted.current && latestJourney.current.context?.pendingActivityId === objectId)
+        j.setContext({ pendingActivityId: null }, scope);
       // An old editor may finish after it was closed or reopened. Read the current draft
       // atomically and only clear fields whose current value was actually saved.
       j.updateDrafts((drafts) => {
@@ -273,18 +287,25 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
     serial.current = tracked.catch(() => {});
     return tracked;
   }
+  function showIssue(group, issue, focus = false) {
+    if (group === 'url') {
+      setUrlError(issue);
+      setNotesOpen(true);
+      if (focus) urlInput.current?.focus({ preventScroll: true });
+    } else setError(issue);
+  }
   function commit(group, p = draft) {
     if (completingRef.current) return;
     const issue = validGroup(group, p);
     if (issue) {
-      setError(issue);
+      showIssue(group, issue);
       return;
     }
     setError('');
     const groups =
       group === 'place' && !titleManual.current && p.title.trim() ? ['place', 'title'] : [group];
     void save(groups, p).catch((e) => {
-      if (mounted.current) setError(errorMessage(e));
+      if (mounted.current) showIssue(e.field, errorMessage(e));
     });
   }
   async function complete() {
@@ -292,7 +313,7 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
     for (const group of Object.keys(draft)) {
       const issue = validGroup(group, draft);
       if (issue) {
-        setError(issue);
+        showIssue(group, issue, true);
         return;
       }
     }
@@ -316,7 +337,7 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
         close();
       }
     } catch (e) {
-      if (mounted.current) setError(errorMessage(e));
+      if (mounted.current) showIssue(e.field, errorMessage(e));
     } finally {
       completingRef.current = false;
       if (mounted.current) setCompleting(false);
@@ -351,6 +372,7 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
     }
     close();
   }
+  useImperativeHandle(ref, () => ({ requestClose }));
   function close() {
     mounted.current = false;
     j.setContext({ selection: null }, scope);
@@ -358,7 +380,9 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
   }
   return (
     <Modal
-      className="editor-modal activity-editor-modal"
+      className={`editor-modal activity-editor-modal${panel ? ' activity-editor-panel' : ''}`}
+      nonModal={panel}
+      returnFocus={returnFocus}
       title={wasExisting ? draft.title.trim() || existing.payload.title : '添加活动'}
       onClose={requestClose}
       initialFocus={wasExisting ? 'title' : 'input'}
@@ -383,7 +407,7 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
             ? '填写名称或选择地点'
             : pendingSaves
               ? '正在保存…'
-              : error
+              : error || urlError
                 ? '部分输入待完善'
                 : edited.current.size
                   ? '修改会自动保存'
@@ -584,13 +608,15 @@ export default function ActivityEditor({ journey: j, object, initial = {}, onClo
               onBlur={() => commit('notes')}
             />
           </Field>
-          <Field label="链接">
+          <Field label="链接" error={urlError}>
             <input
-              type="url"
+              ref={urlInput}
+              type="text"
+              inputMode="url"
               value={draft.url}
               onChange={(e) => update('url', e.target.value)}
               onBlur={() => commit('url')}
-              placeholder="https://"
+              placeholder="ehall.nju.edu.cn"
             />
           </Field>
         </details>

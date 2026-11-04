@@ -57,8 +57,12 @@ struct ItineraryView: View {
                     : p["time"]["period"].string.isEmpty ? "时间灵活" : p["time"]["period"].string
                 ).font(.caption).foregroundStyle(palette.accent)
                 Text(p["title"].string).lineLimit(editMode == .active ? 1 : nil).font(.headline).foregroundStyle(palette.text)
-                if !p["place"]["name"].string.isEmpty {
-                  Label(p["place"]["name"].string, systemImage: "mappin").font(.subheadline)
+                let placeName = p["place"]["name"].string
+                let trimmedPlace = placeName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedPlace.isEmpty,
+                  trimmedPlace != p["title"].string.trimmingCharacters(in: .whitespacesAndNewlines)
+                {
+                  Label(placeName, systemImage: "mappin").font(.subheadline)
                     .foregroundStyle(palette.muted)
                 }
                 if editMode != .active && !p["notes"].string.isEmpty {
@@ -119,7 +123,7 @@ struct ItineraryView: View {
       }
       ToolbarItem(placement: .topBarTrailing) {
         if editMode == .active { Button("完成") { editMode = .inactive } }
-        else { Menu { Button("调整顺序") { editMode = .active }; Button("与另一天交换…") { swapping = true } } label: { Image(systemName: "ellipsis.circle") } }
+        else { Menu { Button("调整顺序") { editMode = .active }; Button("与另一天交换") { swapping = true } } label: { Image(systemName: "ellipsis.circle") } }
       }
       ToolbarItem(placement: .topBarTrailing) {
         Button {
@@ -268,6 +272,8 @@ struct ActivityEditor: View {
   @State private var initialized = false
   @State private var finished = false
   @State private var createdID = UUID().uuidString
+  @State private var linkError: String?
+  @FocusState private var linkFocused: Bool
   func text(_ key: String) -> Binding<String> {
     Binding(
       get: { form[key].string },
@@ -368,9 +374,14 @@ struct ActivityEditor: View {
         Section {
           TextField("备注", text: text("notes"), axis: .vertical).lineLimit(3...8)
             .accessibilityIdentifier("activity.notes")
-          TextField("相关链接", text: text("url")).keyboardType(.URL).textInputAutocapitalization(
-            .never
-          ).autocorrectionDisabled()
+          VStack(alignment: .leading, spacing: 4) {
+            TextField("相关链接", text: text("url")).keyboardType(.URL)
+              .textInputAutocapitalization(.never).autocorrectionDisabled().focused($linkFocused)
+              .onChange(of: form["url"].string) { _, _ in linkError = nil }
+            if let linkError {
+              Text(linkError).font(.caption).foregroundStyle(palette.danger)
+            }
+          }
         }
       }.navigationTitle(object == nil ? "添加活动" : "编辑活动").toolbar {
         ToolbarItem(placement: .cancellationAction) {
@@ -465,8 +476,17 @@ struct ActivityEditor: View {
     guard initialized, !finished, restore.isNull, !dirty.isEmpty,
       !form["title"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     else { return }
+    var payload = form
     do {
-      var payload = form
+      payload["url"] = .string(try ActivityLink.normalize(form["url"].string))
+    } catch {
+      if reportErrors {
+        linkError = error.localizedDescription
+        linkFocused = true
+      }
+      return
+    }
+    do {
       if payload["time"]["mode"].string == "precise" {
         let pattern = #"^([01]\d|2[0-3]):[0-5]\d$"#
         guard payload["time"]["start"].string.range(of: pattern, options: .regularExpression) != nil

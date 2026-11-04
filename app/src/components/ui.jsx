@@ -18,15 +18,21 @@ export function Modal({
   initialFocus = 'title',
   action,
   dismissOnBackdrop = false,
+  nonModal = false,
+  returnFocus,
 }) {
   const ref = useRef(null),
     titleRef = useRef(null),
     titleId = useId();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const previous = document.activeElement,
+    const previous = returnFocus || document.activeElement,
       dialog = ref.current;
-    modalDepth++;
-    document.documentElement.classList.add('has-modal');
+    if (!nonModal) {
+      modalDepth++;
+      document.documentElement.classList.add('has-modal');
+    }
     // Entrance belongs to opening the dialog. Restoring motion later must not
     // replay it on a dialog that is already visible.
     const finishEntrance = (event) => {
@@ -36,7 +42,15 @@ export function Modal({
     dialog.addEventListener('animationend', finishEntrance);
     dialog.addEventListener('animationcancel', finishEntrance);
     if (!reducedMotion()) dialog.dataset.enter = '';
-    dialog.showModal();
+    if (nonModal) dialog.show();
+    else dialog.showModal();
+    const escape = (event) => {
+      if (event.key === 'Escape' && modalDepth === 0) {
+        event.preventDefault();
+        closeRef.current();
+      }
+    };
+    if (nonModal) document.addEventListener('keydown', escape);
     const target =
       initialFocus === 'title'
         ? titleRef.current
@@ -47,15 +61,17 @@ export function Modal({
       dialog.removeEventListener('animationcancel', finishEntrance);
       delete dialog.dataset.enter;
       dialog.close();
-      modalDepth--;
+      if (nonModal) document.removeEventListener('keydown', escape);
+      else modalDepth--;
       if (modalDepth === 0) document.documentElement.classList.remove('has-modal');
       if (previous?.isConnected) previous.focus?.({ preventScroll: true });
     };
-  }, []);
+  }, [nonModal]);
   return (
     <dialog
       ref={ref}
       aria-labelledby={titleId}
+      aria-modal={nonModal ? false : true}
       className={`modal ${wide ? 'wide' : ''} ${className}`}
       onCancel={(e) => {
         e.preventDefault();

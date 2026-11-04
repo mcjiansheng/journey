@@ -391,7 +391,7 @@ struct RescheduleView: View {
           dismiss()
         }
       }.disabled(!(1...365).contains(count))
-    }.navigationTitle("调整日期").onAppear {
+    }.navigationTitle("调整日期与天数").onAppear {
       start = JourneyDate.date(store.trip["startDate"].string)
       end = JourneyDate.calendar.date(byAdding: .day, value: max(0, Int(store.trip["dayCount"].number) - 1), to: start)!
     }

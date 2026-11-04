@@ -28,7 +28,7 @@ async function setup(page,{count=3,located=false,precise=false,dayCount=2,startD
 
 async function dates(page) {
  await page.getByRole('button',{name:'当天操作',exact:true}).click();
- await page.getByRole('button',{name:'调整日期与天数…',exact:true}).click();
+ await page.getByRole('button',{name:'调整日期与天数',exact:true}).click();
 }
 test('date shift offers a preview and moves arrangements with their day number',async({page})=>{
  await page.setViewportSize({width:1440,height:1000});const f=await setup(page);
@@ -49,7 +49,7 @@ test('extending dates completes directly and whole day swap is in the day menu',
  await dates(page);await page.getByLabel('结束日期',{exact:true}).fill('2026-11-04');
  await expect(page.getByRole('button',{name:'下一步',exact:true})).toHaveCount(0);
  await page.getByRole('dialog').getByRole('button',{name:'完成',exact:true}).click();
- await page.getByRole('button',{name:'当天操作',exact:true}).click();await page.getByRole('button',{name:'与另一天交换…',exact:true}).click();
+ await page.getByRole('button',{name:'当天操作',exact:true}).click();await page.getByRole('button',{name:'与另一天交换',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/第2天/}).click();
  await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.activity-card')).toHaveCount(0);
  await page.getByRole('tab',{name:/第2天/}).click();await expect(page.locator('.activity-card')).toHaveCount(3);

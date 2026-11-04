@@ -168,7 +168,7 @@ test('returning from an activity preserves edited provider place facts after det
  expect(saved).toMatchObject({name:'我们约定的湖边入口',address:'东门售票亭旁集合',category:'景点',lng:118.7975,lat:32.0739,providerPlaceId:'BINFOEDIT'});
  expect((await objects(page)).filter(o=>o.kind==='favorite')).toHaveLength(0);
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();
- await page.locator('.activity-card').filter({hasText:'我们约定的湖边入口'}).getByRole('button',{name:'地图',exact:true}).click();
+ await page.locator('.activity-card').filter({hasText:'我们约定的湖边入口'}).getByRole('button',{name:/^在地图查看：/}).click();
  await expect(page.locator('.place-information-hours')).toContainText('复查完成');
  await expect(page.getByRole('heading',{name:'我们约定的湖边入口',exact:true})).toBeVisible();
  await expect(page.locator('.place-address')).toHaveText('东门售票亭旁集合');
