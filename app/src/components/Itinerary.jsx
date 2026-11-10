@@ -24,6 +24,7 @@ import {
   Link,
 } from 'lucide-react';
 import { Field, Modal, Empty, AsyncButton, active, id, errorMessage, money } from './ui.jsx';
+import { pinWidgetToBoard } from '../board-sync.js';
 import {
   visibleDays,
   outsideDays,
@@ -149,21 +150,34 @@ export function ObjectActions({ journey: j, object: o, prominent = false, onDele
     <div className={`object-actions${prominent ? ' prominent-actions' : ''}`}>
       {children}
       {!deleted && o.kind === 'activity' && (
-        <button
-          className="text-button"
-          disabled={pending}
-          onClick={() =>
-            perform({
-              objectId: o.id,
-              kind: 'express',
-              generation: o.generation,
-              expression: { notParticipating: !expression.notParticipating },
-            })
-          }
-        >
-          {expression.notParticipating ? <UserPlus size={16} /> : <UserMinus size={16} />}{' '}
-          {expression.notParticipating ? '重新参加' : '我不参加'}
-        </button>
+        <>
+          <button
+            className="text-button"
+            disabled={pending}
+            onClick={() =>
+              perform({
+                objectId: o.id,
+                kind: 'express',
+                generation: o.generation,
+                expression: { notParticipating: !expression.notParticipating },
+              })
+            }
+          >
+            {expression.notParticipating ? <UserPlus size={16} /> : <UserMinus size={16} />}{' '}
+            {expression.notParticipating ? '重新参加' : '我不参加'}
+          </button>
+          <button
+            className="text-button pin-to-board-button"
+            disabled={pending}
+            onClick={(event) => {
+              const d = event.currentTarget.closest('details');
+              if (d) d.open = false;
+              pinWidgetToBoard(j, { kind: 'activity', activityId: o.id }, 'M');
+            }}
+          >
+            贴到白板
+          </button>
+        </>
       )}
       <button
         className={
@@ -1372,6 +1386,15 @@ export default function Itinerary({
                   }}
                 >
                   与另一天交换
+                </button>
+                <button
+                  className="text-button pin-day-to-board-button"
+                  onClick={() => {
+                    setDayMenuId(null);
+                    pinWidgetToBoard(j, { kind: 'day', dayId: current.id }, 'M');
+                  }}
+                >
+                  贴到白板
                 </button>
                 <button
                   className="text-button"

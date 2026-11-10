@@ -14,7 +14,7 @@ export function openDatabase(path) {
  CREATE TABLE IF NOT EXISTS leases(id TEXT PRIMARY KEY,userId TEXT NOT NULL,deviceId TEXT NOT NULL,serverTime INTEGER NOT NULL,expiresAt INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS trips(id TEXT PRIMARY KEY,data TEXT NOT NULL,cursor INTEGER NOT NULL DEFAULT 0,sequence INTEGER NOT NULL DEFAULT 0);
  CREATE TABLE IF NOT EXISTS members(tripId TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,userId TEXT NOT NULL REFERENCES users(id),isAdmin INTEGER NOT NULL,canInvite INTEGER NOT NULL,joinOrder INTEGER NOT NULL,archived INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(tripId,userId));
- CREATE TABLE IF NOT EXISTS objects(id TEXT NOT NULL,tripId TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,kind TEXT NOT NULL,payload TEXT NOT NULL,state TEXT NOT NULL,generation INTEGER NOT NULL,clocks TEXT NOT NULL,PRIMARY KEY(tripId,id));
+ CREATE TABLE IF NOT EXISTS objects(id TEXT NOT NULL,tripId TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,kind TEXT NOT NULL,payload TEXT NOT NULL,state TEXT NOT NULL,generation INTEGER NOT NULL,clocks TEXT NOT NULL,changedCursor INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(tripId,id));
  CREATE TABLE IF NOT EXISTS expressions(tripId TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,objectId TEXT NOT NULL,userId TEXT NOT NULL,data TEXT NOT NULL,clocks TEXT NOT NULL,PRIMARY KEY(tripId,objectId,userId));
  CREATE TABLE IF NOT EXISTS invites(id TEXT PRIMARY KEY,tripId TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,tokenHash TEXT UNIQUE NOT NULL,issuedBy TEXT NOT NULL,issuedOrder INTEGER NOT NULL,expiresAt INTEGER NOT NULL,revokedAt INTEGER);
  CREATE TABLE IF NOT EXISTS removals(tripId TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,userId TEXT NOT NULL,removedOrder INTEGER NOT NULL,PRIMARY KEY(tripId,userId));
@@ -25,6 +25,12 @@ export function openDatabase(path) {
  INSERT OR IGNORE INTO migrations VALUES(1);
  INSERT OR IGNORE INTO migrations VALUES(2);
  INSERT OR IGNORE INTO migrations VALUES(3);`);
+ const hasChangedCursor = db.prepare("PRAGMA table_info(objects)").all().some(c => c.name === 'changedCursor');
+ if (!hasChangedCursor) {
+  db.exec("ALTER TABLE objects ADD COLUMN changedCursor INTEGER NOT NULL DEFAULT 0;");
+ }
+ db.exec("CREATE INDEX IF NOT EXISTS idx_objects_trip_kind_cursor ON objects(tripId, kind, changedCursor);");
+ db.exec("INSERT OR IGNORE INTO migrations VALUES(4);");
  return db;
 }
 export function transaction(db,fn){db.exec('BEGIN IMMEDIATE');try{const result=fn();db.exec('COMMIT');return result;}catch(e){db.exec('ROLLBACK');throw e;}}

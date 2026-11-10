@@ -4,6 +4,7 @@ import { Modal, Field, Empty, money, active, id, errorMessage, currencyFactor } 
 import { visibleDays, timeLabel } from '../domain.js';
 import { linkedExpenseActivity, expenseDate, expenseTitle, expenseDateLabel } from '../expenses.js';
 import { ObjectActions } from './Itinerary.jsx';
+import { pinWidgetToBoard } from '../board-sync.js';
 import './editor-ledger.css';
 import ScrollableTabs from './ScrollableTabs.jsx';
 const groups = ['title', 'payment', 'notes', 'activityId', 'date'];
@@ -636,10 +637,18 @@ export default function Ledger({
         <div>
           <h1 className="sr-only">费用</h1>
         </div>
-        <button className="primary" onClick={() => edit(j.context.pendingExpenseId || id())}>
-          <Plus size={18} />
-          记一笔
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="secondary pin-to-board-button"
+            onClick={() => pinWidgetToBoard(j, { kind: 'expense' }, 'M')}
+          >
+            贴到白板
+          </button>
+          <button className="primary" onClick={() => edit(j.context.pendingExpenseId || id())}>
+            <Plus size={18} />
+            记一笔
+          </button>
+        </div>
       </div>
       {activityId && (
         <div className="ledger-activity-filter">

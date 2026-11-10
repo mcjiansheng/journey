@@ -17,7 +17,11 @@ JSON 请求/响应；错误 {error:{code,message,details?}}。Cookie HttpOnly �
 - GET /api/trips/:id -> Snapshot={trip:Trip,members:[Member],objects:[Object],cursor:number,epoch:number}。
 - GET /api/trips/:id/members -> {members:[Member]}，供成员与邀请界面独立刷新；Snapshot 中继续保留成员摘要，支持顶部头像、权限判断与离线展示。
 - Trip={id,name,ownerId,createdBy,teamMode,timezone,currency,destination,startDate:null|string,dayCount,state,generation,...}；Member={userId,displayName,isAdmin,canInvite,joinOrder}。
-- Object={id,tripId,kind:'day'|'activity'|'favorite'|'expense'|'route',payload,state:'active'|'deleted',generation,clocks?,expressions?}。expressions 数组 {userId,notParticipating,wishDelete,wishRestore}，只含当前成员。
+- Object={id,tripId,kind:'day'|'activity'|'favorite'|'expense'|'route'|'board'|'boardItem',payload,state:'active'|'deleted',generation,clocks?,expressions?}。expressions 数组 {userId,notParticipating,wishDelete,wishRestore}，只含当前成员。主快照排除 boardItem（仅返回 board）。
+- board payload={title,order:number,background:'dots'|'grid'|'plain'}；boardItem payload={boardId,frame:{x,y,w,h,rotation,scale},z:number,content,style,linkedActivityId,createdBy}。content 区分 note / text / emoji / image / link / widget / stroke / shape；widget.kind 为 activity / day / place / route / countdown / clock / expense；frame、z、content、style、linkedActivityId 各为独立逻辑组。boardItem 删除与恢复不走表态，任何成员可直接执行，express 返回 VALIDATION。每旅程 active board ≤ 20，每 board active boardItem ≤ 2000，超限返回 BOARD_FULL (409)。
+- GET /api/trips/:id/boards/:boardId/items?since=<cursor> -> {items:[Object],cursor,epoch} 白板增量拉取（无 since 全量含 deleted；有 since 仅返回变化项）。POST /operations 操作 boardItem 时省略 snapshot，仅返回 receipt。
+- PUT /api/trips/:id/assets/:assetId?variant=full|thumb 二进制上传（静态图 ≤ 1.5MB，GIF ≤ 5MB，thumb ≤ 300KB，限流 60 次/分/用户）；GET 同路径返回不可变缓存资源。
+- POST /api/trips/:id/boards/:boardId/presence {deviceId,selected,editing,live,leave?} -> 204（仅内存，限频 15次/秒/设备，15s 超时发 leave）；GET /api/trips/:id/events SSE 广播 event: presence。
 - day payload={ordinal,date:null|string}；activity={title,dayId,order:number,time:{mode:'flexible'|'precise',period:'',start:null|'HH:mm',end:null|'HH:mm',endDayOffset:0},place:null|Place,buffers:{before:null|number,after:null|number},notes:'',url:''}。
 - Place={name,address:'',lng:null|number,lat:null|number,provider:null|'amap',providerPlaceId:null|string,category:'',sourceUrl:'',fetchedAt:null|number,coordSystem:'GCJ-02'}，成组修改地点。
 - favorite payload=Place；expense={title:'',payment:{status:'paid'|'estimated',amountMinor:null|integer,currency},notes:'',activityId:null|string}；route={fromId:null|string,fromPlace:null|Place,toId,mode:'walking'|'driving'|'bicycling'|'transit',minutes:null|number,manual:boolean,inputSignature:string,path:[],distance:null|number}。
@@ -45,7 +49,7 @@ setContext(patch)（同步更新 React、异步持久化/上传）、setDraft(ke
 
 ## 实施选择
 
-- 手机底栏四项 行程/地图/费用/设置；首页个人设置同组件。
+- 主导航五项 行程/地图/白板/费用/设置；手机底栏五项；白板全视口布局；首页个人设置同组件。
 - 归档为个人列表整理，权限由本人控制，共享行程保持可编辑。
 - 通知先提供本人设备的协作变化通知（用户主动开启权限；页面保持连接时），无行程闹钟或假送达开关。
 - 日期范围、逻辑组、生命周期、永久清除与邀请撤权以正式规则为准。软删除保留，不提供未经决定的到期清理。

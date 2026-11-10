@@ -50,6 +50,7 @@ import MarkPicker, { MarkSymbol } from './components/MarkPicker.jsx';
 import { markKey, defaultMark, markLabel } from './marks.js';
 import { clusterPlaces } from './map-clusters.js';
 import { Modal } from './components/ui.jsx';
+import { pinWidgetToBoard } from './board-sync.js';
 import './map.css';
 import './map-markers.css';
 
@@ -1552,6 +1553,16 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                     <Star size={18} />
                     {selectedFavorite?.state === 'active' ? '已收藏' : '收藏'}
                   </button>
+                  {selectedFavorite?.state === 'active' && (
+                    <button
+                      className="pin-to-board-button"
+                      onClick={() =>
+                        pinWidgetToBoard(j, { kind: 'place', favoriteId: selectedFavorite.id }, 'S')
+                      }
+                    >
+                      贴到白板
+                    </button>
+                  )}
                 </div>
                 {selectedFavorite?.state === 'active' && (
                   <FavoriteMarkEditor

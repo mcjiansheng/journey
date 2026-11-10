@@ -14,10 +14,12 @@ import {
   AlertCircle,
   X,
   UserRound,
+  StickyNote,
 } from 'lucide-react';
 import { useJourney } from './sync.js';
 import { usePageNavigation } from './usePageNavigation.js';
 import TripMap from './components/TripMap.jsx';
+import { Board } from './components/Board.jsx';
 import { Login, Home, CreateTrip, JoinTrip } from './components/Entry.jsx';
 import ActivityEditor from './components/ActivityEditor.jsx';
 import Itinerary, { Reschedule } from './components/Itinerary.jsx';
@@ -36,6 +38,7 @@ import { syncStatusText } from './components/SyncSettings.jsx';
 const pages = [
   ['itinerary', '行程', CalendarDays],
   ['map', '地图', Map],
+  ['board', '白板', StickyNote],
   ['expenses', '费用', Wallet],
   ['settings', '旅程设置', SettingsIcon],
 ];
@@ -326,7 +329,7 @@ export default function App() {
             <div className={`workspace-body${panelOpen ? ' has-activity-panel' : ''}`}>
               <main
                 id="main"
-                className={`main-content ${page === 'map' ? 'map-content' : ''}`}
+                className={`main-content ${page === 'map' ? 'map-content' : ''} ${page === 'board' ? 'board-content' : ''}`}
                 ref={scrollRef}
                 onScroll={(e) => {
                   clearTimeout(scrollRef.timer);
@@ -352,7 +355,19 @@ export default function App() {
                     onTeam={() => setModal('team')}
                     onDeleted={() => setModal('deleted')}
                   />
-                ) : page === 'map' ? null : page === 'expenses' ? (
+                ) : page === 'map' ? null : page === 'board' ? (
+                  <Board
+                    key={`${j.user.id}:${tripId}:${j.context?.board?.boardId || 'default'}`}
+                    tripId={tripId}
+                    boardId={j.context?.board?.boardId}
+                    snapshot={j.snapshot}
+                    currentUserId={j.user?.id}
+                    mutate={j.mutate}
+                    onNavigate={(targetPage, targetContext) => {
+                      j.setContext({ page: targetPage, ...targetContext });
+                    }}
+                  />
+                ) : page === 'expenses' ? (
                   <Ledger
                     key={`${j.user.id}:${tripId}:${expenseActivityId || 'all'}`}
                     journey={j}

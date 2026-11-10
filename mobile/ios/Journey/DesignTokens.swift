@@ -19,6 +19,35 @@ enum DesignTokens {
     let selected: Color
     let highlight: Color
     let shadow: Color
+    let widgetBrandA: Color
+    let widgetBrandB: Color
+    let widgetInkA: Color
+    let widgetInkB: Color
+    let widgetBrandHi: Color
+    let mapLand: Color
+    let mapBlock: Color
+    let mapRoad: Color
+    let mapMajor: Color
+    let mapWater: Color
+    let mapPark: Color
+    let mapText: Color
+    let noteYellow: Color
+    let noteGreen: Color
+    let noteBlue: Color
+    let notePink: Color
+    let notePurple: Color
+    let noteGray: Color
+    let inkOrange: Color
+    let inkBlue: Color
+    let inkPurple: Color
+    let hlYellow: Color
+    let hlGreen: Color
+    let hlBlue: Color
+    let hlPink: Color
+    let peer1: Color
+    let peer2: Color
+    let peer3: Color
+    let peer4: Color
   }
   private static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
     Color(uiColor: UIColor { traits in
@@ -42,7 +71,36 @@ enum DesignTokens {
     border: adaptive(0xdce2d9ff, 0x2c3a34ff),
     selected: adaptive(0xdcebddff, 0x294c3eff),
     highlight: adaptive(0xffffffe0, 0xffffff1f),
-    shadow: adaptive(0x294b3b0a, 0x0000001f)
+    shadow: adaptive(0x294b3b0a, 0x0000001f),
+    widgetBrandA: adaptive(0x368165ff, 0x368165ff),
+    widgetBrandB: adaptive(0x14382bff, 0x14382bff),
+    widgetInkA: adaptive(0x1b2a24ff, 0x1b2a24ff),
+    widgetInkB: adaptive(0x0e1714ff, 0x0e1714ff),
+    widgetBrandHi: adaptive(0x9be0c0ff, 0x9be0c0ff),
+    mapLand: adaptive(0xeef1e8ff, 0x232f45ff),
+    mapBlock: adaptive(0xe3e8dcff, 0x28364fff),
+    mapRoad: adaptive(0xffffffff, 0x3b4a66ff),
+    mapMajor: adaptive(0xfbe9b7ff, 0x55647fff),
+    mapWater: adaptive(0xb9d9efff, 0x1b3f7cff),
+    mapPark: adaptive(0xcfe6c8ff, 0x1f4b3cff),
+    mapText: adaptive(0x6b7a72ff, 0x9fb0c8ff),
+    noteYellow: adaptive(0xf6e9b0ff, 0x564c22ff),
+    noteGreen: adaptive(0xd2e8d6ff, 0x27453aff),
+    noteBlue: adaptive(0xd0e4f0ff, 0x234456ff),
+    notePink: adaptive(0xf4d6d1ff, 0x58322fff),
+    notePurple: adaptive(0xdfd8efff, 0x3c3558ff),
+    noteGray: adaptive(0xe7e9e4ff, 0x2d3632ff),
+    inkOrange: adaptive(0xc9661fff, 0xf0a060ff),
+    inkBlue: adaptive(0x2a6fb8ff, 0x7db6eeff),
+    inkPurple: adaptive(0x7651b8ff, 0xb79cf0ff),
+    hlYellow: adaptive(0xf2cf3aff, 0xe3c33aff),
+    hlGreen: adaptive(0x5fc487ff, 0x56b87cff),
+    hlBlue: adaptive(0x58a9dcff, 0x5aa5d6ff),
+    hlPink: adaptive(0xee7f78ff, 0xe07f79ff),
+    peer1: adaptive(0xd9622bff, 0xd9622bff),
+    peer2: adaptive(0x7a5bd0ff, 0x7a5bd0ff),
+    peer3: adaptive(0x1f8fb3ff, 0x1f8fb3ff),
+    peer4: adaptive(0xc0397aff, 0xc0397aff)
   )
   static let atlas = Colors(
     primary: adaptive(0x176b88ff, 0x8ecce2ff),
@@ -60,12 +118,42 @@ enum DesignTokens {
     border: adaptive(0xcedde5ff, 0x253f4cff),
     selected: adaptive(0xc7e2edff, 0x275a72ff),
     highlight: adaptive(0xffffffbb, 0xffffff19),
-    shadow: adaptive(0x193d510a, 0x0000001f)
+    shadow: adaptive(0x193d510a, 0x0000001f),
+    widgetBrandA: adaptive(0x1f7ea0ff, 0x1f7ea0ff),
+    widgetBrandB: adaptive(0x0d3b52ff, 0x0d3b52ff),
+    widgetInkA: adaptive(0x16262fff, 0x16262fff),
+    widgetInkB: adaptive(0x0b151bff, 0x0b151bff),
+    widgetBrandHi: adaptive(0x9bdcf2ff, 0x9bdcf2ff),
+    mapLand: adaptive(0xeef1e8ff, 0x232f45ff),
+    mapBlock: adaptive(0xe3e8dcff, 0x28364fff),
+    mapRoad: adaptive(0xffffffff, 0x3b4a66ff),
+    mapMajor: adaptive(0xfbe9b7ff, 0x55647fff),
+    mapWater: adaptive(0xb9d9efff, 0x1b3f7cff),
+    mapPark: adaptive(0xcfe6c8ff, 0x1f4b3cff),
+    mapText: adaptive(0x6b7a72ff, 0x9fb0c8ff),
+    noteYellow: adaptive(0xf6e9b0ff, 0x564c22ff),
+    noteGreen: adaptive(0xd2e8d6ff, 0x27453aff),
+    noteBlue: adaptive(0xd0e4f0ff, 0x234456ff),
+    notePink: adaptive(0xf4d6d1ff, 0x58322fff),
+    notePurple: adaptive(0xdfd8efff, 0x3c3558ff),
+    noteGray: adaptive(0xe7e9e4ff, 0x2d3632ff),
+    inkOrange: adaptive(0xc9661fff, 0xf0a060ff),
+    inkBlue: adaptive(0x2a6fb8ff, 0x7db6eeff),
+    inkPurple: adaptive(0x7651b8ff, 0xb79cf0ff),
+    hlYellow: adaptive(0xf2cf3aff, 0xe3c33aff),
+    hlGreen: adaptive(0x5fc487ff, 0x56b87cff),
+    hlBlue: adaptive(0x58a9dcff, 0x5aa5d6ff),
+    hlPink: adaptive(0xee7f78ff, 0xe07f79ff),
+    peer1: adaptive(0xd9622bff, 0xd9622bff),
+    peer2: adaptive(0x7a5bd0ff, 0x7a5bd0ff),
+    peer3: adaptive(0x1f8fb3ff, 0x1f8fb3ff),
+    peer4: adaptive(0xc0397aff, 0xc0397aff)
   )
   static func palette(_ name: String) -> Colors { name == "atlas" ? atlas : forest }
   static let radiusSm: CGFloat = 8
   static let radiusMd: CGFloat = 12
   static let radiusLg: CGFloat = 16
   static let radiusXl: CGFloat = 24
+  static let radiusWidget: CGFloat = 30
   static let radiusPill: CGFloat = 999
 }

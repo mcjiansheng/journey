@@ -77,6 +77,8 @@ function operationSummary(op, objects) {
       markPreset: '标记预设',
       day: '日期',
       route: '路线',
+      board: '白板',
+      boardItem: '白板贴纸',
     }[kind] || '内容';
   const objectName = (id) => {
     const object = objects.get(id);
@@ -226,20 +228,25 @@ const emptyAccount = (user) => ({
   queue: [],
 });
 
-export async function api(path, { body, method = 'GET', ...options } = {}) {
+export async function api(path, { body, method = 'GET', raw = false, ...options } = {}) {
   let res;
   const requestEpoch = authEpoch;
+  const isBinary =
+    raw ||
+    (typeof Blob !== 'undefined' && body instanceof Blob) ||
+    (typeof ArrayBuffer !== 'undefined' &&
+      (body instanceof ArrayBuffer || ArrayBuffer.isView(body)));
   try {
     res = await fetch(base.replace(/\/$/, '') + path, {
       method,
       credentials: 'same-origin',
       ...options,
       headers: {
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(body !== undefined && !isBinary ? { 'Content-Type': 'application/json' } : {}),
         ...(method !== 'GET' && csrf ? { 'X-CSRF-Token': csrf } : {}),
         ...options.headers,
       },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      ...(body !== undefined ? { body: isBinary ? body : JSON.stringify(body) } : {}),
     });
   } catch {
     if (requestEpoch === authEpoch) {
@@ -320,6 +327,7 @@ function optimistic(snapshot, queue) {
   if (!snapshot) return null;
   let next = clone(snapshot);
   for (const op of queue.filter((x) => x.tripId === snapshot.trip.id)) {
+    if (op.objectType === 'boardItem') continue;
     const obj =
       op.objectId === next.trip.id ? next.trip : next.objects.find((x) => x.id === op.objectId);
     if (op.kind === 'reschedule') {
@@ -577,6 +585,20 @@ async function accessFailure(e, id) {
     setError(e);
   });
 }
+const presenceListeners = new Set();
+const changeListeners = new Set();
+export function onPresence(fn) {
+  presenceListeners.add(fn);
+  return () => presenceListeners.delete(fn);
+}
+export function onTripChange(fn) {
+  changeListeners.add(fn);
+  return () => changeListeners.delete(fn);
+}
+export function getDeviceId() {
+  return deviceId;
+}
+
 function closeSource() {
   source?.close();
   source = null;
@@ -594,6 +616,11 @@ function subscribeTrip(id) {
     } catch {
       return;
     }
+    for (const fn of changeListeners) {
+      try {
+        fn(notice);
+      } catch {}
+    }
     const current = account.snapshots[id];
     if (
       (notice.epoch ?? 0) < (current?.epoch ?? 0) ||
@@ -606,6 +633,13 @@ function subscribeTrip(id) {
     } catch {
       /* refresh sets recoverable error */
     }
+  });
+  source.addEventListener('presence', (event) => {
+    if (epoch !== authEpoch || selected !== id) return;
+    try {
+      const data = JSON.parse(event.data);
+      for (const fn of presenceListeners) fn(data);
+    } catch {}
   });
   source.addEventListener('revoked', () => {
     if (epoch === authEpoch) void refresh().catch(() => {});
@@ -1133,5 +1167,6 @@ export function useJourney() {
     updateProfile,
     isCurrentUser: (id) => account?.user?.id === id,
     refreshTrips,
+    getDeviceId,
   };
 }
