@@ -12,7 +12,8 @@ export function currentCityFromAmap(AMap = globalThis.window?.AMap) {
   const location = AMap?.getConfig?.()?.defaultLocation;
   if (Array.isArray(location) && location.length >= 2) {
     const point = location.slice(-2).map(Number);
-    if (validCenter(point)) return { name: '当前城市', lng: point[0], lat: point[1] };
+    if (validCenter(point) && (point[0] !== 0 || point[1] !== 0))
+      return { name: '当前城市', lng: point[0], lat: point[1] };
   }
   return { name: '当前城市', lng: DEFAULT_CITY_CENTER[0], lat: DEFAULT_CITY_CENTER[1] };
 }

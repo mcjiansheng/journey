@@ -108,10 +108,12 @@ const searchCity = (city) => {
 const isCityLookupError = (error) =>
   /ABROAD|INVALID|ENGINE_RESPONSE_DATA_ERROR/i.test(str(error?.info));
 export async function searchPlaces(query, city = '') {
+  const text = str(query).trim();
+  if (!text) return [];
   const AMap = await loadAmap();
   const targetCity = searchCity(city);
   const run = (c) =>
-    call(new AMap.PlaceSearch({ city: c, pageSize: 20, extensions: 'base' }), 'search', [query]);
+    call(new AMap.PlaceSearch({ city: c, pageSize: 20, extensions: 'base' }), 'search', [text]);
   let result;
   try {
     result = await run(targetCity);
@@ -122,9 +124,11 @@ export async function searchPlaces(query, city = '') {
   return result?.poiList?.pois?.map(normalizePlace) || [];
 }
 export async function suggestPlaces(query, city = '') {
+  const text = str(query).trim();
+  if (!text) return [];
   const AMap = await loadAmap();
   const targetCity = searchCity(city);
-  const run = (c) => call(new AMap.AutoComplete({ city: c }), 'search', [query]);
+  const run = (c) => call(new AMap.AutoComplete({ city: c }), 'search', [text]);
   let result;
   try {
     result = await run(targetCity);
@@ -144,17 +148,27 @@ async function geocodeResponse(address, city = '', { signal } = {}) {
   if (signal?.aborted) throw signal.reason || new DOMException('地图查询已取消', 'AbortError');
   const AMap = await loadAmap();
   const geocoder = new AMap.Geocoder({ city: city || '全国' });
-  if (typeof geocoder._geocodingComplete === 'function' && AMap.WebService?.get) {
+  if (
+    typeof geocoder._geocodingComplete === 'function' &&
+    typeof geocoder._onError === 'function' &&
+    geocoder.url &&
+    AMap.WebService?.get
+  ) {
     return call(
       {
         getLocation(target, callback) {
+          if (!target) {
+            callback?.('error', 'NO_PARAMS');
+            return;
+          }
           const params = {
             key: geocoder.config?.key,
             s: 'rsv3',
             language: geocoder.opt?.lang || 'zh_cn',
-            address: target,
+            address: Array.isArray(target) ? target.join('|') : target,
             ...(geocoder.opt?.city ? { city: geocoder.opt.city } : {}),
           };
+          if (Array.isArray(target)) params.batch = true;
           AMap.WebService.get(`${geocoder.url}/geo`, params, (status, data) => {
             if (status === 'complete' && data?.status) geocoder._geocodingComplete(data, callback);
             else geocoder._onError(data || { info: status }, callback);

@@ -69,4 +69,8 @@ test('geocoding failures fall back to the user current city and retry destinatio
  assert.equal(planMapCamera({destination:'nju',saved:savedFallback}).source,'destination');
  const moved={...savedFallback,cameraSource:'viewport',zoom:15};
  assert.equal(planMapCamera({destination:'nju',saved:moved}).source,'viewport');
+ for(const invalid of [[0,0],[0,0,0,0,0,0],null,undefined,[-190,0]]){
+  const zero=currentCityFromAmap({getConfig:()=>({defaultLocation:invalid})});
+  assert.equal(zero.name,'当前城市');assert.equal(zero.lng,116.397128);assert.equal(zero.lat,39.916527);
+ }
 });
