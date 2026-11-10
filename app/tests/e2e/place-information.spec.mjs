@@ -140,7 +140,8 @@ test('a located selection remains actionable while optional details are pending'
   expect((await objects(page)).find(o=>o.kind==='favorite').payload).toMatchObject({name:'延迟详情地点',lng:118.7975,lat:32.0739,providerPlaceId:'BINFODELAY'});
   await page.getByRole('button',{name:'加入行程',exact:true}).click();
   await expect(page.getByRole('dialog')).toBeVisible();
-  await expect(page.getByRole('dialog').getByLabel('活动名称')).toHaveValue('延迟详情地点');
+  await expect(page.getByRole('dialog').getByLabel('活动名称')).toHaveValue('');
+  await expect(page.getByRole('dialog').getByLabel('活动名称')).toHaveAttribute('placeholder','延迟详情地点');
  }finally{release();}
 });
 

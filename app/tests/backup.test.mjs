@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, rm, chmod } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -98,4 +98,42 @@ test('new host migration with independent latest ledger works, refuses overwriti
  assert.equal(verifyServiceStopMode('--service-stopped',()=>'ActiveState=inactive\nMainPID=0\n'),true);
  assert.throws(()=>verifyServiceStopMode('--service-stopped',()=>'ActiveState=active\nMainPID=123\n'),/SERVICE_STILL_RUNNING/);
  assert.throws(()=>verifyServiceStopMode('--service-stopped',()=>{throw new Error('no systemctl');}),/SERVICE_STILL_RUNNING/);
+});
+
+test('backup and restore include the whiteboard assets directory',async t=>{
+ const {options,db,security}=await fixture(t);
+ const assetsPath=join(dirname(options.mainPath),'assets');
+ const image=randomBytes(5*1024*1024),thumb=Buffer.from('thumbnail-bytes');
+ await mkdir(join(assetsPath,'trip-1'),{recursive:true});
+ await writeFile(join(assetsPath,'trip-1','asset.full'),image);
+ await writeFile(join(assetsPath,'trip-1','asset.thumb'),thumb);
+ const backupPath=await createBackup({...options,assetsPath});
+ assert.ok((await readFile(join(backupPath,'assets.enc'))).length>0);
+ security.close();db.close();
+ // Simulate a disaster: the asset directory is lost.
+ await rm(assetsPath,{recursive:true,force:true});
+ const result=await restoreBackup({...options,backupPath,assetsPath,serviceStopped:true});
+ assert.equal(result.assets,assetsPath);
+ assert.deepEqual(await readFile(join(assetsPath,'trip-1','asset.full')),image);
+ assert.deepEqual(await readFile(join(assetsPath,'trip-1','asset.thumb')),thumb);
+ const restored=openDatabase(options.mainPath);
+ assert.equal(JSON.parse(restored.prepare('SELECT data FROM trips WHERE id=?').get('t').data).name,'Before');
+ restored.close();
+ // A backup created before assets support has no assets.enc and must stay restorable.
+ const manifestPath=join(backupPath,'manifest.json'),manifest=JSON.parse(await readFile(manifestPath,'utf8'));
+ delete manifest.files.assets;
+ await writeFile(manifestPath,JSON.stringify(manifest,null,2)+'\n');
+ await rm(join(backupPath,'assets.enc'),{force:true});
+ const legacy=await restoreBackup({...options,backupPath,assetsPath,serviceStopped:true});
+ assert.equal(legacy.assets,null);
+ assert.deepEqual(await readFile(join(assetsPath,'trip-1','asset.full')),image);
+});
+test('restore refuses a backup with assets when no assets path is provided',async t=>{
+ const {options,db,security}=await fixture(t);
+ const assetsPath=join(dirname(options.mainPath),'assets');
+ await mkdir(join(assetsPath,'trip-1'),{recursive:true});
+ await writeFile(join(assetsPath,'trip-1','asset.full'),Buffer.from('x'));
+ const backupPath=await createBackup({...options,assetsPath});
+ security.close();db.close();
+ await assert.rejects(restoreBackup({...options,backupPath,serviceStopped:true}),/ASSETS_PATH_REQUIRED/);
 });

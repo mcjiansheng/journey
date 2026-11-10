@@ -244,10 +244,15 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
   const consecutivePresenceErrorsRef = useRef(0);
   const pendingPresenceRef = useRef(null);
 
-  // Load from IndexedDB and server
+  // Load from IndexedDB and server. The cached cursor may sit on a previous
+  // process epoch (server restart, deploy, backup restore). In that case the
+  // incremental response is not a complete board, so refetch without `since`,
+  // replace the cache, and only then trust it again.
   const loadData = useCallback(async () => {
     if (!tripId || !boardId) return;
     try {
+      const itemsUrl = (since) =>
+        `/api/trips/${tripId}/boards/${boardId}/items${since ? `?since=${since}` : ''}`;
       const cached = await readBoardCache(tripId, boardId);
       if (cached && Array.isArray(cached.items)) {
         const normCached = cached.items.map(normalizeBoardItem);
@@ -259,15 +264,36 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
         epochRef.current = cached.epoch || null;
       }
 
-      const since = cached?.cursor ? `?since=${cached.cursor}` : '';
-      const res = await api(`/api/trips/${tripId}/boards/${boardId}/items${since}`);
+      const since = cached?.cursor ? cached.cursor : 0;
+      let res = await api(itemsUrl(since));
+      let replace = !cached || !Array.isArray(cached.items) || !since;
+      if (
+        res &&
+        cached &&
+        Array.isArray(cached.items) &&
+        Number(res.epoch) !== Number(cached.epoch)
+      ) {
+        res = await api(itemsUrl(0));
+        replace = true;
+      }
 
       if (res) {
-        const map = new Map((cached?.items || []).map((it) => [it.id, normalizeBoardItem(it)]));
-        for (const item of res.items || []) {
-          map.set(item.id, normalizeBoardItem(item));
-        }
-        const merged = Array.from(map.values());
+        const merged = replace
+          ? (res.items || []).map(normalizeBoardItem)
+          : Array.from(
+              (() => {
+                const map = new Map();
+                for (const item of cached.items) {
+                  const norm = normalizeBoardItem(item);
+                  map.set(norm.id, norm);
+                }
+                for (const item of res.items || []) {
+                  const norm = normalizeBoardItem(item);
+                  map.set(norm.id, norm);
+                }
+                return map;
+              })().values(),
+            );
 
         setItems(merged);
         setCursor(res.cursor || 0);
@@ -298,17 +324,26 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
     const unsub = onTripChange(async () => {
       if (!tripId || !boardId) return;
       try {
-        const since = cursorRef.current ? `?since=${cursorRef.current}` : '';
-        const res = await api(`/api/trips/${tripId}/boards/${boardId}/items${since}`);
+        const itemsUrl = (since) =>
+          `/api/trips/${tripId}/boards/${boardId}/items${since ? `?since=${since}` : ''}`;
+        const since = cursorRef.current || 0;
+        let res = await api(itemsUrl(since));
         if (!res) return;
 
+        // An epoch change means the server was restarted/restored. The
+        // incremental payload only contains changed items, never replace the
+        // whole board with it; refetch the complete board instead.
         let merged;
-        if (epochRef.current && res.epoch === epochRef.current && since) {
+        if (since && epochRef.current != null && Number(res.epoch) === Number(epochRef.current)) {
           const map = new Map(itemsRef.current.map((it) => [it.id, normalizeBoardItem(it)]));
           for (const item of res.items || []) {
-            map.set(item.id, normalizeBoardItem(item));
+            const norm = normalizeBoardItem(item);
+            map.set(norm.id, norm);
           }
           merged = Array.from(map.values());
+        } else if (since && Number(res.epoch) !== Number(epochRef.current)) {
+          res = await api(itemsUrl(0));
+          merged = (res?.items || []).map(normalizeBoardItem);
         } else {
           merged = (res.items || []).map(normalizeBoardItem);
         }
@@ -408,12 +443,12 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
         }
       };
 
-      if (immediate || elapsed >= 60) {
+      if (immediate || elapsed >= 80) {
         clearTimeout(presenceTimerRef.current);
         await doSend();
       } else {
         clearTimeout(presenceTimerRef.current);
-        presenceTimerRef.current = setTimeout(doSend, 60 - elapsed);
+        presenceTimerRef.current = setTimeout(doSend, 80 - elapsed);
       }
     },
     [tripId, boardId],
@@ -511,7 +546,6 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
               style: cleaned.style ? { ...(it.style || {}), ...cleaned.style } : it.style,
               frame: cleaned.frame ? { ...(it.frame || {}), ...cleaned.frame } : it.frame,
               updatedAt: now,
-              generation: (it.generation || 0) + 1,
             });
             return updatedItem;
           }

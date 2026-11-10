@@ -261,6 +261,14 @@ test('board-widgets: countdown widget model across phases', () => {
   const mBefore = widgetModel(snapshot, item, { now: Date.parse('2026-11-20T10:00:00Z') });
   assert.equal(mBefore.label, '距出发');
   assert.equal(mBefore.number, 11); // 2026-12-01 - 2026-11-20
+  assert.equal(mBefore.startDateLabel, '12/1');
+  assert.equal(mBefore.startWd, '周二');
+  assert.equal(mBefore.endMd, '12/2');
+  assert.equal(mBefore.endWd, '周三');
+  assert.deepEqual(
+    mBefore.days.map((d) => d.ordinal),
+    [1, 2],
+  );
 
   // 2. During trip: 2026-12-02
   const mDuring = widgetModel(snapshot, item, { now: Date.parse('2026-12-02T10:00:00Z') });
@@ -296,12 +304,63 @@ test('board-widgets: clock widget model', () => {
 test('board-widgets: expense widget model', () => {
   const snapshot = createMockSnapshot();
   const item = { content: { kind: 'expense' }, style: { size: 'M' } };
-  const m = widgetModel(snapshot, item);
+  const m = widgetModel(snapshot, item, { now: Date.parse('2026-12-02T10:00:00Z') });
 
   assert.equal(m.total, 38000); // 380.00 CNY (paid only)
+  assert.equal(m.formattedTotal, '¥380.00');
   assert.equal(m.est, 10000);   // 100.00 CNY (estimated)
+  assert.equal(m.formattedEst, '¥100.00');
   assert.equal(m.per, 19000);   // 38000 / 2 members
+  assert.equal(m.formattedPer, '¥190.00');
   assert.equal(m.others['USD'], 1500);
+  assert.deepEqual(m.perDay, [38000, 0]);
+  assert.equal(m.hi, 1); // 2026-12-02 is the second visible day
   assert.equal(m.top.length, 1);
   assert.equal(m.top[0].title, '楼外楼午餐');
+  assert.equal(m.top[0].dayText, '第 1 天');
+  assert.equal(m.top[0].formatted, '¥380.00');
+});
+
+test('board-widgets: expense widget currency factors (KRW/JPY/CNY)', () => {
+  const item = { content: { kind: 'expense' }, style: { size: 'M' } };
+  const withCurrency = (currency, amountMinor) => {
+    const snapshot = createMockSnapshot();
+    snapshot.trip.currency = currency;
+    snapshot.objects = snapshot.objects.filter((o) => o.kind !== 'expense');
+    snapshot.objects.push({
+      id: 'exp-main',
+      tripId: 'trip-1',
+      kind: 'expense',
+      state: 'active',
+      generation: 1,
+      clocks: {},
+      payload: {
+        title: '午饭钱',
+        activityId: 'act-2',
+        payment: { status: 'paid', currency, amountMinor },
+      },
+    });
+    return widgetModel(snapshot, item, { now: Date.parse('2026-12-02T10:00:00Z') });
+  };
+
+  // KRW has 0 decimals (currencyFactor 1): 150000 minor is ₩150,000, not ₩1,500.
+  const krw = withCurrency('KRW', 150000);
+  assert.equal(krw.cur, 'KRW');
+  assert.equal(krw.total, 150000);
+  assert.equal(krw.formattedTotal, '₩150,000');
+  assert.equal(krw.per, 75000);
+  assert.equal(krw.formattedPer, '₩75,000');
+  assert.deepEqual(krw.perDay, [150000, 0]);
+  assert.equal(krw.top[0].formatted, '₩150,000');
+
+  // JPY regression (currencyFactor 1): 1000 minor is ¥1,000, not ¥10.00.
+  const jpy = withCurrency('JPY', 1000);
+  assert.equal(jpy.total, 1000);
+  assert.ok(jpy.formattedTotal.endsWith('¥1,000'));
+  assert.ok(jpy.formattedPer.endsWith('¥500'));
+
+  // CNY regression (currencyFactor 100): 12000 minor is ¥120.00.
+  const cny = withCurrency('CNY', 12000);
+  assert.equal(cny.formattedTotal, '¥120.00');
+  assert.equal(cny.formattedPer, '¥60.00');
 });

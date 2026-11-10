@@ -554,3 +554,78 @@ test('P3: presence upstream, broadcast to other connections, rate limit, inactiv
 
   await readerB.cancel();
 });
+
+test('P1: presence 上行不消耗全局 IP 配额，大量 presence 后普通 API 仍可用', async t => {
+  const f = await fixture(t);
+  const a = await f.account('alice');
+  const s = await f.trip(a);
+  const tid = s.trip.id;
+  const boardId = randomUUID();
+  await f.op(a, tid, { objectId: boardId, kind: 'create', objectType: 'board', patch: { title: '限流板', order: 0, background: 'dots' } });
+
+  // 设备 15 次/秒限频保留：同一 deviceId 连发会得到 PRESENCE_RATE
+  const floodDevice = randomUUID();
+  let deviceRateCode = null;
+  for (let i = 0; i < 17; i++) {
+    const r = await f.req(`/api/trips/${tid}/boards/${boardId}/presence`, {
+      actor: a,
+      method: 'POST',
+      body: { deviceId: floodDevice, selected: [] },
+    });
+    if (r.status === 429 && !deviceRateCode) deviceRateCode = r.data.error.code;
+  }
+  assert.equal(deviceRateCode, 'PRESENCE_RATE', '同一设备超过 15 次/秒应返回 PRESENCE_RATE');
+
+  // 全局 IP 桶为 500 次/分：presence 若仍计入，这里 520 次必然把后续普通 API 打成 429。
+  const statuses = new Set();
+  let routeRateCode = null;
+  for (let i = 0; i < 520; i++) {
+    const r = await f.req(`/api/trips/${tid}/boards/${boardId}/presence`, {
+      actor: a,
+      method: 'POST',
+      body: { deviceId: randomUUID(), selected: [] },
+    });
+    statuses.add(r.status);
+    if (r.status === 429 && !routeRateCode) routeRateCode = r.data.error.code;
+    assert.ok(r.status === 204 || r.status === 429, `presence 只应返回 204 或自身限频 429，实际 ${r.status}`);
+  }
+  assert.ok(statuses.has(204), 'burst 中应有成功的 presence');
+  assert.equal(statuses.has(429), true, '超过 presence 自身限频后应返回 429');
+  assert.equal(routeRateCode, 'PRESENCE_RATE', 'presence 限频错误码应为 PRESENCE_RATE');
+
+  const snap = await f.req(`/api/trips/${tid}`, { actor: a });
+  assert.equal(snap.status, 200, 'presence burst 后普通 API 不应被全局 IP 桶 429');
+  assert.equal(snap.data.trip.id, tid);
+});
+
+test('P1: presence 的 live 键数超过 200 返回 422 VALIDATION', async t => {
+  const f = await fixture(t);
+  const a = await f.account('alice');
+  const s = await f.trip(a);
+  const tid = s.trip.id;
+  const boardId = randomUUID();
+  await f.op(a, tid, { objectId: boardId, kind: 'create', objectType: 'board', patch: { title: '上限板', order: 0, background: 'dots' } });
+  const frameAt = i => ({ x: i, y: i, w: 10, h: 10 });
+
+  const tooMany = {};
+  for (let i = 0; i < 201; i++) tooMany[`live_${i}`] = frameAt(i);
+  let r = await f.req(`/api/trips/${tid}/boards/${boardId}/presence`, {
+    actor: a,
+    method: 'POST',
+    body: { deviceId: randomUUID(), selected: [], live: tooMany },
+  });
+  assert.equal(r.status, 422);
+  assert.equal(r.data.error.code, 'VALIDATION');
+  assert.match(r.data.error.message, /实况对象最多 200 个/);
+
+  // 边界：200 个键不触发键数上限（这些 id 不存在于白板，走对象归属校验）
+  const atLimit = {};
+  for (let i = 0; i < 200; i++) atLimit[`live_${i}`] = frameAt(i);
+  r = await f.req(`/api/trips/${tid}/boards/${boardId}/presence`, {
+    actor: a,
+    method: 'POST',
+    body: { deviceId: randomUUID(), selected: [], live: atLimit },
+  });
+  assert.equal(r.status, 422);
+  assert.doesNotMatch(r.data.error.message, /实况对象最多/);
+});

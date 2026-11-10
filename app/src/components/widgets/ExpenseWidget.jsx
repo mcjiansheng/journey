@@ -1,6 +1,6 @@
 import React from 'react';
 import { WidgetFrame } from './WidgetFrame.jsx';
-import { money } from '../../domain.js';
+import { currencyFactor } from '../../domain.js';
 
 export function ExpenseWidget({ item, model }) {
   const size = model.size || 'S';
@@ -11,7 +11,7 @@ export function ExpenseWidget({ item, model }) {
     style: 'currency',
     currency: cur,
     maximumFractionDigits: 0,
-  }).formatToParts(Math.round(model.total / (cur === 'JPY' ? 1 : 100)));
+  }).formatToParts(Math.round(model.total / currencyFactor(cur)));
 
   const sym = rawParts
     .filter((p) => p.type === 'currency')

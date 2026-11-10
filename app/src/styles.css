@@ -1429,7 +1429,9 @@ details[open] > summary {
   }
   .bottom-nav {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    /* 行程/地图/白板/费用/旅程设置 — five items must stay on one row; a wrapped
+       second row covers the add-activity FAB and blocks it on phones. */
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     position: fixed;
     bottom: calc(9px + env(safe-area-inset-bottom));
     left: 16px;

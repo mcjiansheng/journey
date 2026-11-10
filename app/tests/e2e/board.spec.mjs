@@ -16,7 +16,7 @@ test.beforeAll(async () => {
     securityPath: ':memory:',
     config: { amapKey: '' },
   });
-  server = await new Promise(resolve => {
+  server = await new Promise((resolve) => {
     const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
   });
   base = `http://127.0.0.1:${server.address().port}`;
@@ -51,6 +51,88 @@ async function createTrip(page, name = '白板协作测试旅程') {
   await expect(page.locator('.itinerary-page')).toBeVisible();
 }
 
+async function boardItems(page, boardId = 'default-board') {
+  return page.evaluate(async (boardId) => {
+    const list = await fetch('/api/trips').then((r) => r.json());
+    const tripId = list.trips[0].id;
+    const res = await fetch(`/api/trips/${tripId}/boards/${boardId}/items`).then((r) => r.json());
+    const snapshot = await fetch(`/api/trips/${tripId}`).then((r) => r.json());
+    return {
+      tripId,
+      items: res.items.map((i) => ({
+        id: i.id,
+        state: i.state,
+        generation: i.generation,
+        payload: i.payload,
+      })),
+      objects: snapshot.objects,
+    };
+  }, boardId);
+}
+
+async function seedPlaceWidget(page) {
+  return page.evaluate(async () => {
+    const list = await fetch('/api/trips').then((r) => r.json());
+    const tripId = list.trips[0].id;
+    const session = await fetch('/api/session').then((r) => r.json());
+    const headers = { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrfToken };
+    const snapshot = await fetch(`/api/trips/${tripId}`).then((r) => r.json());
+    const board = snapshot.objects.find((o) => o.kind === 'board');
+    const lease = await fetch('/api/clock', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ deviceId: crypto.randomUUID() }),
+    }).then((r) => r.json());
+    const post = async (objectType, patch, objectId) => {
+      const res = await fetch(`/api/trips/${tripId}/operations`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          id: crypto.randomUUID(),
+          objectId,
+          kind: 'create',
+          objectType,
+          patch,
+          clock: { leaseId: lease.leaseId, elapsedMs: 0, uncertaintyMs: 0 },
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    };
+    const favoriteId = crypto.randomUUID();
+    const itemId = crypto.randomUUID();
+    await post(
+      'favorite',
+      {
+        name: '西湖断桥',
+        address: '杭州西湖',
+        lng: 120.15,
+        lat: 30.27,
+        provider: null,
+        providerPlaceId: null,
+        category: '景点',
+        sourceUrl: '',
+        fetchedAt: null,
+        coordSystem: 'GCJ-02',
+        mark: null,
+      },
+      favoriteId,
+    );
+    await post(
+      'boardItem',
+      {
+        boardId: board.id,
+        frame: { x: 120, y: 120, w: 352, h: 168, rotation: 0, scale: 1 },
+        z: 1,
+        content: { type: 'widget', kind: 'place', favoriteId },
+        style: { size: 'M' },
+      },
+      itemId,
+    );
+    return { tripId, boardId: board.id, favoriteId, itemId };
+  });
+}
+
 async function addActivity(page, title = '断桥残雪') {
   await page.getByRole('button', { name: '添加活动', exact: true }).first().click();
   await page.getByLabel('活动名称').fill(title);
@@ -59,7 +141,9 @@ async function addActivity(page, title = '断桥残雪') {
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
 }
 
-test('board: basic sticker lifecycle (stick note, edit text, scale, delete, restore)', async ({ page }) => {
+test('board: basic sticker lifecycle (stick note, edit text, scale, delete, restore)', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await register(page);
   await createTrip(page);
@@ -107,9 +191,53 @@ test('board: basic sticker lifecycle (stick note, edit text, scale, delete, rest
   // 8. Note is restored
   await expect(page.locator('.board-item.item-note')).toBeVisible();
   await expect(page.locator('.board-item.item-note .note-text')).toContainText('买一把西湖绸伞');
+
+  // 9. The server must accept the edit → delete → restore sequence (not just
+  // the optimistic local UI). The queued operations may still be flushing.
+  await expect
+    .poll(async () => (await boardItems(page)).items.map((i) => i.state))
+    .toEqual(['active']);
 });
 
-test('board: widget integration with itinerary (activity pin, rename, gone state, revival)', async ({ page }) => {
+test('board: place widget schedules a real activity with the full place payload', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  const seeded = await seedPlaceWidget(page);
+
+  await page.locator('nav button[aria-label="白板"]').first().click();
+  await expect(page.locator('.board-container')).toBeVisible();
+  const widget = page.locator('.board-item.item-widget').first();
+  await expect(widget).toBeVisible();
+  await widget.click();
+  const schedule = page.locator('#actions button.primary:has-text("加入行程")');
+  await expect(schedule).toBeVisible();
+  await schedule.click();
+
+  // The activity is created and the board item is linked on the server (the
+  // two-step request must not leave a 422/INVALID_REFERENCE behind).
+  await expect
+    .poll(async () => {
+      const state = await boardItems(page);
+      return state.items.find((i) => i.id === seeded.itemId)?.payload?.linkedActivityId || null;
+    })
+    .not.toBeNull();
+  const state = await boardItems(page);
+  const activity = state.objects.find((o) => o.kind === 'activity');
+  expect(activity).toBeTruthy();
+  expect(activity.payload.title).toBe('西湖断桥');
+  expect(activity.payload.place).toMatchObject({ name: '西湖断桥', lng: 120.15, lat: 30.27 });
+  expect(activity.payload.place.mark).toBeUndefined();
+
+  await page.locator('nav button[aria-label="行程"]').first().click();
+  await expect(page.getByRole('heading', { name: '西湖断桥', exact: true })).toBeVisible();
+});
+
+test('board: widget integration with itinerary (activity pin, rename, gone state, revival)', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await register(page);
   await createTrip(page);
@@ -205,8 +333,10 @@ test('board: freehand drawing with pen, unified z-order, and eraser', async ({ p
   // 4. Test bring to front / send to back
   await note.click();
   await page.locator('#actions button:has-text("置顶")').click();
-  const noteZ = await note.evaluate(el => parseInt(el.style.zIndex || '0', 10));
-  const strokeZ = await page.locator('.board-item.item-stroke').evaluate(el => parseInt(el.style.zIndex || '0', 10));
+  const noteZ = await note.evaluate((el) => parseInt(el.style.zIndex || '0', 10));
+  const strokeZ = await page
+    .locator('.board-item.item-stroke')
+    .evaluate((el) => parseInt(el.style.zIndex || '0', 10));
   expect(noteZ).toBeGreaterThan(strokeZ);
 
   // 5. Select eraser tool and erase the stroke where it is visible (not covered by the note).

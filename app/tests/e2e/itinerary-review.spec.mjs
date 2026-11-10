@@ -73,7 +73,7 @@ for(const width of [1440,390])test(`adjacent precise activities show notes witho
  const route=page.locator('.route-add').last();
  if(width===390){await expect(route).toBeVisible();await page.getByRole('button',{name:'当天操作',exact:true}).click();await page.getByRole('button',{name:'调整顺序',exact:true}).click();await expect(route).toBeHidden();await page.getByRole('button',{name:'完成',exact:true}).click();await expect(route).toBeVisible()}
  await page.locator('.activity-more>summary').last().click();
- await expect(page.locator('.activity-more-panel').last().getByRole('button')).toHaveText(['编辑','我不参加','删除']);
+ await expect(page.locator('.activity-more-panel').last().getByRole('button')).toHaveText([/^编辑$/,/我不参加/,/^贴到白板$/,/^删除$/]);
  expect((await page.locator('.activity-more-panel').last().boundingBox()).width).toBeGreaterThanOrEqual(200);
  await page.getByRole('button',{name:'当天操作',exact:true}).click();await expect(page.getByRole('button',{name:'调整日期与天数',exact:true})).toBeVisible();
 });

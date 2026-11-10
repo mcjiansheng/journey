@@ -410,21 +410,21 @@ export function widgetModel(snapshot, item, { now = Date.now(), deviceTimeZone }
       unit,
       progress,
       destination: trip.destination || '旅程',
-      startDateLabel: firstDay?.date ? formatMd(firstDay.date) : '未定日期',
-      startWd: firstDay?.date
+      startDateLabel: firstDay?.payload?.date ? formatMd(firstDay.payload.date) : '未定日期',
+      startWd: firstDay?.payload?.date
         ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][
-            new Date(firstDay.date + 'T00:00:00').getDay()
+            new Date(firstDay.payload.date + 'T00:00:00').getDay()
           ]
         : '',
-      endMd: lastDay?.date ? formatMd(lastDay.date) : '',
-      endWd: lastDay?.date
+      endMd: lastDay?.payload?.date ? formatMd(lastDay.payload.date) : '',
+      endWd: lastDay?.payload?.date
         ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][
-            new Date(lastDay.date + 'T00:00:00').getDay()
+            new Date(lastDay.payload.date + 'T00:00:00').getDay()
           ]
         : '',
       totalDays: dayCount,
       activityCount: actCount,
-      days,
+      days: days.map((d) => ({ id: d.id, ordinal: d.payload.ordinal, date: d.payload.date })),
       sub,
     };
   }
@@ -495,7 +495,7 @@ export function widgetModel(snapshot, item, { now = Date.now(), deviceTimeZone }
 
     const days = visibleDays(snapshot);
     const perDay = days.map((d) => {
-      const dayIso = d.date;
+      const dayIso = d.payload.date;
       return main
         .filter((e) => expenseDate(snapshot, e) === dayIso)
         .reduce((sum, e) => sum + (e.payload.payment.amountMinor || 0), 0);
@@ -503,7 +503,7 @@ export function widgetModel(snapshot, item, { now = Date.now(), deviceTimeZone }
 
     const tz = trip.timezone || 'Asia/Shanghai';
     const todayIso = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(now));
-    const todayIdx = days.findIndex((d) => d.date === todayIso);
+    const todayIdx = days.findIndex((d) => d.payload.date === todayIso);
     const maxVal = Math.max(0, ...perDay);
     const hi = todayIdx >= 0 ? todayIdx : perDay.indexOf(maxVal);
 
@@ -512,11 +512,15 @@ export function widgetModel(snapshot, item, { now = Date.now(), deviceTimeZone }
       .slice(0, 4)
       .map((e) => {
         const eIso = expenseDate(snapshot, e);
-        const dObj = days.find((d) => d.date === eIso);
+        const dObj = days.find((d) => d.payload.date === eIso);
         let dayText = '未记日期';
-        if (dObj) dayText = `第 ${dObj.ordinal} 天`;
-        else if (eIso && days[0]?.date && eIso < days[0].date) dayText = '行前';
-        else if (eIso && days[days.length - 1]?.date && eIso > days[days.length - 1].date)
+        if (dObj) dayText = `第 ${dObj.payload.ordinal} 天`;
+        else if (eIso && days[0]?.payload.date && eIso < days[0].payload.date) dayText = '行前';
+        else if (
+          eIso &&
+          days[days.length - 1]?.payload.date &&
+          eIso > days[days.length - 1].payload.date
+        )
           dayText = '行后';
         return {
           title: expenseTitle(snapshot, e),

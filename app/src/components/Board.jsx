@@ -580,28 +580,48 @@ export function Board({
   };
 
   const handleSchedulePlace = async (item) => {
-    // Navigate to itinerary or create activity
+    // Create a real activity for the place widget, then link the board item to
+    // it. `ordinal` is not part of the activity schema, and a favorite's payload
+    // carries `mark`, which is not part of Place — both are stripped below.
     const days = (snapshot?.objects || []).filter((o) => o.kind === 'day' && o.state === 'active');
     const firstDay = days[0];
-    if (firstDay && mutate) {
-      const actId = crypto.randomUUID();
-      const placeData = item.content?.place || {
-        name: item.content?.favoriteId
-          ? snapshot.objects.find((o) => o.id === item.content.favoriteId)?.payload?.name
-          : '新地点',
+    if (!firstDay || !mutate) return;
+    const favorite = item.content?.favoriteId
+      ? snapshot.objects.find((o) => o.id === item.content.favoriteId)
+      : null;
+    const source = item.content?.place || favorite?.payload || null;
+    let placeData = null;
+    if (source) {
+      const { mark: _mark, ...place } = source;
+      placeData = {
+        name: place.name || '新地点',
+        address: place.address || '',
+        lng: place.lng ?? null,
+        lat: place.lat ?? null,
+        provider: place.provider ?? null,
+        providerPlaceId: place.providerPlaceId ?? null,
+        category: place.category || '',
+        sourceUrl: place.sourceUrl || '',
+        fetchedAt: place.fetchedAt ?? null,
+        coordSystem: place.coordSystem || 'GCJ-02',
       };
+    }
+    const actId = crypto.randomUUID();
+    try {
       await mutate({
         kind: 'create',
         objectType: 'activity',
         objectId: actId,
         patch: {
           dayId: firstDay.id,
-          ordinal: 99,
-          title: placeData.name || '安排',
-          place: placeData,
+          order: 999,
+          title: placeData?.name || '安排',
+          ...(placeData ? { place: placeData } : {}),
         },
       });
       await patchBoardItem(item.id, { linkedActivityId: actId });
+    } catch (err) {
+      alert(err?.message || '加入行程失败，请稍后重试');
     }
   };
 
