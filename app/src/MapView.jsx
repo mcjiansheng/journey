@@ -38,6 +38,7 @@ import {
   planMapCamera,
   resolveMapCamera,
   cameraContext,
+  currentCityFromAmap,
 } from './map-camera.js';
 import MapRoutePicker from './components/MapRoutePicker.jsx';
 import SelectionTrack from './components/SelectionTrack.jsx';
@@ -331,13 +332,13 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
       ...favorites.map((favorite) => favorite.payload),
     ].find(located);
     if (
-      plan.source === 'destination' &&
+      ['destination', 'empty'].includes(plan.source) &&
       existingPlace &&
       lastContext.current.cameraDestination === undefined
     )
       plan = { ...plan, source: 'markers', center: [existingPlace.lng, existingPlace.lat] };
     if (
-      ['destination', 'markers'].includes(plan.source) &&
+      ['destination', 'markers', 'empty'].includes(plan.source) &&
       !currentActivity &&
       lastContext.current.cameraDestination !== destinationKey(destination)
     ) {
@@ -369,6 +370,7 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
         plan,
         (destination, signal) => geocode(destination, '', { signal }),
         controller.signal,
+        () => currentCityFromAmap(AMap),
       );
       if (!current()) return;
       instance = new AMap.Map(canvas.current, {
