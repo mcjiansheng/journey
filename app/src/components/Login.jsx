@@ -143,6 +143,42 @@ function RegisterField({ register, children }) {
   );
 }
 
+function validateIdentifier(value) {
+  const v = (value || '').trim();
+  if (!v) return '请输入手机号或邮箱';
+  if (v.includes('@')) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.toLowerCase())) return '请输入有效邮箱地址';
+    return '';
+  }
+  const clean = v.replace(/[\s-]/g, '');
+  if (/^1\d{10}$/.test(clean) || /^\+[1-9]\d{7,14}$/.test(clean)) return '';
+  return '请输入有效手机号（11位）或有效邮箱';
+}
+
+function validateDisplayName(value, register) {
+  if (!register) return '';
+  const v = (value || '').trim();
+  if (!v) return '请输入称呼';
+  if (v.length > 80) return '称呼最多 80 个字符';
+  return '';
+}
+
+function validatePassword(value, register) {
+  if (!value) return '请输入密码';
+  if (register) {
+    if (value.length < 10) return '密码长度至少需 10 个字符';
+    if (value.length > 128) return '密码最多 128 个字符';
+  }
+  return '';
+}
+
+function validateConfirmation(confirmation, password, register) {
+  if (!register) return '';
+  if (!confirmation) return '请再次输入密码以确认';
+  if (confirmation !== password) return '两次输入的密码不一致';
+  return '';
+}
+
 export default function Login({ journey: j, onDone, illustrated = false }) {
   const [form, setForm] = useState(() => {
     try {
@@ -164,21 +200,51 @@ export default function Login({ journey: j, onDone, illustrated = false }) {
   const [confirmation, setConfirmation] = useState(''),
     [confirmationTouched, setConfirmationTouched] = useState(false),
     [showConfirmation, setShowConfirmation] = useState(false);
+  const [identifierTouched, setIdentifierTouched] = useState(false),
+    [displayNameTouched, setDisplayNameTouched] = useState(false),
+    [passwordTouched, setPasswordTouched] = useState(false),
+    [serverErrors, setServerErrors] = useState({});
   const layout = useRef(null),
+    identifierInput = useRef(null),
+    displayNameInput = useRef(null),
+    passwordInput = useRef(null),
     confirmationInput = useRef(null),
     headingId = useId();
-  const confirmationError =
-    form.register && confirmationTouched && confirmation !== form.password
-      ? '两次输入的密码不一致'
+
+  const identifierError = identifierTouched
+    ? serverErrors.identifier || validateIdentifier(form.identifier)
+    : '';
+  const displayNameError =
+    form.register && displayNameTouched
+      ? serverErrors.displayName || validateDisplayName(form.displayName, form.register)
       : '';
+  const passwordError = passwordTouched
+    ? serverErrors.password || validatePassword(form.password, form.register)
+    : '';
+  const confirmationError =
+    form.register && confirmationTouched
+      ? validateConfirmation(confirmation, form.password, form.register)
+      : '';
+
   useSketchPointer(layout, illustrated);
   function change(key, value) {
     const n = { ...form, [key]: value };
     setForm(n);
     setError('');
+    if (serverErrors[key]) {
+      setServerErrors((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
     if (key === 'register') {
+      setIdentifierTouched(false);
+      setDisplayNameTouched(false);
+      setPasswordTouched(false);
       setConfirmationTouched(false);
       setShowConfirmation(false);
+      setServerErrors({});
     }
     sessionStorage.setItem('journey.loginDraft', JSON.stringify({ ...n, password: '' }));
   }
@@ -186,17 +252,56 @@ export default function Login({ journey: j, onDone, illustrated = false }) {
     event.preventDefault();
     if (busy) return;
     setError('');
-    if (form.register && confirmation !== form.password) {
+    setServerErrors({});
+
+    setIdentifierTouched(true);
+    setPasswordTouched(true);
+    if (form.register) {
+      setDisplayNameTouched(true);
       setConfirmationTouched(true);
-      confirmationInput.current.focus();
+    }
+
+    const idErr = validateIdentifier(form.identifier);
+    if (idErr) {
+      identifierInput.current?.focus();
       return;
     }
+    const nameErr = validateDisplayName(form.displayName, form.register);
+    if (form.register && nameErr) {
+      displayNameInput.current?.focus();
+      return;
+    }
+    const pwdErr = validatePassword(form.password, form.register);
+    if (pwdErr) {
+      passwordInput.current?.focus();
+      return;
+    }
+    const cfmErr = validateConfirmation(confirmation, form.password, form.register);
+    if (form.register && cfmErr) {
+      confirmationInput.current?.focus();
+      return;
+    }
+
     setBusy(true);
     try {
       await j.login(form);
       sessionStorage.removeItem('journey.loginDraft');
       onDone?.();
     } catch (e) {
+      if (e.code === 'ACCOUNT_EXISTS') {
+        setServerErrors({ identifier: e.message });
+        identifierInput.current?.focus();
+      } else if (e.details && Array.isArray(e.details)) {
+        const fieldMap = {};
+        for (const item of e.details) {
+          const field = item.path?.[0];
+          if (field) fieldMap[field] = item.message;
+        }
+        setServerErrors(fieldMap);
+        if (fieldMap.identifier) identifierInput.current?.focus();
+        else if (fieldMap.displayName) displayNameInput.current?.focus();
+        else if (fieldMap.password) passwordInput.current?.focus();
+      }
       setError(errorMessage(e));
     } finally {
       setBusy(false);
@@ -240,9 +345,10 @@ export default function Login({ journey: j, onDone, illustrated = false }) {
           创建账号
         </button>
       </div>
-      <form className="login-form" aria-busy={busy} onSubmit={submit}>
-        <Field label="手机号或邮箱">
+      <form className="login-form" aria-busy={busy} onSubmit={submit} noValidate>
+        <Field label="手机号或邮箱" error={identifierError}>
           <input
+            ref={identifierInput}
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
@@ -250,34 +356,39 @@ export default function Login({ journey: j, onDone, illustrated = false }) {
             disabled={busy}
             value={form.identifier}
             onChange={(e) => change('identifier', e.target.value)}
+            onBlur={() => setIdentifierTouched(true)}
             placeholder="输入手机号或邮箱"
           />
           <UserRound className="login-field-icon" size={18} aria-hidden="true" />
         </Field>
         <RegisterField register={form.register}>
-          <Field label="你的称呼">
+          <Field label="你的称呼" error={displayNameError}>
             <input
+              ref={displayNameInput}
               autoComplete="nickname"
               required={form.register}
               disabled={busy || !form.register}
               maxLength={80}
               value={form.displayName}
               onChange={(e) => change('displayName', e.target.value)}
+              onBlur={() => setDisplayNameTouched(true)}
               placeholder="怎么称呼你"
             />
             <UserRound className="login-field-icon" size={18} aria-hidden="true" />
           </Field>
         </RegisterField>
-        <Field label="密码">
+        <Field label="密码" error={passwordError}>
           <input
+            ref={passwordInput}
             type={showPassword ? 'text' : 'password'}
             autoComplete={form.register ? 'new-password' : 'current-password'}
             required
             disabled={busy}
-            minLength={10}
+            minLength={form.register ? 10 : undefined}
             maxLength={128}
             value={form.password}
             onChange={(e) => change('password', e.target.value)}
+            onBlur={() => setPasswordTouched(true)}
             placeholder={form.register ? '10 至 128 个字符' : '输入密码'}
           />
           <LockKeyhole className="login-field-icon" size={18} aria-hidden="true" />
@@ -297,7 +408,10 @@ export default function Login({ journey: j, onDone, illustrated = false }) {
               disabled={busy || !form.register}
               maxLength={128}
               value={confirmation}
-              onChange={(e) => setConfirmation(e.target.value)}
+              onChange={(e) => {
+                setConfirmation(e.target.value);
+                if (confirmationTouched) setError('');
+              }}
               onBlur={() => setConfirmationTouched(true)}
               placeholder="再次输入密码"
             />
