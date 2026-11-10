@@ -147,18 +147,19 @@ function validateIdentifier(value) {
   const v = (value || '').trim();
   if (!v) return '请输入手机号或邮箱';
   if (v.includes('@')) {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.toLowerCase())) return '请输入有效邮箱地址';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.toLowerCase()))
+      return '请输入格式正确的邮箱地址（例如 name@example.com）';
     return '';
   }
   const clean = v.replace(/[\s-]/g, '');
   if (/^1\d{10}$/.test(clean) || /^\+[1-9]\d{7,14}$/.test(clean)) return '';
-  return '请输入有效手机号（11位）或有效邮箱';
+  return '请输入 11 位手机号码或有效邮箱地址（例如 name@example.com）';
 }
 
 function validateDisplayName(value, register) {
   if (!register) return '';
   const v = (value || '').trim();
-  if (!v) return '请输入称呼';
+  if (!v) return '请输入你的称呼（如昵称或姓名）';
   if (v.length > 80) return '称呼最多 80 个字符';
   return '';
 }

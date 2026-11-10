@@ -207,7 +207,7 @@ export function Back({ onClick, children = '返回' }) {
 }
 export const id = () => crypto.randomUUID();
 export function errorMessage(e) {
-  if (!e) return '操作未完成，请重试。';
+  if (!e) return '操作未能完成，请稍后重试；若持续出现请刷新页面。';
   if (e.code === 'ORIGIN_REJECTED') {
     return '当前网页访问地址与服务端安全配置不一致。请使用配置的标准网址访问，或联系管理员设置 APP_ORIGIN。';
   }
@@ -223,7 +223,16 @@ export function errorMessage(e) {
   if (e.code === 'NETWORK') {
     return '网络连接中断，请检查网络设置后重试。';
   }
-  return e.message || '操作未完成，请重试。';
+  if (e.code === 'STALE_GENERATION') {
+    return '其他同行成员刚刚更新了此内容，请刷新查看最新版本。';
+  }
+  if (e.code === 'CLOCK_UNCERTAIN') {
+    return '未能确认离线修改的先后顺序，请保持网络连接后重新保存。';
+  }
+  if (e.code === 'CLOCK_INVALID') {
+    return '设备系统时间与服务器差异过大，请核对设备系统时间后重试。';
+  }
+  return e.message || '操作未能完成，请稍后重试；若持续出现请刷新页面。';
 }
 export const clone = (x) => JSON.parse(JSON.stringify(x));
 export function money(minor, currency = 'CNY') {

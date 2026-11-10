@@ -264,7 +264,7 @@ export async function api(path, { body, method = 'GET', ...options } = {}) {
     value = {};
   }
   if (!res.ok) {
-    const e = new Error(value.error?.message || '请求失败，请重试');
+    const e = new Error(value.error?.message || '服务器响应异常，请检查网络或稍后重试');
     e.code = value.error?.code || 'REQUEST_FAILED';
     e.status = res.status;
     e.details = value.error?.details;
@@ -924,7 +924,7 @@ async function recover(preview, mode) {
           code: 'RECEIPT_UNCONFIRMED',
         });
       if (reapply && !current.canReapply)
-        throw Object.assign(new Error('这些修改需要按原顺序重试或放弃'), {
+        throw Object.assign(new Error('存在依赖先后关系的离线修改，请按顺序点击重试或选择放弃'), {
           code: 'RECOVERY_NOT_REAPPLICABLE',
         });
       if (reapply) await calibrate();

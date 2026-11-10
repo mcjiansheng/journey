@@ -37,7 +37,11 @@ export function CreateTrip({ journey: j, onClose }) {
   });
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
-    [extraOpen, setExtraOpen] = useState(false);
+    [extraOpen, setExtraOpen] = useState(false),
+    [nameTouched, setNameTouched] = useState(false),
+    [destinationTouched, setDestinationTouched] = useState(false);
+  const nameInput = useRef(null),
+    destinationInput = useRef(null);
   const [lookup, setLookup] = useState({
     destination: '',
     status: 'idle',
@@ -122,15 +126,27 @@ export function CreateTrip({ journey: j, onClose }) {
   const automaticLabel = destinationTimezone
     ? `目的地当地 · ${timezoneLabel(destinationTimezone, reference)}`
     : `当地时区 · ${timezoneLabel(localZone, reference)}`;
+  const nameError = nameTouched && !form.name.trim() ? '请填写旅程名称（不能仅为空格）' : '';
+  const destinationError =
+    destinationTouched && !destination ? '请填写目的地城市或地区（例如南京）' : '';
   return (
     <Modal title="开始一段新旅程" initialFocus="input" onClose={onClose}>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
           setError('');
+          setNameTouched(true);
+          setDestinationTouched(true);
           try {
+            if (!form.name.trim()) {
+              nameInput.current?.focus();
+              return;
+            }
+            if (!destination) {
+              destinationInput.current?.focus();
+              return;
+            }
             const dayCount = dateRangeDays(form.startDate, form.endDate);
-            if (!destination) throw new Error('请填写目的地');
             if (!validTimezone(timezone)) {
               setExtraOpen(true);
               throw new Error('请选择旅程时区。');
@@ -154,18 +170,23 @@ export function CreateTrip({ journey: j, onClose }) {
           }
         }}
       >
-        <Field label="旅程名称">
+        <Field label="旅程名称" error={nameError}>
           <input
+            ref={nameInput}
             required
             maxLength={120}
             value={form.name}
             autoFocus
             onChange={(e) => update('name', e.target.value)}
+            onBlur={() => {
+              if (form.name) setNameTouched(true);
+            }}
             placeholder="给这次旅行起个名字"
           />
         </Field>
         <Field
           label="目的地"
+          error={destinationError}
           help={
             automatic && !destinationTimezone
               ? `时区：${timezoneLabel(timezone, reference)}，可在旅程管理中修改。`
@@ -173,10 +194,14 @@ export function CreateTrip({ journey: j, onClose }) {
           }
         >
           <input
+            ref={destinationInput}
             required
             maxLength={240}
             value={form.destination}
             onChange={(e) => update('destination', e.target.value)}
+            onBlur={() => {
+              if (form.destination) setDestinationTouched(true);
+            }}
             placeholder="城市或地区，例如南京"
           />
         </Field>
@@ -495,7 +520,7 @@ export function Home({ journey: j, onCreate, onJoin, onSettings, onSync }) {
                 ? '暂时无法更新旅程列表，以下显示本机保留的旅程。'
                 : '旅程列表加载失败。'}
             </p>
-            <p className="muted">{load.error || '请检查连接后重试。'}</p>
+            <p className="muted">{load.error || '未能连接到服务器，请检查网络连接后重试。'}</p>
             <AsyncButton className="text-button" onClick={retry}>
               重新加载旅程
             </AsyncButton>

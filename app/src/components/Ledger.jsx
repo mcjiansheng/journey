@@ -158,7 +158,9 @@ export function ExpenseEditor({
         !Number.isSafeInteger(minor) ||
         Math.abs(Number(p.amount) * factor - minor) > 0.000001)
     )
-      return '请按所选币种填写有效金额。';
+      return factor === 1
+        ? `${p.payment.currency} 不含分位小数，请填写有效金额（整数，例如 1000）。`
+        : '请按所选币种填写有效金额（非负数字，最多 2 位小数，例如 99.50）。';
     if (p.payment.status === 'paid' && p.amount === '') return '请填写已支付金额。';
     return '';
   }
