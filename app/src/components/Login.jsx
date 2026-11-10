@@ -289,9 +289,11 @@ export default function Login({ journey: j, onDone, illustrated = false }) {
       onDone?.();
     } catch (e) {
       if (e.code === 'ACCOUNT_EXISTS') {
-        setServerErrors({ identifier: e.message });
+        setServerErrors({ identifier: e.message || '该账号已注册，请直接登录' });
         identifierInput.current?.focus();
-      } else if (e.details && Array.isArray(e.details)) {
+        return;
+      }
+      if (e.code === 'VALIDATION' && e.details && Array.isArray(e.details)) {
         const fieldMap = {};
         for (const item of e.details) {
           const field = item.path?.[0];
@@ -301,6 +303,22 @@ export default function Login({ journey: j, onDone, illustrated = false }) {
         if (fieldMap.identifier) identifierInput.current?.focus();
         else if (fieldMap.displayName) displayNameInput.current?.focus();
         else if (fieldMap.password) passwordInput.current?.focus();
+        return;
+      }
+      if (e.code === 'ORIGIN_REJECTED') {
+        setError(
+          `当前网页访问地址（${window.location.origin}）与服务端安全配置不一致。请使用配置的标准网址访问，或联系管理员设置 APP_ORIGIN。`,
+        );
+        return;
+      }
+      if (e.code === 'LOGIN_INVALID') {
+        setError('账号或密码不正确，请核对后重新输入');
+        passwordInput.current?.focus();
+        return;
+      }
+      if (e.code === 'RATE_LIMITED') {
+        setError('登录尝试过于频繁，请稍候片刻后再试');
+        return;
       }
       setError(errorMessage(e));
     } finally {

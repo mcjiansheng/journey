@@ -207,7 +207,23 @@ export function Back({ onClick, children = '返回' }) {
 }
 export const id = () => crypto.randomUUID();
 export function errorMessage(e) {
-  return e?.message || '操作未完成，请重试。';
+  if (!e) return '操作未完成，请重试。';
+  if (e.code === 'ORIGIN_REJECTED') {
+    return '当前网页访问地址与服务端安全配置不一致。请使用配置的标准网址访问，或联系管理员设置 APP_ORIGIN。';
+  }
+  if (e.code === 'CSRF_REJECTED') {
+    return '页面会话安全凭据已失效，请刷新页面后重试。';
+  }
+  if (e.code === 'LOGIN_INVALID') {
+    return '账号或密码不正确，请核对后重新输入。';
+  }
+  if (e.code === 'RATE_LIMITED') {
+    return '操作过于频繁，请稍候片刻后再试。';
+  }
+  if (e.code === 'NETWORK') {
+    return '网络连接中断，请检查网络设置后重试。';
+  }
+  return e.message || '操作未完成，请重试。';
 }
 export const clone = (x) => JSON.parse(JSON.stringify(x));
 export function money(minor, currency = 'CNY') {
