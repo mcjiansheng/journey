@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Compass,
   CalendarDays,
-  Map,
+  Map as MapIcon,
   Wallet,
   SlidersHorizontal as SettingsIcon,
   Users,
@@ -37,7 +37,7 @@ import { appearanceKey, readAppearance, mergeAccountAppearance, boardDock } from
 import { syncStatusText } from './components/SyncSettings.jsx';
 const pages = [
   ['itinerary', '行程', CalendarDays],
-  ['map', '地图', Map],
+  ['map', '地图', MapIcon],
   ['board', '白板', StickyNote],
   ['expenses', '费用', Wallet],
   ['settings', '旅程设置', SettingsIcon],
@@ -246,12 +246,7 @@ export default function App() {
                 <span>我的旅程</span>
               </button>
               {!tripDeleted && (
-                <SelectionTrack
-                  as="nav"
-                  activeKey={page}
-                  layoutKey={immersive}
-                  aria-label="主导航"
-                >
+                <SelectionTrack as="nav" activeKey={page} layoutKey={immersive} aria-label="主导航">
                   {pages.map(([key, label, Icon]) => (
                     <button
                       aria-label={label}

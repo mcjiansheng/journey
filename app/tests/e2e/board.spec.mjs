@@ -488,6 +488,7 @@ test('board: pen draft follows the pointer before release; text replaces placeho
   // An empty text object is discarded, not left behind invisibly.
   await page.locator('#toolbar button[data-tool="text"]').click();
   await page.mouse.click(box.x + 800, box.y + 500);
+  await expect(page.locator('.board-item.item-text .text-inner').last()).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.locator('.board-item.item-text')).toHaveCount(1);
 });
@@ -523,6 +524,7 @@ test('board: shortcuts ignore other dialogs; release outside does not stick', as
   await page.mouse.move(nb.x + nb.width / 2 + 40, nb.y + nb.height / 2 + 40, { steps: 4 });
   await page.mouse.move(tb.x + 30, tb.y + tb.height / 2, { steps: 6 });
   await page.mouse.up();
+  await page.waitForTimeout(50);
   const after = await note.boundingBox();
   await page.mouse.move(200, 200, { steps: 4 });
   await page.waitForTimeout(100);
@@ -613,7 +615,7 @@ test('board: sticker panel docks to the nearest edge and remembers it', async ({
   const hb = await handle.boundingBox();
   await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
   await page.mouse.down();
-  await page.mouse.move(800, 400, { steps: 4 });
+  await page.mouse.move(950, 400, { steps: 4 });
   await expect(page.locator('.dock-target.right.on')).toBeVisible();
   await page.mouse.move(1000, 420, { steps: 4 });
   await page.mouse.up();
@@ -642,6 +644,7 @@ test('board: sticker panel docks to the nearest edge and remembers it', async ({
     )
     .toBe('bottom');
   await page.reload();
+  await page.getByRole('button', { name: /继续旅程/ }).click();
   await openBoard(page);
   await page.locator('#toolbar button[data-tool="sticker"]').click();
   await expect(page.locator('#panel')).toHaveClass(/dock-bottom/);

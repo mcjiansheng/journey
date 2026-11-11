@@ -542,22 +542,20 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
         ...(styleWithLock ? { style: styleWithLock } : {}),
       };
       const cleaned = cleanBoardItemPatch(patchToClean);
-      let updatedItem = null;
+      const updatedItem = target
+        ? normalizeBoardItem({
+            ...target,
+            ...cleaned,
+            content: cleaned.content
+              ? { ...(target.content || {}), ...cleaned.content }
+              : target.content,
+            style: cleaned.style ? { ...(target.style || {}), ...cleaned.style } : target.style,
+            frame: cleaned.frame ? { ...(target.frame || {}), ...cleaned.frame } : target.frame,
+            updatedAt: now,
+          })
+        : null;
       setItems((prev) => {
-        const next = prev.map((it) => {
-          if (it.id === itemId) {
-            updatedItem = normalizeBoardItem({
-              ...it,
-              ...cleaned,
-              content: cleaned.content ? { ...(it.content || {}), ...cleaned.content } : it.content,
-              style: cleaned.style ? { ...(it.style || {}), ...cleaned.style } : it.style,
-              frame: cleaned.frame ? { ...(it.frame || {}), ...cleaned.frame } : it.frame,
-              updatedAt: now,
-            });
-            return updatedItem;
-          }
-          return it;
-        });
+        const next = prev.map((it) => (it.id === itemId && updatedItem ? updatedItem : it));
         writeBoardCache(tripId, boardId, {
           cursor: cursorRef.current,
           epoch: epochRef.current,

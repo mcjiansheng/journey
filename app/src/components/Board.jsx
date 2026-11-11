@@ -417,6 +417,7 @@ export function Board({
     select([item.id]);
   };
   const addSpec = (spec, at) => {
+    setTool('select');
     if (spec.type === 'widget') return addWidget(spec.content, spec.size, at);
     if (spec.type === 'note') return addNote(spec.color, at);
     if (spec.type === 'emoji') return addEmoji(spec.char, at);
