@@ -1,18 +1,19 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { WIDGET_KINDS, widgetSize } from '../board-widgets.js';
+import { NOTE, NOTE_NAMES, noteColor } from '../board.js';
 
-const NOTE_COLORS = [
-  { id: 'yellow', hex: '#fef08a' },
-  { id: 'green', hex: '#bbf7d0' },
-  { id: 'blue', hex: '#bfdbfe' },
-  { id: 'pink', hex: '#fbcfe8' },
-  { id: 'purple', hex: '#e9d5ff' },
-  { id: 'gray', hex: '#e2e8f0' },
-];
+const GAP = 12;
 
+/**
+ * Context bar for the selected object. `rect` is the object's screen rect inside
+ * the stage; the bar sits above it, or below when the floating header would
+ * cover it, and is clamped horizontally into the stage (N-8).
+ */
 export function BoardActions({
   item,
-  pos,
+  rect,
+  stage,
+  topSafe = 76,
   onChangeWidgetSize,
   onChangeNoteColor,
   onBringToFront,
@@ -23,6 +24,21 @@ export function BoardActions({
   onSchedulePlace,
   onOpenTarget,
 }) {
+  const ref = useRef(null);
+  const [pos, setPos] = useState(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !rect) return;
+    const bw = el.offsetWidth;
+    const bh = el.offsetHeight;
+    const above = rect.y - GAP - bh;
+    const top = above >= topSafe ? above : Math.min(rect.y + rect.h + GAP, stage.h - bh - 96);
+    const cx = rect.x + rect.w / 2;
+    const left = Math.min(stage.w - 8 - bw, Math.max(8, cx - bw / 2));
+    setPos((p) => (p && p.left === left && p.top === top ? p : { left, top }));
+  });
+
   if (!item) return null;
 
   const type = item.content?.type;
@@ -31,21 +47,20 @@ export function BoardActions({
   const isNote = type === 'note';
   const allowedSizes = isWidget ? WIDGET_KINDS[kind] || ['S'] : [];
   const currentSize = isWidget ? widgetSize(item) : null;
-  const isLocked = Boolean(item.locked);
+  const isLocked = Boolean(item.style?.locked ?? item.locked);
+  const currentNote = isNote ? noteColor(item.style?.color) : null;
 
   return (
     <div
       id="actions"
+      ref={ref}
       className="ui glass on"
-      style={{
-        left: `${pos.x}px`,
-        top: `${pos.y - 48}px`,
-        transform: 'translateX(-50%)',
-      }}
+      role="toolbar"
+      aria-label="所选对象操作"
+      style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999 }}
     >
-      {/* Widget sizes seg */}
       {isWidget && allowedSizes.length > 1 && (
-        <div className="seg">
+        <div className="seg" role="group" aria-label="小组件形态">
           {allowedSizes.map((sz) => (
             <button
               key={sz}
@@ -58,7 +73,6 @@ export function BoardActions({
         </div>
       )}
 
-      {/* Widget Contextual Actions */}
       {isWidget && kind === 'place' && !item.linkedActivityId && (
         <button className="primary" onClick={() => onSchedulePlace(item)}>
           加入行程
@@ -79,23 +93,23 @@ export function BoardActions({
         </button>
       )}
 
-      {/* Note Colors */}
       {isNote && (
         <>
-          {NOTE_COLORS.map((c) => (
+          {Object.keys(NOTE).map((id) => (
             <button
-              key={c.id}
+              key={id}
               className="sw"
-              style={{ backgroundColor: c.hex }}
-              aria-pressed={item.style?.color === c.id}
-              onClick={() => onChangeNoteColor(c.id)}
+              style={{ backgroundColor: NOTE[id] }}
+              aria-pressed={currentNote === id}
+              aria-label={`便签颜色：${NOTE_NAMES[id]}`}
+              title={NOTE_NAMES[id]}
+              onClick={() => onChangeNoteColor(id)}
             />
           ))}
           <div className="sep" />
         </>
       )}
 
-      {/* Common Layer & Management */}
       <button onClick={onBringToFront} title="置顶">
         置顶
       </button>

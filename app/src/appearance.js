@@ -28,6 +28,7 @@ export const accountAppearanceKeys = [
   'reducedMotion',
   'reducedTransparency',
   'collaborationNotifications',
+  'boardPanelDock',
 ];
 export function readAppearance(storage = localStorage) {
   try {
@@ -42,7 +43,12 @@ const accountDefaults = {
   reducedMotion: 'system',
   reducedTransparency: 'system',
   collaborationNotifications: false,
+  boardPanelDock: 'left',
 };
+export const boardDocks = ['left', 'right', 'bottom'];
+export function boardDock(p) {
+  return boardDocks.includes(p?.boardPanelDock) ? p.boardPanelDock : 'left';
+}
 export function mergeAccountAppearance(local, account) {
   const next = { ...local };
   for (const key of accountAppearanceKeys)

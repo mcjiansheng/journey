@@ -26,6 +26,45 @@ export const WIDGET_KINDS = {
   expense: ['S', 'M'],
 };
 
+// Corner handles scale a widget within this range of its form's base size.
+export const WIDGET_SCALE_MIN = 0.75;
+export const WIDGET_SCALE_MAX = 1.6;
+
+/** Current zoom factor of a widget relative to its form's base size. */
+export function widgetScale(item) {
+  const [baseW] = WIDGET_SIZES[widgetSize(item)] || [168, 168];
+  const w = item?.frame?.w || baseW;
+  return Math.min(WIDGET_SCALE_MAX, Math.max(WIDGET_SCALE_MIN, w / baseW));
+}
+
+/**
+ * Form (S/M/L) chosen while an edge handle is dragged. The hysteresis band
+ * keeps the form from flickering when the pointer rests near the threshold.
+ *   axis 'x': square S ⇄ wide M        axis 'y': wide M ⇄ big square L
+ */
+export function pickWidgetSize(kind, liveW, liveH, prev, axis) {
+  const allowed = WIDGET_KINDS[kind] || ['S'];
+  const r = liveW / Math.max(1, liveH);
+  if (axis === 'x') {
+    if (prev === 'S' && allowed.includes('M') && r > 1.65) return 'M';
+    if (prev === 'M' && allowed.includes('S') && r < 1.35) return 'S';
+  } else {
+    if (prev === 'M' && allowed.includes('L') && r < 1.45) return 'L';
+    if (prev === 'L' && allowed.includes('M') && r > 1.75) return 'M';
+  }
+  return prev;
+}
+
+/** Which edge handles a widget offers in its current form. */
+export function widgetEdgeHandles(item) {
+  const allowed = WIDGET_KINDS[item?.content?.kind] || ['S'];
+  const size = widgetSize(item);
+  const handles = [];
+  if (allowed.includes('S') && allowed.includes('M') && size !== 'L') handles.push('e', 'w');
+  if (allowed.includes('L') && (size === 'M' || size === 'L')) handles.push('s');
+  return handles;
+}
+
 export function widgetSize(item) {
   const kind = item?.content?.kind;
   const allowed = WIDGET_KINDS[kind] || ['S'];

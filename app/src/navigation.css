@@ -161,25 +161,25 @@
     right: 25px;
     padding: 0;
   }
-  :root:not([data-map-sidebar-collapse='false']) .map-shell > .sidebar {
+  :root:not([data-map-sidebar-collapse='false']) .immersive-shell > .sidebar {
     clip-path: inset(
       calc(var(--nav-top) - 11px) calc(100% - 79px)
         calc(100% - var(--nav-top) - var(--nav-height) - 11px) 7px round var(--radius-xl)
     );
   }
-  :root:not([data-map-sidebar-collapse='false']) .map-shell .workspace {
+  :root:not([data-map-sidebar-collapse='false']) .immersive-shell .workspace {
     margin-left: 0;
   }
-  :root:not([data-map-sidebar-collapse='false']) .map-shell .sidebar-navigation {
+  :root:not([data-map-sidebar-collapse='false']) .immersive-shell .sidebar-navigation {
     width: 52px;
   }
-  :root:not([data-map-sidebar-collapse='false']) .map-shell .sidebar .back-home > span,
-  :root:not([data-map-sidebar-collapse='false']) .map-shell .sidebar nav button > span {
+  :root:not([data-map-sidebar-collapse='false']) .immersive-shell .sidebar .back-home > span,
+  :root:not([data-map-sidebar-collapse='false']) .immersive-shell .sidebar nav button > span {
     opacity: 0;
     transition: opacity 100ms ease 0s;
   }
-  :root:not([data-map-sidebar-collapse='false']) .map-shell .sidebar > .brand,
-  :root:not([data-map-sidebar-collapse='false']) .map-shell .sidebar-foot {
+  :root:not([data-map-sidebar-collapse='false']) .immersive-shell .sidebar > .brand,
+  :root:not([data-map-sidebar-collapse='false']) .immersive-shell .sidebar-foot {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -289,7 +289,7 @@
   gap: 10px;
   padding: 0 6px;
 }
-:root .app-shell.map-shell .trip-header {
+:root .app-shell.immersive-shell .trip-header {
   position: absolute;
   left: var(--sidebar-space);
   right: 0;
@@ -307,7 +307,7 @@
   -webkit-backdrop-filter: none;
   pointer-events: none;
 }
-.map-shell .header-right {
+.immersive-shell .header-right {
   background: var(--glass);
   box-shadow: 0 3px 14px var(--optical-shadow);
   backdrop-filter: blur(20px);
@@ -333,7 +333,7 @@
     gap: 5px;
     padding: 0 4px;
   }
-  :root .app-shell.map-shell .trip-header {
+  :root .app-shell.immersive-shell .trip-header {
     left: 0;
     height: 70px;
     min-height: 70px;
@@ -351,7 +351,7 @@
     color: var(--muted);
     pointer-events: auto;
   }
-  .map-shell .header-home {
+  .immersive-shell .header-home {
     background: var(--glass);
   }
   .app-shell .header-home:hover {
@@ -374,7 +374,7 @@
       opacity 140ms ease,
       visibility 0s;
   }
-  .map-shell .trip-title {
+  .immersive-shell .trip-title {
     position: absolute;
     left: 42px;
     top: 20px;
@@ -418,12 +418,12 @@
     opacity: 0;
     transition: opacity 100ms ease;
   }
-  .map-shell .map-trip-title {
+  .immersive-shell .map-trip-title {
     grid-template-columns: 1fr;
     visibility: visible;
     transition-delay: 0s;
   }
-  .map-shell .map-trip-title > span > span {
+  .immersive-shell .map-trip-title > span > span {
     opacity: 1;
     transition-delay: 200ms;
   }
@@ -569,4 +569,17 @@
     height: 56px;
     flex: 0 0 56px;
   }
+}
+
+/* Board: the switcher sits where the trip title would be on phones. */
+@media (max-width: 760px) {
+  .board-shell .trip-title {
+    visibility: hidden;
+  }
+}
+/* Members currently on the board get their presence color as a ring (N-9). */
+.members-button .avatar.on-board {
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--ring, var(--accent));
 }

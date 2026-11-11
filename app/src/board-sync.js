@@ -243,6 +243,9 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
   const lastPresenceSendRef = useRef(0);
   const consecutivePresenceErrorsRef = useRef(0);
   const pendingPresenceRef = useRef(null);
+  // Selection and editing persist across partial updates and the heartbeat,
+  // so a live-frame or heartbeat update never clears them for peers.
+  const presenceStateRef = useRef({ selected: [], editing: null, live: null });
 
   // Load from IndexedDB and server. The cached cursor may sit on a previous
   // process epoch (server restart, deploy, backup restore). In that case the
@@ -410,11 +413,15 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
     async (payload, { immediate = false } = {}) => {
       if (!tripId || !boardId) return;
       const devId = getDeviceId?.() || 'unknown-device';
+      const state = presenceStateRef.current;
+      if ('selected' in payload) state.selected = payload.selected || [];
+      if ('editing' in payload) state.editing = payload.editing ?? null;
+      if ('live' in payload) state.live = payload.live ?? null;
       const body = {
         deviceId: devId,
-        selected: (payload.selected || []).slice(0, 20),
-        editing: payload.editing ?? null,
-        live: payload.live ?? null,
+        selected: state.selected.slice(0, 20),
+        editing: state.editing,
+        live: state.live,
         ...(payload.leave ? { leave: true } : {}),
       };
 

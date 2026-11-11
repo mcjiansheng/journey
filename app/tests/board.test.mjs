@@ -14,6 +14,11 @@ import {
   hourOf,
   sky,
   mapSvg,
+  visibleArea,
+  strokeLook,
+  nearestDock,
+  geoFit,
+  geoProject,
 } from '../src/board.js';
 
 test('board: coordinate transformations', () => {
@@ -106,16 +111,25 @@ test('board: scaled handles note, widget, text, and other items', () => {
   assert.equal(sNoteClamp.w, 900);
   assert.equal(sNoteClamp.h, 900);
 
-  // Widget aspect locked and clamped
+  // Widget aspect locked; corners scale within 0.75–1.6× the form's base size
   const widget = { content: { type: 'widget', kind: 'activity' }, style: { size: 'S' } };
   const sWidget = scaled(widget, { x: 100, y: 100, w: 168, h: 168, scale: 1 }, { w: 168, h: 168 }, 2, 2, 'se');
   assert.equal(sWidget.w, sWidget.h);
-  assert.equal(sWidget.w, 336);
+  assert.equal(sWidget.w, Math.round(168 * 1.6));
+  const sSmall = scaled(widget, { x: 100, y: 100, w: 168, h: 168, scale: 1 }, { w: 168, h: 168 }, 0.2, 0.2, 'se');
+  assert.equal(sSmall.w, 126);
 
   // Text scaling modifies scale
   const textItem = { content: { type: 'text' } };
   const sText = scaled(textItem, { x: 0, y: 0, w: 150, h: 60, scale: 1 }, { w: 150, h: 60 }, 1.5, 1.5, 'se');
   assert.equal(sText.scale, 1.5);
+  // The frame is the size seen on the board, so selection and culling match (N-2)
+  assert.equal(sText.w, 225);
+  assert.equal(sText.h, 90);
+  // A second resize starts from the visible size and does not jump
+  const again = scaled(textItem, sText, { w: sText.w, h: sText.h }, 2, 2, 'se');
+  assert.equal(again.scale, 3);
+  assert.equal(again.w, 450);
 });
 
 test('board: project coordinates', () => {
@@ -158,4 +172,50 @@ test('board: mapSvg determinism', () => {
   assert.notEqual(svg1, svg3);
   assert.ok(svg1.includes('<svg class="map-bg"'));
   assert.ok(svg1.includes('var(--map-land)'));
+});
+
+test('board: center keeps content inside the area not covered by the panel', () => {
+  const items = [{ state: 'active', frame: { x: 0, y: 0, w: 400, h: 200 } }];
+  const v = center(items, { w: 1280, h: 800 }, { left: 376 });
+  const left = toScreen({ x: 0, y: 0 }, v).x;
+  const right = toScreen({ x: 400, y: 0 }, v).x;
+  assert.ok(left > 376, 'content starts right of the docked panel');
+  assert.ok(Math.abs((left + right) / 2 - (376 + (1280 - 376) / 2)) < 1);
+  assert.deepEqual(visibleArea({ w: 1280, h: 800 }, { bottom: 364 }), { x: 0, y: 0, w: 1280, h: 436 });
+});
+
+test('board: stroke look shares colors and widths between draft and saved stroke', () => {
+  assert.deepEqual(strokeLook('pen', 'blue', 8), { stroke: 'var(--ink-blue)', width: 8, opacity: 1 });
+  assert.deepEqual(strokeLook('pen', 'unknown'), { stroke: 'var(--ink-default)', width: 4, opacity: 1 });
+  const hl = strokeLook('highlighter', 'pink', 99);
+  assert.equal(hl.stroke, 'var(--hl-pink)');
+  assert.equal(hl.width, 16);
+  assert.ok(hl.opacity < 1);
+});
+
+test('board: dock target is the nearest edge, never floating', () => {
+  assert.equal(nearestDock(100, 400, 1280, 800), 'left');
+  assert.equal(nearestDock(1000, 300, 1280, 800), 'right');
+  assert.equal(nearestDock(640, 760, 1280, 800), 'bottom');
+  assert.equal(nearestDock(640, 100, 1280, 800), 'left');
+});
+
+test('board: static map fit puts points inside the requested box', () => {
+  const pts = [
+    [117.227, 31.82],
+    [117.3, 31.86],
+    [117.25, 31.79],
+  ];
+  const box = { x: 182, y: 26, w: 146, h: 116 };
+  const view = geoFit(pts, box, 352, 168);
+  assert.ok(Number.isInteger(view.zoom) && view.zoom >= 3 && view.zoom <= 17);
+  for (const [x, y] of geoProject(pts, view, 352, 168)) {
+    assert.ok(x >= box.x - 0.5 && x <= box.x + box.w + 0.5, `x ${x}`);
+    assert.ok(y >= box.y - 0.5 && y <= box.y + box.h + 0.5, `y ${y}`);
+  }
+  // A single place lands exactly on the anchor (under the pin)
+  const one = geoFit([[117.227, 31.82]], { x: 84, y: 67, w: 0, h: 0 }, 168, 168, { singleZoom: 16 });
+  assert.equal(one.zoom, 16);
+  const [[px, py]] = geoProject([[117.227, 31.82]], one, 168, 168);
+  assert.ok(Math.abs(px - 84) < 0.01 && Math.abs(py - 67) < 0.01);
 });

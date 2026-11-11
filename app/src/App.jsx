@@ -33,7 +33,7 @@ import Settings, {
 } from './components/Settings.jsx';
 import { ActionNotice, IconButton } from './components/ui.jsx';
 import { visibleDays } from './domain.js';
-import { appearanceKey, readAppearance, mergeAccountAppearance } from './appearance.js';
+import { appearanceKey, readAppearance, mergeAccountAppearance, boardDock } from './appearance.js';
 import { syncStatusText } from './components/SyncSettings.jsx';
 const pages = [
   ['itinerary', '行程', CalendarDays],
@@ -82,10 +82,31 @@ export default function App() {
     j.snapshot?.objects?.some((o) => o.id === editingDayId && o.state === 'deleted');
   const tripDeleted = j.snapshot?.trip?.state === 'deleted';
   const page = tripDeleted ? 'recovery' : j.context?.page || 'itinerary';
+  // Map and board share the immersive shell: collapsed sidebar, floating header.
+  const immersive = page === 'map' || page === 'board';
+  const [panelDock, setPanelDock] = useState(() => boardDock(readAppearance()));
+  const journeyRef = useRef(journey);
+  journeyRef.current = journey;
+  const changePanelDock = useCallback((value) => {
+    setPanelDock(value);
+    const next = { ...readAppearance(), boardPanelDock: value };
+    localStorage.setItem(appearanceKey, JSON.stringify(next));
+    const jr = journeyRef.current;
+    if (jr.user) jr.updateProfile({ preferences: { boardPanelDock: value } }).catch(() => {});
+  }, []);
+  // Members currently on this board get a colored ring in the header (N-9).
+  const [boardPeers, setBoardPeers] = useState(() => new Map());
+  const onBoardPeers = useCallback((peers) => {
+    setBoardPeers((prev) => {
+      if (prev.size === peers.size && [...peers].every(([k, v]) => prev.get(k) === v)) return prev;
+      return peers;
+    });
+  }, []);
   useEffect(() => {
     const preferences = mergeAccountAppearance(readAppearance(), j.user?.preferences);
     localStorage.setItem(appearanceKey, JSON.stringify(preferences));
     applyAppearance(preferences);
+    setPanelDock(boardDock(preferences));
     const media = matchMedia('(prefers-color-scheme: dark)');
     const update = () => applyAppearance(readAppearance());
     media.addEventListener('change', update);
@@ -204,7 +225,9 @@ export default function App() {
           onSync={() => setModal('sync')}
         />
       ) : (
-        <div className={`app-shell ${page === 'map' ? 'map-shell' : ''}`}>
+        <div
+          className={`app-shell ${immersive ? 'immersive-shell' : ''} ${page === 'map' ? 'map-shell' : ''} ${page === 'board' ? 'board-shell' : ''}`}
+        >
           <aside className="sidebar">
             <button className="brand" onClick={home}>
               <Compass />
@@ -226,7 +249,7 @@ export default function App() {
                 <SelectionTrack
                   as="nav"
                   activeKey={page}
-                  layoutKey={page === 'map'}
+                  layoutKey={immersive}
                   aria-label="主导航"
                 >
                   {pages.map(([key, label, Icon]) => (
@@ -268,7 +291,7 @@ export default function App() {
                 </div>
               }
               <div className="header-right">
-                <div className="map-trip-title" aria-hidden={page !== 'map'}>
+                <div className="map-trip-title" aria-hidden={!immersive}>
                   <span>
                     <span title={j.snapshot.trip.name}>{j.snapshot.trip.name}</span>
                   </span>
@@ -302,11 +325,23 @@ export default function App() {
                 >
                   <div className="avatar-stack">
                     {/* 同伴排在前面：手机端只显示第一个头像，自己的头像已在右侧“我的设置”入口 */}
-                    {[...otherMembers, ...selfMembers].slice(0, 3).map((m) => (
-                      <span className="avatar" key={m.userId}>
-                        {m.displayName.slice(0, 1)}
-                      </span>
-                    ))}
+                    {[...otherMembers, ...selfMembers].slice(0, 3).map((m) => {
+                      const onBoard = page === 'board' && boardPeers.has(m.userId);
+                      return (
+                        <span
+                          className={`avatar ${onBoard ? 'on-board' : ''}`}
+                          key={m.userId}
+                          style={
+                            onBoard
+                              ? { '--ring': `var(--peer-${(boardPeers.get(m.userId) % 4) + 1})` }
+                              : undefined
+                          }
+                          title={onBoard ? `${m.displayName} 正在看这块白板` : undefined}
+                        >
+                          {m.displayName.slice(0, 1)}
+                        </span>
+                      );
+                    })}
                   </div>
                   {otherMembers.length > 1 && (
                     <span className="member-overflow" aria-hidden="true">
@@ -363,6 +398,15 @@ export default function App() {
                     snapshot={j.snapshot}
                     currentUserId={j.user?.id}
                     mutate={j.mutate}
+                    notify={notify}
+                    modalOpen={Boolean(modal) || Boolean(edit)}
+                    dock={panelDock}
+                    onDockChange={changePanelDock}
+                    boardContext={j.context?.board}
+                    onBoardContext={(patch) =>
+                      j.setContext({ board: { ...(j.context?.board || {}), ...patch } })
+                    }
+                    onPeersChange={onBoardPeers}
                     onNavigate={(targetPage, targetContext) => {
                       j.setContext({ page: targetPage, ...targetContext });
                     }}

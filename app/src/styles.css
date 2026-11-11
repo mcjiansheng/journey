@@ -1229,10 +1229,11 @@ details[open] > summary {
     transform: rotate(360deg);
   }
 }
-.map-shell {
+.map-shell,
+.immersive-shell {
   position: relative;
 }
-.map-shell .trip-header {
+.immersive-shell .trip-header {
   position: absolute;
   z-index: 6;
   top: 18px;
@@ -1248,11 +1249,11 @@ details[open] > summary {
   padding: 0 20px;
   box-shadow: var(--shadow);
 }
-.map-shell .main-content {
+.immersive-shell .main-content {
   height: 100dvh;
   overflow: hidden;
 }
-.map-shell .workspace {
+.immersive-shell .workspace {
   height: 100dvh;
 }
 .map-content {
@@ -1656,7 +1657,7 @@ details[open] > summary {
   .login-wrap > .muted {
     font-size: var(--fs-caption);
   }
-  .map-shell .trip-header {
+  .immersive-shell .trip-header {
     top: calc(12px + env(safe-area-inset-top));
     left: 12px;
     right: 12px;
@@ -1665,7 +1666,7 @@ details[open] > summary {
     border-radius: var(--radius-lg);
     padding: 0 14px;
   }
-  .map-shell .bottom-nav {
+  .immersive-shell .bottom-nav {
     bottom: calc(9px + env(safe-area-inset-bottom));
   }
   .member-row {
@@ -2778,7 +2779,7 @@ body:has(> .site-filing),
     0 3px 13px var(--optical-shadow);
   font-weight: 600;
 }
-.app-shell:not(.map-shell) .trip-header {
+.app-shell:not(.immersive-shell) .trip-header {
   background: transparent;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;

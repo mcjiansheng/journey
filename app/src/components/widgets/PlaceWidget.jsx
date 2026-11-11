@@ -29,7 +29,16 @@ export function PlaceWidget({ item, model }) {
       style={{ '--mc': mc }}
       ariaLabel={`地点小组件：${model.name}`}
     >
-      <MapSketch seed={model.favoriteId || model.name || 'place'} w={168} h={168} className="map" />
+      <MapSketch
+        seed={model.favoriteId || model.name || 'place'}
+        w={168}
+        h={168}
+        location={
+          model.lng != null && model.lat != null ? { lng: model.lng, lat: model.lat } : null
+        }
+        anchor={{ x: 84, y: size === 'S' ? 67 : 91 }}
+        className="map"
+      />
       <i className="pulse" />
       {pinSvg}
 

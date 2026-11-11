@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import './widgets.css';
-import { widgetModel } from '../../board-widgets.js';
+import { widgetModel, widgetDeps } from '../../board-widgets.js';
 import { ActivityWidget } from './ActivityWidget.jsx';
 import { DayWidget } from './DayWidget.jsx';
 import { PlaceWidget } from './PlaceWidget.jsx';
@@ -10,8 +10,16 @@ import { ClockWidget } from './ClockWidget.jsx';
 import { ExpenseWidget } from './ExpenseWidget.jsx';
 import { WidgetFrame } from './WidgetFrame.jsx';
 
-export function BoardWidget({ item, snapshot, deviceTimeZone }) {
-  const model = widgetModel(snapshot, item, { deviceTimeZone });
+export const BoardWidget = React.memo(function BoardWidget({ item, snapshot, deviceTimeZone }) {
+  // Recompute the model only when the trip data it reads changes, not on every
+  // drag frame or presence update (旧 P2-6).
+  // The minute bucket keeps time-based models (countdown, clock, today) fresh.
+  const deps = `${widgetDeps(snapshot, item)}|${Math.floor(Date.now() / 60000)}`;
+  const model = useMemo(
+    () => widgetModel(snapshot, item, { deviceTimeZone }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deps, item.content?.kind, item.style?.size, item.linkedActivityId, deviceTimeZone],
+  );
   const kind = item.content?.kind;
 
   switch (kind) {
@@ -36,7 +44,7 @@ export function BoardWidget({ item, snapshot, deviceTimeZone }) {
         </WidgetFrame>
       );
   }
-}
+});
 
 export {
   ActivityWidget,

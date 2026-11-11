@@ -4,6 +4,9 @@ import {
   WIDGET_SIZES,
   WIDGET_KINDS,
   widgetSize,
+  pickWidgetSize,
+  widgetEdgeHandles,
+  widgetScale,
   widgetDeps,
   widgetModel,
 } from '../src/board-widgets.js';
@@ -363,4 +366,34 @@ test('board-widgets: expense widget currency factors (KRW/JPY/CNY)', () => {
   const cny = withCurrency('CNY', 12000);
   assert.equal(cny.formattedTotal, '¥120.00');
   assert.equal(cny.formattedPer, '¥60.00');
+});
+
+test('board-widgets: edge drag switches form with hysteresis', () => {
+  // S → M once the box is clearly wide, and back only once clearly square
+  assert.equal(pickWidgetSize('activity', 168 * 1.6, 168, 'S', 'x'), 'S');
+  assert.equal(pickWidgetSize('activity', 168 * 1.7, 168, 'S', 'x'), 'M');
+  assert.equal(pickWidgetSize('activity', 168 * 1.4, 168, 'M', 'x'), 'M');
+  assert.equal(pickWidgetSize('activity', 168 * 1.3, 168, 'M', 'x'), 'S');
+  // M → L by pulling down, back by pushing up
+  assert.equal(pickWidgetSize('day', 352, 250, 'M', 'y'), 'L');
+  assert.equal(pickWidgetSize('day', 352, 220, 'L', 'y'), 'L');
+  assert.equal(pickWidgetSize('day', 352, 190, 'L', 'y'), 'M');
+  // Kinds without L or S never switch into them
+  assert.equal(pickWidgetSize('activity', 352, 300, 'M', 'y'), 'M');
+  assert.equal(pickWidgetSize('route', 100, 168, 'M', 'x'), 'M');
+});
+
+test('board-widgets: edge handles match the forms a kind supports', () => {
+  const w = (kind, size) => ({ content: { type: 'widget', kind }, style: { size } });
+  assert.deepEqual(widgetEdgeHandles(w('activity', 'S')), ['e', 'w']);
+  assert.deepEqual(widgetEdgeHandles(w('day', 'M')), ['e', 'w', 's']);
+  assert.deepEqual(widgetEdgeHandles(w('day', 'L')), ['s']);
+  assert.deepEqual(widgetEdgeHandles(w('route', 'M')), ['s']);
+  assert.deepEqual(widgetEdgeHandles(w('clock', 'S')), ['e', 'w']);
+});
+
+test('board-widgets: widget scale is kept relative to the form base size', () => {
+  const item = { content: { kind: 'activity' }, style: { size: 'M' }, frame: { w: 352 * 1.3, h: 168 * 1.3 } };
+  assert.equal(widgetScale(item), 1.3);
+  assert.equal(widgetScale({ ...item, frame: { w: 10 } }), 0.75);
 });

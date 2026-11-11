@@ -43,7 +43,7 @@ const categories = [
   ['appearance', '外观', Palette],
   ['accessibility', '辅助功能', Eye],
   ['notifications', '通知与提示', Bell],
-  ['map', '地图', Map],
+  ['map', '地图与白板', Map],
   ['sync', '保存与同步', Cloud],
   ['account', '账号', UserRound],
 ];
@@ -69,17 +69,18 @@ function Switch({ title, description, checked, onChange, disabled }) {
     </label>
   );
 }
-function Segmented({ title, description, value, onChange, disabled }) {
+const SYSTEM_OFF_ON = [
+  ['system', '跟随系统'],
+  [false, '关'],
+  [true, '开'],
+];
+function Segmented({ title, description, value, onChange, disabled, options = SYSTEM_OFF_ON }) {
   return (
     <fieldset className="personal-segment-setting">
       <legend>{title}</legend>
       <p className="muted">{description}</p>
       <SelectionTrack className="personal-segments" activeKey={value}>
-        {[
-          ['system', '跟随系统'],
-          [false, '关'],
-          [true, '开'],
-        ].map(([key, label]) => (
+        {options.map(([key, label]) => (
           <button
             type="button"
             key={String(key)}
@@ -228,7 +229,7 @@ export default function PersonalSettings({ journey: j, onClose, initialCategory 
           : '跟随系统',
     notifications:
       prefs.collaborationNotifications && permission === 'granted' ? '提醒已开启' : '提醒已关闭',
-    map: (prefs.autoCollapseMapSidebar ?? true) ? '自动收起侧栏' : '保持侧栏展开',
+    map: `${(prefs.autoCollapseMapSidebar ?? true) ? '自动收起侧栏' : '保持侧栏展开'} · 贴纸面板${{ left: '在左侧', right: '在右侧', bottom: '在底部' }[prefs.boardPanelDock || 'left']}`,
     sync: j.pendingCount ? `${j.pendingCount} 项待上传` : '查看同步状态',
     account: j.user?.identifier || '尚未登录',
   };
@@ -405,13 +406,27 @@ export default function PersonalSettings({ journey: j, onClose, initialCategory 
             </>
           )}
           {selected === 'map' && (
-            <Switch
-              title="地图自动收起侧栏"
-              description="打开地图时，为地图留出更多空间。"
-              checked={prefs.autoCollapseMapSidebar ?? true}
-              disabled={saving}
-              onChange={(value) => preference('autoCollapseMapSidebar', value)}
-            />
+            <>
+              <Switch
+                title="地图和白板自动收起侧栏"
+                description="打开地图或白板时，为画面留出更多空间。"
+                checked={prefs.autoCollapseMapSidebar ?? true}
+                disabled={saving}
+                onChange={(value) => preference('autoCollapseMapSidebar', value)}
+              />
+              <Segmented
+                title="贴纸面板位置"
+                description="白板上贴纸与小组件面板停靠的位置，也可以直接拖动面板标题栏切换。"
+                value={prefs.boardPanelDock || 'left'}
+                options={[
+                  ['left', '左侧'],
+                  ['right', '右侧'],
+                  ['bottom', '底部'],
+                ]}
+                disabled={saving}
+                onChange={(value) => preference('boardPanelDock', value)}
+              />
+            </>
           )}
           {selected === 'sync' && j.user && <SyncSettings journey={j} />}
           {selected === 'account' &&

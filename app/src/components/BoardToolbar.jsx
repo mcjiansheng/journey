@@ -1,21 +1,55 @@
-import React from 'react';
-
-const PEN_COLORS = [
-  { id: 'default', color: 'var(--text)' },
-  { id: 'accent', color: 'var(--brand, #059669)' },
-  { id: 'red', color: '#dc2626' },
-  { id: 'orange', color: '#ea580c' },
-  { id: 'blue', color: '#2563eb' },
-  { id: 'purple', color: '#9333ea' },
-];
+import React, { useLayoutEffect, useRef, useState } from 'react';
+import { PEN, PEN_NAMES, HL, HL_NAMES } from '../board.js';
 
 const PEN_SIZES = [2, 4, 8];
 
-const HL_COLORS = [
-  { id: 'yellow', color: '#fef08a' },
-  { id: 'green', color: '#bbf7d0' },
-  { id: 'blue', color: '#bfdbfe' },
-  { id: 'pink', color: '#fbcfe8' },
+const TOOLS = [
+  {
+    id: 'select',
+    label: '选择',
+    key: 'V',
+    icon: <path d="m5 3 14 8-6 2-2 6z" />,
+  },
+  {
+    id: 'text',
+    label: '文字',
+    key: 'T',
+    icon: <path d="M5 6V4h14v2M12 4v16M9 20h6" />,
+  },
+  {
+    id: 'pen',
+    label: '画笔',
+    key: 'P',
+    icon: (
+      <>
+        <path d="M4 20l1-4L16 5l3 3L8 19z" />
+        <path d="m14 7 3 3" />
+      </>
+    ),
+  },
+  {
+    id: 'highlighter',
+    label: '荧光笔',
+    key: 'H',
+    icon: (
+      <>
+        <path d="m9 14 7-9 4 3-7 9z" />
+        <path d="m9 14-2 4 4 1 2-2M4 21h9" />
+      </>
+    ),
+  },
+  {
+    id: 'eraser',
+    label: '橡皮',
+    key: 'E',
+    hint: '整笔擦除',
+    icon: (
+      <>
+        <path d="m4 15 9-9 7 7-6 6H8z" />
+        <path d="M9 10l7 7M8 19h12" />
+      </>
+    ),
+  },
 ];
 
 export function BoardToolbar({
@@ -29,23 +63,59 @@ export function BoardToolbar({
   onChangeHlColor,
   panelOpen,
   onTogglePanel,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
+  hidden = false,
 }) {
   const showOptions = activeTool === 'pen' || activeTool === 'highlighter';
+  const toolRefs = useRef({});
+  const wrapRef = useRef(null);
+  const optionsRef = useRef(null);
+  const [optionsLeft, setOptionsLeft] = useState(null);
+
+  // Anchor the color/size bubble above the tool it belongs to, clamped so it
+  // stays on screen (问题 6).
+  useLayoutEffect(() => {
+    if (!showOptions) return;
+    const btn = toolRefs.current[activeTool];
+    const wrap = wrapRef.current;
+    const opts = optionsRef.current;
+    if (!btn || !wrap || !opts) return;
+    const wrapRect = wrap.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    const half = opts.offsetWidth / 2;
+    const centerX = btnRect.left + btnRect.width / 2;
+    const clamped = Math.min(window.innerWidth - 8 - half, Math.max(8 + half, centerX));
+    setOptionsLeft(clamped - wrapRect.left);
+  }, [showOptions, activeTool, penColor, hlColor, penSize]);
+
+  const dotColor = (id) =>
+    id === 'pen' ? PEN[penColor] : id === 'highlighter' ? HL[hlColor] : null;
 
   return (
-    <>
+    <div id="toolbar-wrap" className={`ui ${hidden ? 'is-hidden' : ''}`} ref={wrapRef}>
       {showOptions && (
-        <div id="options" className="ui glass">
+        <div
+          id="options"
+          className="glass"
+          ref={optionsRef}
+          role="group"
+          aria-label={activeTool === 'pen' ? '画笔选项' : '荧光笔选项'}
+          style={optionsLeft == null ? { visibility: 'hidden' } : { left: optionsLeft }}
+        >
           {activeTool === 'pen' && (
             <>
-              {PEN_COLORS.map((c) => (
+              {Object.keys(PEN).map((id) => (
                 <button
-                  key={c.id}
+                  key={id}
                   className="sw"
-                  style={{ backgroundColor: c.color }}
-                  aria-pressed={penColor === c.id}
-                  onClick={() => onChangePenColor(c.id)}
-                  title={`画笔颜色：${c.id}`}
+                  style={{ backgroundColor: PEN[id] }}
+                  aria-pressed={penColor === id}
+                  onClick={() => onChangePenColor(id)}
+                  title={`画笔颜色：${PEN_NAMES[id]}`}
+                  aria-label={`画笔颜色：${PEN_NAMES[id]}`}
                 />
               ))}
               <div className="sep" />
@@ -56,48 +126,75 @@ export function BoardToolbar({
                   aria-pressed={penSize === sz}
                   onClick={() => onChangePenSize(sz)}
                   title={`粗细：${sz}px`}
+                  aria-label={`粗细 ${sz} 像素`}
                 >
                   <i style={{ width: sz * 1.5, height: sz * 1.5 }} />
                 </button>
               ))}
             </>
           )}
-
-          {activeTool === 'highlighter' && (
-            <>
-              {HL_COLORS.map((c) => (
-                <button
-                  key={c.id}
-                  className="sw"
-                  style={{ backgroundColor: c.color }}
-                  aria-pressed={hlColor === c.id}
-                  onClick={() => onChangeHlColor(c.id)}
-                  title={`荧光笔颜色：${c.id}`}
-                />
-              ))}
-            </>
-          )}
+          {activeTool === 'highlighter' &&
+            Object.keys(HL).map((id) => (
+              <button
+                key={id}
+                className="sw"
+                style={{ backgroundColor: HL[id] }}
+                aria-pressed={hlColor === id}
+                onClick={() => onChangeHlColor(id)}
+                title={`荧光笔颜色：${HL_NAMES[id]}`}
+                aria-label={`荧光笔颜色：${HL_NAMES[id]}`}
+              />
+            ))}
         </div>
       )}
 
-      <div id="toolbar" className="ui glass" role="toolbar" aria-label="白板工具">
+      <div id="toolbar" className="glass" role="toolbar" aria-label="白板工具">
         <button
           className="tool"
-          data-tool="select"
-          aria-pressed={activeTool === 'select'}
-          onClick={() => onSelectTool('select')}
-          title="选择 (V)"
-          aria-label="选择"
+          onClick={onUndo}
+          disabled={!canUndo}
+          title="撤销 (⌘Z)"
+          aria-label="撤销"
         >
           <svg viewBox="0 0 24 24">
-            <path d="m5 3 14 8-6 2-2 6z" />
+            <path d="M9 14 4 9l5-5" />
+            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
           </svg>
         </button>
-
         <button
           className="tool"
+          onClick={onRedo}
+          disabled={!canRedo}
+          title="重做 (⇧⌘Z)"
+          aria-label="重做"
+        >
+          <svg viewBox="0 0 24 24">
+            <path d="m15 14 5-5-5-5" />
+            <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
+          </svg>
+        </button>
+        <div className="sep" />
+        {TOOLS.map((t) => (
+          <button
+            key={t.id}
+            ref={(el) => (toolRefs.current[t.id] = el)}
+            className="tool"
+            data-tool={t.id}
+            aria-pressed={activeTool === t.id}
+            onClick={() => onSelectTool(t.id)}
+            title={`${t.label} (${t.key})${t.hint ? `，${t.hint}` : ''}`}
+            aria-label={t.label}
+          >
+            <svg viewBox="0 0 24 24">{t.icon}</svg>
+            {dotColor(t.id) && <span className="tool-dot" style={{ background: dotColor(t.id) }} />}
+          </button>
+        ))}
+        <div className="sep" />
+        <button
+          className={`tool sticker-btn ${panelOpen ? 'is-open' : ''}`}
           data-tool="sticker"
-          aria-pressed={panelOpen}
+          aria-expanded={panelOpen}
+          aria-controls="panel"
           onClick={onTogglePanel}
           title="贴纸与小组件 (S)"
           aria-label="贴纸与小组件"
@@ -107,62 +204,7 @@ export function BoardToolbar({
             <path d="M20 14h-6v6" />
           </svg>
         </button>
-
-        <button
-          className="tool"
-          data-tool="text"
-          aria-pressed={activeTool === 'text'}
-          onClick={() => onSelectTool('text')}
-          title="文字 (T)"
-          aria-label="文字"
-        >
-          <svg viewBox="0 0 24 24">
-            <path d="M5 6V4h14v2M12 4v16M9 20h6" />
-          </svg>
-        </button>
-
-        <button
-          className="tool"
-          data-tool="pen"
-          aria-pressed={activeTool === 'pen'}
-          onClick={() => onSelectTool('pen')}
-          title="画笔 (P)"
-          aria-label="画笔"
-        >
-          <svg viewBox="0 0 24 24">
-            <path d="M4 20l1-4L16 5l3 3L8 19z" />
-            <path d="m14 7 3 3" />
-          </svg>
-        </button>
-
-        <button
-          className="tool"
-          data-tool="highlighter"
-          aria-pressed={activeTool === 'highlighter'}
-          onClick={() => onSelectTool('highlighter')}
-          title="荧光笔 (H)"
-          aria-label="荧光笔"
-        >
-          <svg viewBox="0 0 24 24">
-            <path d="m9 14 7-9 4 3-7 9z" />
-            <path d="m9 14-2 4 4 1 2-2M4 21h9" />
-          </svg>
-        </button>
-
-        <button
-          className="tool"
-          data-tool="eraser"
-          aria-pressed={activeTool === 'eraser'}
-          onClick={() => onSelectTool('eraser')}
-          title="橡皮 (E)，整笔擦除"
-          aria-label="橡皮"
-        >
-          <svg viewBox="0 0 24 24">
-            <path d="m4 15 9-9 7 7-6 6H8z" />
-            <path d="M9 10l7 7M8 19h12" />
-          </svg>
-        </button>
       </div>
-    </>
+    </div>
   );
 }

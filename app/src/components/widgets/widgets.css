@@ -12,7 +12,7 @@
   border-radius: var(--r-widget, 30px);
   overflow: hidden;
   color: #fff;
-  font-family: var(--round, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-family: inherit;
   box-shadow:
     inset 0 1px 0 #ffffff38,
     inset 0 0 0 1px #ffffff14,
@@ -544,7 +544,7 @@
 }
 .w-route .dpill {
   background: var(--selected, #dcebdd);
-  color: var(--primary, #2f6b57);
+  color: var(--accent, #2f6b57);
   align-self: flex-start;
 }
 .w-route .panel {
@@ -561,7 +561,7 @@
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   box-shadow:
-    inset 0 1px 0 var(--edge, #ffffffbf),
+    inset 0 1px 0 var(--optical-edge, #ffffffbf),
     0 8px 18px -10px #0005;
 }
 .w-route .big {
@@ -585,7 +585,7 @@
   display: flex;
   gap: 4px;
   align-items: center;
-  color: var(--primary, #2f6b57);
+  color: var(--accent, #2f6b57);
 }
 .w-route .sub2 {
   font-size: 11px;
@@ -735,7 +735,7 @@
   display: grid;
   place-items: center;
   background: var(--selected, #dcebdd);
-  color: var(--primary, #2f6b57);
+  color: var(--accent, #2f6b57);
 }
 .w-exp .coin .ic {
   width: 14px;
@@ -783,11 +783,11 @@
 .w-exp .bars i {
   width: 100%;
   border-radius: 4px 4px 2px 2px;
-  background: color-mix(in srgb, var(--primary, #2f6b57) 28%, transparent);
+  background: color-mix(in srgb, var(--accent, #2f6b57) 28%, transparent);
   height: var(--h, 3px);
 }
 .w-exp .bars i.on {
-  background: var(--primary, #2f6b57);
+  background: var(--accent, #2f6b57);
 }
 .w-exp .bars em {
   font-style: normal;
@@ -1019,4 +1019,54 @@
   font-size: 11.5px;
   opacity: 0.6;
   margin-top: 5px;
+}
+
+/* 真实地图（高德静态图）与离线回退 */
+.static-map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+}
+:root:where([data-theme='dark']) .static-map {
+  filter: brightness(0.8) saturate(0.85);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light']):not([data-theme='dark'])) .static-map {
+    filter: brightness(0.8) saturate(0.85);
+  }
+}
+.map-offline {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 16px;
+  color: var(--muted, #666);
+  background: color-mix(in srgb, var(--surface, #fff) 86%, transparent);
+  pointer-events: none;
+}
+.w-route.m .map-offline {
+  right: 10px;
+}
+
+/* 形态切换（边缘拉球拖动时）：只在形态改变的那一刻做尺寸过渡 */
+.board-item.reshaping .widget-frame {
+  transition:
+    width 0.16s cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-item.reshaping .widget-frame {
+    transition: none;
+  }
+}
+:root[data-motion='true'] .board-item.reshaping .widget-frame {
+  transition: none;
 }

@@ -93,6 +93,12 @@ export function Modal({
 }
 export function ActionNotice({ notice, onClose }) {
   const [error, setError] = useState('');
+  // Undo offers (e.g. 白板「已删除 · 撤销」) disappear on their own.
+  useEffect(() => {
+    if (!notice.timeout) return undefined;
+    const t = setTimeout(onClose, notice.timeout);
+    return () => clearTimeout(t);
+  }, [notice.id]);
   return (
     <div className="action-notice" role="status">
       <span>{error || notice.message}</span>

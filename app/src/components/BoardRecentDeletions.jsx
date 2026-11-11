@@ -1,23 +1,51 @@
 import React from 'react';
 
-export function BoardRecentDeletions({ open, onClose, deletedItems = [], onRestore }) {
+export function BoardRecentDeletions({
+  open,
+  onClose,
+  deletedItems = [],
+  onRestore,
+  deletedBoards = [],
+  onRestoreBoard,
+}) {
   if (!open) return null;
+  // A text object that was never given any text is discarded, not "deleted".
+  const items = deletedItems.filter((it) => !(it.content?.type === 'text' && !it.content?.text));
 
   return (
     <div id="drawer" className="ui sheet glass on" role="dialog" aria-label="最近删除">
       <header>
         <h2>最近删除</h2>
         <button className="iconbtn" onClick={onClose} aria-label="关闭">
-          ✕
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
         </button>
       </header>
       <div className="body">
-        {deletedItems.length === 0 ? (
+        {deletedBoards.length > 0 && (
+          <>
+            <div className="group">白板</div>
+            {deletedBoards.map((b) => (
+              <div key={b.id} className="recent-row">
+                <div className="info">
+                  <b>{b.payload?.title || '白板'}</b>
+                  <span>整块白板及其内容</span>
+                </div>
+                <button className="restore-btn" onClick={() => onRestoreBoard?.(b)}>
+                  恢复
+                </button>
+              </div>
+            ))}
+            <div className="group">对象</div>
+          </>
+        )}
+        {items.length === 0 ? (
           <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted)' }}>
             没有已删除的内容
           </div>
         ) : (
-          deletedItems.map((item) => {
+          items.map((item) => {
             const type = item.content?.type;
             const title =
               type === 'note'
@@ -27,7 +55,7 @@ export function BoardRecentDeletions({ open, onClose, deletedItems = [], onResto
                   : type === 'text'
                     ? item.content?.text || '文本'
                     : type === 'emoji'
-                      ? `表情 ${item.content?.emoji}`
+                      ? `表情 ${item.content?.char || item.content?.emoji || ''}`
                       : type === 'image'
                         ? '图片'
                         : '笔迹';

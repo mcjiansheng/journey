@@ -9,7 +9,7 @@ const password = 'JourneyBoard2026!';
 const suffix = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
 test.beforeAll(async () => {
-  mkdirSync(resolve(process.cwd(), '../.local/evidence/1110-白板-小组件'), { recursive: true });
+  mkdirSync(resolve(process.cwd(), '../.local/evidence/1111-白板界面'), { recursive: true });
   app = createApp({
     distPath: fileURLToPath(new URL('../../dist/', import.meta.url)),
     databasePath: ':memory:',
@@ -160,6 +160,9 @@ test('board: basic sticker lifecycle (stick note, edit text, scale, delete, rest
   await expect(page.locator('#panel')).toBeVisible();
   await page.locator('#panel .tabs button:has-text("便签")').click();
   await page.locator('.pick-note').first().click();
+  // The panel stays open so several stickers can be added in a row (问题 1).
+  await expect(page.locator('#panel')).toBeVisible();
+  await page.locator('#panel button[aria-label="关闭"]').click();
   await expect(page.locator('#panel')).toHaveCount(0);
 
   // 3. Verify note exists
@@ -181,8 +184,9 @@ test('board: basic sticker lifecycle (stick note, edit text, scale, delete, rest
   await page.locator('#actions button.danger:has-text("删除")').click();
   await expect(note).toHaveCount(0);
 
-  // 7. Open Recent Deletions drawer and restore
-  await page.locator('#top-right button[aria-label="最近删除"]').click();
+  // 7. Open Recent Deletions from the board menu and restore (问题 9)
+  await page.locator('#top-left .switcher-button').click();
+  await page.getByRole('menuitem', { name: /最近删除/ }).click();
   await expect(page.locator('#drawer')).toBeVisible();
   await expect(page.locator('#drawer .recent-row')).toContainText('买一把西湖绸伞');
   await page.locator('#drawer .restore-btn').click();
@@ -326,6 +330,7 @@ test('board: freehand drawing with pen, unified z-order, and eraser', async ({ p
   await page.locator('#toolbar button[data-tool="sticker"]').click();
   await page.locator('#panel .tabs button:has-text("便签")').click();
   await page.locator('.pick-note').first().click();
+  await page.locator('#panel button[aria-label="关闭"]').click();
 
   const note = page.locator('.board-item.item-note');
   await expect(note).toBeVisible();
@@ -342,11 +347,13 @@ test('board: freehand drawing with pen, unified z-order, and eraser', async ({ p
   // 5. Select eraser tool and erase the stroke where it is visible (not covered by the note).
   // The eraser removes whole strokes only; stickers under the pointer are never erased.
   await page.locator('#toolbar button[data-tool="eraser"]').click();
-  const strokeStart = await page.locator('.board-item.item-stroke path').evaluate((path) => {
-    const p = path.getPointAtLength(0);
-    const m = path.getScreenCTM();
-    return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
-  });
+  const strokeStart = await page
+    .locator('.board-item.item-stroke path.stroke-paint')
+    .evaluate((path) => {
+      const p = path.getPointAtLength(0);
+      const m = path.getScreenCTM();
+      return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
+    });
   const hitIsStroke = await page.evaluate(
     ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('.item-stroke')),
     strokeStart,
@@ -374,63 +381,282 @@ test('board: responsive screenshots across palettes and viewports', async ({ pag
   await page.locator('nav button[aria-label="白板"]').first().click();
   await expect(page.locator('.board-container')).toBeVisible();
 
-  // Add countdown widget
+  // Add three stickers without reopening the panel (问题 1 验收)
   await page.locator('#toolbar button[data-tool="sticker"]').click();
   await page.locator('#panel .gallery button:has-text("倒计时")').click();
-
-  // Add clock widget
-  await page.locator('#toolbar button[data-tool="sticker"]').click();
   await page.locator('#panel .gallery button:has-text("当地时间")').click();
-
-  // Add note
-  await page.locator('#toolbar button[data-tool="sticker"]').click();
   await page.locator('#panel .tabs button:has-text("便签")').click();
   await page.locator('.pick-note').first().click();
+  await expect(page.locator('#panel')).toBeVisible();
+  await expect(page.locator('.board-item')).toHaveCount(3);
+  await page.locator('#stage').click({ position: { x: 900, y: 600 } });
+  await page.locator('#panel .tabs button:has-text("小组件")').click();
 
-  // 1. Desktop 1280px Light Forest
+  const dir = '../.local/evidence/1111-白板界面';
+  const shoot = async (name, { palette = 'forest', theme = 'light' } = {}) => {
+    await page.evaluate(
+      ([palette, theme]) => {
+        document.documentElement.dataset.palette = palette;
+        document.documentElement.dataset.theme = theme;
+      },
+      [palette, theme],
+    );
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: `${dir}/${name}.png`, fullPage: false });
+  };
+
+  // Panel open, docked left: visible border, background and selected states.
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.screenshot({
-    path: '../.local/evidence/1110-白板-小组件/board-desktop-1280-forest-light.png',
-    fullPage: false,
-  });
+  for (const palette of ['forest', 'atlas'])
+    for (const theme of ['light', 'dark'])
+      await shoot(`board-1280-${palette}-${theme}-panel`, { palette, theme });
 
-  // 2. Desktop 1280px Dark Forest
-  await page.evaluate(() => {
-    document.documentElement.dataset.mode = 'dark';
-  });
-  await page.screenshot({
-    path: '../.local/evidence/1110-白板-小组件/board-desktop-1280-forest-dark.png',
-    fullPage: false,
-  });
-
-  // 3. Mobile 390px Light Forest
-  await page.evaluate(() => {
-    document.documentElement.dataset.mode = 'light';
-  });
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({
-    path: '../.local/evidence/1110-白板-小组件/board-mobile-390-forest-light.png',
-    fullPage: false,
-  });
-
-  // 4. Mobile 390px Dark Atlas
-  await page.evaluate(() => {
-    document.documentElement.dataset.palette = 'atlas';
-    document.documentElement.dataset.mode = 'dark';
-  });
-  await page.screenshot({
-    path: '../.local/evidence/1110-白板-小组件/board-mobile-390-atlas-dark.png',
-    fullPage: false,
-  });
-
-  // 5. Desktop 1440px Light Forest
-  await page.evaluate(() => {
-    document.documentElement.dataset.palette = 'forest';
-    document.documentElement.dataset.mode = 'light';
-  });
+  await page.locator('#panel button[aria-label="关闭"]').click();
+  await shoot('board-1280-forest-light');
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.screenshot({
-    path: '../.local/evidence/1110-白板-小组件/board-desktop-1440-forest-light.png',
-    fullPage: false,
+  await shoot('board-1440-forest-light');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await shoot('board-390-forest-light');
+  await shoot('board-390-atlas-dark', { palette: 'atlas', theme: 'dark' });
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  await shoot('board-390-forest-light-sheet');
+});
+
+async function openBoard(page) {
+  await page.locator('nav button[aria-label="白板"]').first().click();
+  await expect(page.locator('.board-container')).toBeVisible();
+}
+
+async function addFromPanel(page, tab, locator) {
+  if (!(await page.locator('#panel').count()))
+    await page.locator('#toolbar button[data-tool="sticker"]').click();
+  await page.locator(`#panel .tabs button:has-text("${tab}")`).click();
+  await page.locator(locator).first().click();
+  await page.locator('#panel button[aria-label="关闭"]').click();
+}
+
+test('board: pen draft follows the pointer before release; text replaces placeholder', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+
+  // 问题 3/8: the draft is visible while the button is still held.
+  await page.locator('#toolbar button[data-tool="pen"]').click();
+  const box = await page.locator('#stage').boundingBox();
+  const x = box.x + 600;
+  const y = box.y + 300;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 25, y + 10);
+  await page.mouse.move(x + 50, y + 20);
+  await page.waitForTimeout(50);
+  const draft = await page.locator('#draft path').evaluate((p) => {
+    const r = p.getBoundingClientRect();
+    return { left: r.left, top: r.top, width: r.width, right: r.right, bottom: r.bottom };
   });
+  expect(draft.width).toBeGreaterThan(30);
+  expect(draft.left).toBeGreaterThanOrEqual(0);
+  expect(draft.right).toBeLessThanOrEqual(1280);
+  expect(draft.top).toBeGreaterThanOrEqual(0);
+  expect(draft.bottom).toBeLessThanOrEqual(800);
+  await page.mouse.up();
+  await expect(page.locator('#draft')).toHaveCount(0);
+  await expect(page.locator('.board-item.item-stroke')).toHaveCount(1);
+
+  // 问题 7: typing on a new text object yields exactly what was typed.
+  await page.locator('#toolbar button[data-tool="text"]').click();
+  await page.mouse.click(box.x + 500, box.y + 500);
+  const text = page.locator('.board-item.item-text .text-inner');
+  await expect(text).toBeFocused();
+  await page.keyboard.type('你好');
+  await page.keyboard.press('Escape');
+  await expect
+    .poll(async () =>
+      (await boardItems(page)).items
+        .filter((i) => i.payload.content.type === 'text')
+        .map((i) => i.payload.content.text),
+    )
+    .toEqual(['你好']);
+  // The frame grew with the text instead of staying 160×48.
+  const textFrame = (await boardItems(page)).items.find((i) => i.payload.content.type === 'text')
+    .payload.frame;
+  expect(textFrame.w).toBeLessThan(160);
+
+  // An empty text object is discarded, not left behind invisibly.
+  await page.locator('#toolbar button[data-tool="text"]').click();
+  await page.mouse.click(box.x + 800, box.y + 500);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.board-item.item-text')).toHaveCount(1);
+});
+
+test('board: shortcuts ignore other dialogs; release outside does not stick', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await addFromPanel(page, '便签', '.pick-note');
+  const note = page.locator('.board-item.item-note');
+  await page.keyboard.press('Escape'); // finish editing the new note
+  await note.click();
+  await expect(page.locator('#actions')).toBeVisible();
+
+  // N-3: Backspace / letters while another dialog is open do nothing to the board.
+  await page.locator('.members-button').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('p');
+  await page.keyboard.press('Escape');
+  await expect(note).toBeVisible();
+  await expect(page.locator('#toolbar button[data-tool="pen"]')).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
+
+  // 旧 P2-2: releasing over the toolbar ends the drag; the note no longer follows.
+  const nb = await note.boundingBox();
+  const tb = await page.locator('#toolbar').boundingBox();
+  await page.mouse.move(nb.x + nb.width / 2, nb.y + nb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(nb.x + nb.width / 2 + 40, nb.y + nb.height / 2 + 40, { steps: 4 });
+  await page.mouse.move(tb.x + 30, tb.y + tb.height / 2, { steps: 6 });
+  await page.mouse.up();
+  const after = await note.boundingBox();
+  await page.mouse.move(200, 200, { steps: 4 });
+  await page.waitForTimeout(100);
+  expect(await note.boundingBox()).toEqual(after);
+
+  // Undo puts the note back where it was before the drag.
+  await page.locator('#toolbar button[aria-label="撤销"]').click();
+  await expect.poll(async () => (await note.boundingBox()).x).toBeCloseTo(nb.x, 0);
+});
+
+test('board: dragging a widget edge switches its form and keeps its scale', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  await page.locator('#panel .gallery button:has-text("当地时间")').click();
+  await page.locator('#panel button[aria-label="关闭"]').click();
+  const widget = page.locator('.board-item.item-widget');
+  await widget.click();
+
+  const handle = page.locator('.board-item.item-widget .handle.edge.e');
+  await expect(handle).toBeVisible();
+  const hb = await handle.boundingBox();
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb.x + 220, hb.y + hb.height / 2, { steps: 8 });
+  await expect(page.locator('.reshape-outline')).toBeVisible();
+  await page.mouse.up();
+
+  await expect.poll(async () => (await boardItems(page)).items[0].payload.style.size).toBe('M');
+  const { frame } = (await boardItems(page)).items[0].payload;
+  expect(frame.w).toBe(352);
+  expect(frame.h).toBe(168);
+
+  // Back to square by pulling the edge in again.
+  await widget.click();
+  const hb2 = await page.locator('.board-item.item-widget .handle.edge.e').boundingBox();
+  await page.mouse.move(hb2.x + hb2.width / 2, hb2.y + hb2.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb2.x - 200, hb2.y + hb2.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await boardItems(page)).items[0].payload.style.size).toBe('S');
+});
+
+test('board: create, rename, switch and delete boards', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  const switcher = page.locator('#top-left .switcher-button');
+  await expect(switcher).toContainText('主白板');
+
+  await switcher.click();
+  await page.getByRole('menuitem', { name: /新建白板/ }).click();
+  const nameInput = page.locator('.rename-form input');
+  await expect(nameInput).toBeFocused();
+  await nameInput.fill('回忆墙');
+  await page.locator('.rename-form button[type="submit"]').click();
+  await expect(switcher).toContainText('回忆墙');
+
+  await switcher.click();
+  await page.getByRole('menuitemradio', { name: /主白板/ }).click();
+  await expect(switcher).toContainText('主白板');
+
+  await switcher.click();
+  await page.getByRole('menuitemradio', { name: /回忆墙/ }).click();
+  await expect(switcher).toContainText('回忆墙');
+  await switcher.click();
+  await page.getByRole('menuitem', { name: /删除当前白板/ }).click();
+  await page.locator('.confirm-delete button.danger-fill').click();
+  await expect(switcher).toContainText('主白板');
+  await switcher.click();
+  await expect(page.getByRole('menuitemradio')).toHaveCount(1);
+  await expect(page.getByRole('menuitem', { name: /删除当前白板/ })).toBeDisabled();
+});
+
+test('board: sticker panel docks to the nearest edge and remembers it', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  const panel = page.locator('#panel');
+  await expect(panel).toHaveClass(/dock-left/);
+
+  const handle = page.locator('#panel .dock-handle');
+  const hb = await handle.boundingBox();
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(800, 400, { steps: 4 });
+  await expect(page.locator('.dock-target.right.on')).toBeVisible();
+  await page.mouse.move(1000, 420, { steps: 4 });
+  await page.mouse.up();
+  await expect(panel).toHaveClass(/dock-right/);
+
+  // A new sticker spawns in the visible part of the canvas, not under the panel.
+  await page.locator('#panel .tabs button:has-text("表情")').click();
+  await page.locator('.pick-emoji').first().click();
+  const emoji = await page.locator('.board-item.item-emoji').boundingBox();
+  const pb = await panel.boundingBox();
+  expect(emoji.x + emoji.width).toBeLessThan(pb.x);
+
+  // Keyboard: ↓ on the handle docks to the bottom.
+  await handle.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(panel).toHaveClass(/dock-bottom/);
+
+  // Saved to the account and restored after reload.
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        fetch('/api/session')
+          .then((r) => r.json())
+          .then((s) => s.user?.preferences?.boardPanelDock),
+      ),
+    )
+    .toBe('bottom');
+  await page.reload();
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  await expect(page.locator('#panel')).toHaveClass(/dock-bottom/);
+});
+
+test('board: place widget requests a static map and falls back to the sketch', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await seedPlaceWidget(page);
+  const staticRequest = page.waitForRequest((r) => r.url().includes('_AMapService/v3/staticmap'));
+  await openBoard(page);
+  const req = await staticRequest;
+  expect(new URL(req.url()).searchParams.get('location')).toMatch(/^120\.\d+,30\.\d+$/);
+  // The test server has no AMap key, so the image fails and the sketch returns.
+  await expect(page.locator('.w-place .sketch-map')).toBeVisible();
+  await expect(page.locator('.w-place .map-offline')).toHaveText('离线');
 });

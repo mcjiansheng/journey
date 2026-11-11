@@ -1,4 +1,58 @@
-import { WIDGET_SIZES, widgetSize } from './board-widgets.js';
+import { WIDGET_SIZES, WIDGET_SCALE_MIN, WIDGET_SCALE_MAX, widgetSize } from './board-widgets.js';
+
+// Stroke, highlighter and note colors come from design tokens only, so the
+// draft layer, saved strokes, toolbar swatches and dark mode all agree (N-12).
+export const PEN = {
+  default: 'var(--ink-default)',
+  accent: 'var(--ink-accent)',
+  red: 'var(--ink-red)',
+  orange: 'var(--ink-orange)',
+  blue: 'var(--ink-blue)',
+  purple: 'var(--ink-purple)',
+};
+export const PEN_NAMES = {
+  default: '墨色',
+  accent: '主题色',
+  red: '红',
+  orange: '橙',
+  blue: '蓝',
+  purple: '紫',
+};
+export const HL = {
+  yellow: 'var(--hl-yellow)',
+  green: 'var(--hl-green)',
+  blue: 'var(--hl-blue)',
+  pink: 'var(--hl-pink)',
+};
+export const HL_NAMES = { yellow: '黄', green: '绿', blue: '蓝', pink: '粉' };
+export const NOTE = {
+  yellow: 'var(--note-yellow)',
+  green: 'var(--note-green)',
+  blue: 'var(--note-blue)',
+  pink: 'var(--note-pink)',
+  purple: 'var(--note-purple)',
+  gray: 'var(--note-gray)',
+};
+export const NOTE_NAMES = {
+  yellow: '暖黄',
+  green: '薄荷',
+  blue: '晴空',
+  pink: '淡粉',
+  purple: '香芋',
+  gray: '浅灰',
+};
+// Legacy note colors written by the prototype.
+const NOTE_ALIASES = { mint: 'green', sky: 'blue', lavender: 'purple', orange: 'yellow' };
+export function noteColor(color) {
+  return NOTE[NOTE_ALIASES[color] || color] ? NOTE_ALIASES[color] || color : 'yellow';
+}
+export const HL_WIDTH = 16;
+export const HL_OPACITY = 0.45;
+export function strokeLook(tool, color, size) {
+  return tool === 'highlighter'
+    ? { stroke: HL[color] ?? HL.yellow, width: HL_WIDTH, opacity: HL_OPACITY }
+    : { stroke: PEN[color] ?? PEN.default, width: size ?? 4, opacity: 1 };
+}
 
 export function toWorld(screenPoint, view) {
   return {
@@ -31,23 +85,48 @@ export function contentBounds(items = []) {
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }
 
-export function center(items = [], viewport = { w: 1200, h: 800 }) {
+/**
+ * Fit the content into the visible part of the stage. `insets` reserves the
+ * screen space covered by floating UI (the docked sticker panel), so "fit" and
+ * "spawn at center" both refer to the canvas the user can actually see.
+ */
+export function center(items = [], viewport = { w: 1200, h: 800 }, insets = {}) {
+  const { left = 0, right = 0, top = 0, bottom = 0 } = insets;
+  const vw = Math.max(100, viewport.w - left - right);
+  const vh = Math.max(100, viewport.h - top - bottom);
   const bounds = contentBounds(items);
   if (!bounds || bounds.w === 0 || bounds.h === 0) {
-    return { x: viewport.w / 2 - 200, y: viewport.h / 2 - 150, k: 1 };
+    return { x: left + vw / 2 - 200, y: top + vh / 2 - 150, k: 1 };
   }
-  const pad = viewport.w < 640 ? 32 : 90;
+  const pad = vw < 640 ? 32 : 90;
   const topPad = 70,
     bottomPad = 140;
-  const availW = Math.max(100, viewport.w - pad * 2);
-  const availH = Math.max(100, viewport.h - topPad - bottomPad);
+  const availW = Math.max(100, vw - pad * 2);
+  const availH = Math.max(100, vh - topPad - bottomPad);
   const k = Math.min(1.2, Math.max(0.2, Math.min(availW / bounds.w, availH / bounds.h)));
   const cx = bounds.x + bounds.w / 2;
   const cy = bounds.y + bounds.h / 2;
   return {
-    x: viewport.w / 2 - cx * k,
-    y: topPad + (viewport.h - topPad - bottomPad) / 2 - cy * k,
+    x: left + vw / 2 - cx * k,
+    y: top + topPad + (vh - topPad - bottomPad) / 2 - cy * k,
     k,
+  };
+}
+
+/** Nearest dock edge for a pointer position; the panel never floats freely. */
+export function nearestDock(x, y, vw, vh) {
+  const d = { left: x, right: vw - x, bottom: vh - y };
+  return Object.entries(d).sort((a, b) => a[1] - b[1])[0][0];
+}
+
+/** Screen-space rectangle of the stage that floating panels do not cover. */
+export function visibleArea(stage = { w: 0, h: 0 }, insets = {}) {
+  const { left = 0, right = 0, top = 0, bottom = 0 } = insets;
+  return {
+    x: left,
+    y: top,
+    w: Math.max(0, stage.w - left - right),
+    h: Math.max(0, stage.h - top - bottom),
   };
 }
 
@@ -110,6 +189,12 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
+/**
+ * Corner-handle scaling. `frame.w/h` is always the size seen on the board:
+ * text keeps its layout and grows through `scale`, so its frame must grow with
+ * it or the selection box, culling and "fit" all read the unscaled size (N-2).
+ * Widgets keep their form (S/M/L) here; the edge handles change form instead.
+ */
 export function scaled(item, frame0, bbox0, sx, sy, anchor = 'se') {
   const type = item.content?.type;
   let w = bbox0.w;
@@ -123,7 +208,7 @@ export function scaled(item, frame0, bbox0, sx, sy, anchor = 'se') {
   } else if (type === 'widget') {
     const size = widgetSize(item);
     const base = WIDGET_SIZES[size] || [168, 168];
-    w = clamp(bbox0.w * s, base[0] * 0.6, base[0] * 2.5);
+    w = clamp(bbox0.w * s, base[0] * WIDGET_SCALE_MIN, base[0] * WIDGET_SCALE_MAX);
     h = (w * base[1]) / base[0];
   } else if (type === 'text') {
     const factor = clamp(s, 0.3 / scale, 8 / scale);
@@ -137,8 +222,8 @@ export function scaled(item, frame0, bbox0, sx, sy, anchor = 'se') {
 
   const f = {
     ...frame0,
-    w: type === 'text' ? frame0.w : Math.round(w),
-    h: type === 'text' ? frame0.h : Math.round(h),
+    w: Math.round(w),
+    h: Math.round(h),
     scale: type === 'text' ? +scale.toFixed(3) : 1,
   };
 
@@ -256,4 +341,62 @@ export function mapSvg(seed, w, h) {
   }
   s += `<path d="M${-R} ${(h * (0.3 + r() * 0.2)).toFixed(0)}Q${cx.toFixed(0)} ${(h * (0.1 + r() * 0.5)).toFixed(0)} ${R * 2} ${(h * (0.4 + r() * 0.2)).toFixed(0)}" stroke="var(--map-major)" stroke-width="6" fill="none"/><path d="M${(w * (0.25 + r() * 0.2)).toFixed(0)} ${-R}Q${(w * (0.2 + r() * 0.4)).toFixed(0)} ${cy.toFixed(0)} ${(w * (0.4 + r() * 0.3)).toFixed(0)} ${R * 2}" stroke="var(--map-major)" stroke-width="6" fill="none"/></g>`;
   return `<svg class="map-bg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice">${s}</svg>`;
+}
+
+// ---------- Web Mercator helpers for static map tiles ----------
+// AMap static images use the standard 256px Web Mercator grid on GCJ-02
+// coordinates, which is what places already store, so stops can be overlaid
+// on the image without asking the service where it put them.
+const TILE = 256;
+function mercX(lng) {
+  return (lng + 180) / 360;
+}
+function mercY(lat) {
+  const s = Math.sin((clamp(lat, -85, 85) * Math.PI) / 180);
+  return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
+}
+function invX(x) {
+  return x * 360 - 180;
+}
+function invY(y) {
+  const n = Math.PI - 2 * Math.PI * y;
+  return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+}
+
+/**
+ * Pick an integer zoom and image center so the points land inside `box`
+ * (container pixels) of a `w`×`h` image. One point is placed at the box center.
+ */
+export function geoFit(points, box, w, h, { maxZoom = 17, singleZoom = 15 } = {}) {
+  if (!points?.length) return null;
+  const xs = points.map(([lng]) => mercX(lng));
+  const ys = points.map(([, lat]) => mercY(lat));
+  const x0 = Math.min(...xs),
+    x1 = Math.max(...xs),
+    y0 = Math.min(...ys),
+    y1 = Math.max(...ys);
+  let zoom = singleZoom;
+  if (points.length > 1 && (x1 > x0 || y1 > y0)) {
+    const fitX = x1 > x0 ? box.w / ((x1 - x0) * TILE) : Infinity;
+    const fitY = y1 > y0 ? box.h / ((y1 - y0) * TILE) : Infinity;
+    zoom = Math.floor(Math.log2(Math.min(fitX, fitY)));
+  }
+  zoom = clamp(zoom, 3, maxZoom);
+  const world = TILE * 2 ** zoom;
+  // Content center in world pixels sits at the box center; the image center is
+  // offset from it by the box center's distance to the container center.
+  const cx = ((x0 + x1) / 2) * world - (box.x + box.w / 2 - w / 2);
+  const cy = ((y0 + y1) / 2) * world - (box.y + box.h / 2 - h / 2);
+  return { lng: invX(cx / world), lat: invY(cy / world), zoom };
+}
+
+/** Project lng/lat points into container pixels of an image centered on `view`. */
+export function geoProject(points, view, w, h) {
+  const world = TILE * 2 ** view.zoom;
+  const cx = mercX(view.lng) * world;
+  const cy = mercY(view.lat) * world;
+  return points.map(([lng, lat]) => [
+    mercX(lng) * world - cx + w / 2,
+    mercY(lat) * world - cy + h / 2,
+  ]);
 }

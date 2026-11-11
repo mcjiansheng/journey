@@ -31,7 +31,13 @@ test('account appearance wins over cached values and keeps this device feedback 
       interactionHaptics: false,
       autoCollapseMapSidebar: false,
       collaborationNotifications: false,
+      boardPanelDock: 'left',
     },
+  );
+  // The sticker panel dock follows the account across devices.
+  assert.equal(
+    mergeAccountAppearance({ boardPanelDock: 'left' }, { boardPanelDock: 'bottom' }).boardPanelDock,
+    'bottom',
   );
   assert.deepEqual(readAppearance({ getItem: () => 'broken json' }), {});
 });
