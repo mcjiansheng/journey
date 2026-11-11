@@ -111,8 +111,12 @@
   touch-action: none;
   pointer-events: auto;
 }
-.board-item.just-added {
+.board-item.just-added > :first-child {
+  /* Individual `scale` on the content, never on the item: the item is placed
+     with transform: translate(), and scaling it scaled the translation too —
+     every new object jumped toward the origin and slid back. */
   animation: board-pop 0.3s var(--ease-out);
+  transform-origin: center;
 }
 .board-item.just-added::after {
   content: '';
@@ -125,10 +129,7 @@
 }
 @keyframes board-pop {
   from {
-    scale: 0.92;
-  }
-  to {
-    scale: 1;
+    scale: 0.94;
   }
 }
 @keyframes board-flash {
@@ -418,25 +419,25 @@
   border: 2px solid var(--accent);
   box-shadow: 0 1px 4px #0004;
 }
-.handle.se {
+.handle.h-se {
   right: 0;
   bottom: 0;
   transform: translate(50%, 50%) scale(var(--ik));
   cursor: nwse-resize;
 }
-.handle.nw {
+.handle.h-nw {
   left: 0;
   top: 0;
   transform: translate(-50%, -50%) scale(var(--ik));
   cursor: nwse-resize;
 }
-.handle.ne {
+.handle.h-ne {
   right: 0;
   top: 0;
   transform: translate(50%, -50%) scale(var(--ik));
   cursor: nesw-resize;
 }
-.handle.sw {
+.handle.h-sw {
   left: 0;
   bottom: 0;
   transform: translate(-50%, 50%) scale(var(--ik));
@@ -451,27 +452,37 @@
   background: var(--accent);
   border-color: var(--surface);
 }
-.handle.edge.e {
+.handle.h-e {
   right: 0;
   top: 50%;
   transform: translate(50%, -50%) scale(var(--ik));
   cursor: ew-resize;
 }
-.handle.edge.w {
+.handle.h-w {
   left: 0;
   top: 50%;
   transform: translate(-50%, -50%) scale(var(--ik));
   cursor: ew-resize;
 }
-.handle.edge.s {
+.handle.h-s {
   left: 50%;
   bottom: 0;
   transform: translate(-50%, 50%) scale(var(--ik));
   cursor: ns-resize;
 }
-.handle.edge.s::after {
+.handle.h-s::after {
   width: 22px;
   height: 6px;
+}
+/* Form switch: the item, its selection box and the widget frame glide to the
+   new size; the new form's content fades in (widgets.css). */
+.board-item.reshaping,
+.board-item.reshaping > .box,
+.board-item.reshaping .widget-frame {
+  transition:
+    width 0.18s var(--ease-out),
+    height 0.18s var(--ease-out),
+    transform 0.18s var(--ease-out);
 }
 .reshape-outline {
   position: absolute;
@@ -809,7 +820,6 @@
   gap: 2px;
   padding: 4px;
   border-radius: 999px;
-  transition: bottom 0.2s var(--ease-out);
 }
 #zoom .iconbtn {
   width: 36px;
@@ -828,12 +838,6 @@
 }
 #zoom .zoom-value:hover {
   background: var(--selected);
-}
-.board-container[data-panel='open'][data-dock='bottom'] #zoom {
-  bottom: calc(84px + 280px + 12px);
-}
-.board-container[data-panel='open'][data-dock='right'] #zoom {
-  right: calc(16px + var(--panel-width) + 12px);
 }
 
 /* Empty board guidance */
@@ -860,12 +864,21 @@
   max-width: calc(100% - 16px);
   overflow-x: auto;
   align-items: center;
-  animation: board-fade-in 0.15s ease-out 0.15s both;
+  animation: board-fade-in 0.15s ease-out both;
+  transition: opacity 0.15s ease-out 0.15s;
 }
 @keyframes board-fade-in {
   from {
     opacity: 0;
   }
+}
+/* Hidden (not unmounted) while dragging, scaling or drawing, so it fades out
+   and back in instead of popping (N-8). */
+#actions.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transition-delay: 0s;
+  transition-duration: 0.1s;
 }
 #actions button {
   height: 36px;
@@ -1070,8 +1083,8 @@
 }
 #panel.dock-bottom .widget-gallery .group-block {
   flex: none;
-  width: 300px;
-  max-height: 200px;
+  width: 330px;
+  max-height: 210px;
   overflow-y: auto;
 }
 #panel.dock-bottom .panel-search {
@@ -1189,18 +1202,37 @@
 .group-block + .group-block {
   margin-top: 6px;
 }
-.overview-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+.group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
-.overview-grid button,
-.fav-cell {
+.group small {
+  font-weight: 500;
+  margin-left: 2px;
+}
+.link-btn {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 2px;
+}
+/* Compact preview tiles: three per row for overview widgets and places. */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.tile {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
   align-items: center;
-  padding: 6px;
+  gap: 5px;
+  padding: 6px 4px;
   border: 0;
   border-radius: var(--radius-md);
   background: none;
@@ -1209,31 +1241,118 @@
   cursor: grab;
   touch-action: none;
 }
-.overview-grid button.size-M {
-  grid-column: span 2;
+.tile > span {
+  max-width: 100%;
 }
-.overview-grid button:hover,
-.fav-cell:hover {
+.tile:hover:not(.tile-empty) {
   background: var(--selected);
+}
+.tile:hover:not(.tile-empty) .thumb {
+  transform: translateY(-2px);
 }
 .thumb {
   position: relative;
+  flex: none;
   pointer-events: none;
   transition: transform 0.15s;
 }
 .thumb .widget-frame {
   box-shadow: 0 4px 12px -6px var(--optical-shadow);
 }
-.overview-grid button:hover .thumb {
-  transform: translateY(-2px);
+/* One day at a time instead of a list that grows with the trip. */
+.day-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+  scrollbar-width: thin;
 }
-.day-rows,
-.act-group ul {
+.day-chip {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 48px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.2;
+}
+.day-chip b {
+  font-size: var(--fs-body);
+}
+.day-chip small {
+  font-size: 10px;
+  color: var(--muted);
+}
+.day-chip.has-acts::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.day-chip[aria-selected='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.day-chip[aria-selected='true'] small {
+  color: inherit;
+  opacity: 0.85;
+}
+.day-chip[aria-selected='true']::after {
+  background: var(--on-accent);
+}
+.day-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.day-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 2px;
+  font-size: var(--fs-meta);
+}
+.day-title span {
+  color: var(--muted);
+  font-size: var(--fs-caption);
+}
+.day-previews {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.tile-empty {
+  cursor: default;
+}
+.thumb-empty {
+  width: 100%;
+  aspect-ratio: 352 / 168;
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  border: 1.5px dashed var(--line);
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+}
+.act-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
-.day-row,
 .act-row {
   display: flex;
   align-items: center;
@@ -1242,11 +1361,9 @@
   padding: 4px 4px 4px 8px;
   border-radius: var(--radius-sm);
 }
-.day-row:hover,
 .act-row:hover {
   background: color-mix(in srgb, var(--selected) 60%, transparent);
 }
-.day-text,
 .act-title {
   flex: 1;
   min-width: 0;
@@ -1254,7 +1371,6 @@
   flex-direction: column;
   line-height: 1.3;
 }
-.day-text b,
 .act-title b {
   font-size: var(--fs-meta);
   font-weight: 650;
@@ -1262,7 +1378,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.day-text span,
 .act-title small {
   font-size: var(--fs-caption);
   color: var(--muted);
@@ -1287,72 +1402,16 @@
   border-color: var(--accent);
   color: var(--accent);
 }
-.chip-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.act-group {
-  border-radius: var(--radius-sm);
-}
-.act-group summary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 8px;
-  font-size: var(--fs-meta);
-  font-weight: 600;
-  cursor: pointer;
-  list-style-position: inside;
-}
-.act-group summary small {
-  color: var(--muted);
-  font-weight: 400;
-}
 .act-icon {
   width: 20px;
   text-align: center;
   flex: none;
-}
-.fav-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-.fav-cell {
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  text-align: left;
-  color: var(--text);
-  min-height: 44px;
-  padding: 6px 8px;
-}
-.fav-mark {
-  width: 18px;
-  height: 18px;
-  flex: none;
-  fill: currentColor;
-}
-.fav-name {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  line-height: 1.3;
 }
 .panel-empty {
   color: var(--muted);
   font-size: var(--fs-meta);
   text-align: center;
   padding: 20px 0;
-}
-.panel-hover-preview {
-  position: fixed;
-  z-index: 200;
-  padding: 8px;
-  border-radius: var(--radius-lg);
-  pointer-events: none;
 }
 .panel-drag-ghost {
   position: fixed;
@@ -1520,13 +1579,28 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .board-item.just-added,
+  .board-item.just-added > :first-child,
   .board-item.just-added::after,
   #actions,
   .switcher-menu {
     animation: none;
   }
+  .board-item.reshaping,
+  .board-item.reshaping > .box,
+  .board-item.reshaping .widget-frame,
+  #actions {
+    transition: none;
+  }
 }
-:root[data-motion='true'] :is(.board-item.just-added, .board-item.just-added::after, #actions) {
+:root[data-motion='true']
+  :is(
+    .board-item.just-added > :first-child,
+    .board-item.just-added::after,
+    #actions,
+    .board-item.reshaping,
+    .board-item.reshaping > .box,
+    .board-item.reshaping .widget-frame
+  ) {
   animation: none;
+  transition: none;
 }

@@ -1,5 +1,4 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { WIDGET_KINDS, widgetSize } from '../board-widgets.js';
 import { NOTE, NOTE_NAMES, noteColor } from '../board.js';
 
 const GAP = 12;
@@ -14,7 +13,7 @@ export function BoardActions({
   rect,
   stage,
   topSafe = 76,
-  onChangeWidgetSize,
+  hidden = false,
   onChangeNoteColor,
   onBringToFront,
   onSendToBack,
@@ -45,8 +44,6 @@ export function BoardActions({
   const kind = item.content?.kind;
   const isWidget = type === 'widget';
   const isNote = type === 'note';
-  const allowedSizes = isWidget ? WIDGET_KINDS[kind] || ['S'] : [];
-  const currentSize = isWidget ? widgetSize(item) : null;
   const isLocked = Boolean(item.style?.locked ?? item.locked);
   const currentNote = isNote ? noteColor(item.style?.color) : null;
 
@@ -54,25 +51,12 @@ export function BoardActions({
     <div
       id="actions"
       ref={ref}
-      className="ui glass on"
+      className={`ui glass on ${hidden ? 'is-hidden' : ''}`}
+      aria-hidden={hidden || undefined}
       role="toolbar"
       aria-label="所选对象操作"
       style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999 }}
     >
-      {isWidget && allowedSizes.length > 1 && (
-        <div className="seg" role="group" aria-label="小组件形态">
-          {allowedSizes.map((sz) => (
-            <button
-              key={sz}
-              aria-pressed={currentSize === sz}
-              onClick={() => onChangeWidgetSize(sz)}
-            >
-              {sz === 'S' ? '小' : sz === 'M' ? '中' : '大'}
-            </button>
-          ))}
-        </div>
-      )}
-
       {isWidget && kind === 'place' && !item.linkedActivityId && (
         <button className="primary" onClick={() => onSchedulePlace(item)}>
           加入行程

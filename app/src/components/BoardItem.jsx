@@ -4,6 +4,8 @@ import { pathD, strokeLook, noteColor } from '../board.js';
 import { widgetEdgeHandles, widgetSize, widgetScale } from '../board-widgets.js';
 
 const SIZE_NAMES = { S: '小', M: '中', L: '大' };
+// Handle classes are prefixed: bare `sw`/`w` collide with the swatch and
+// widget classes and drew stray circles around the left handles.
 const CORNERS = ['nw', 'ne', 'se', 'sw'];
 
 /**
@@ -237,14 +239,14 @@ export const BoardItem = React.memo(function BoardItem({
             CORNERS.map((a) => (
               <div
                 key={a}
-                className={`handle ${a}`}
+                className={`handle corner h-${a}`}
                 onPointerDown={(e) => onHandlePointerDown?.(e, item.id, a)}
               />
             ))}
           {edges.map((a) => (
             <div
               key={a}
-              className={`handle edge ${a}`}
+              className={`handle edge h-${a}`}
               role="presentation"
               title={a === 's' ? '往下拉变成大号，往上收回中号' : '左右拉动切换正方形 / 长方形'}
               onPointerDown={(e) => onHandlePointerDown?.(e, item.id, `edge-${a}`)}

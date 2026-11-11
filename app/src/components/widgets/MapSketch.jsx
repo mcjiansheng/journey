@@ -1,6 +1,6 @@
 import React, { useContext, useMemo, useState } from 'react';
-import { mapSvg, project, geoFit, geoProject } from '../../board.js';
-import { MapDetailContext, staticMapUrl } from './map-context.js';
+import { mapSvg, project, geoFit, geoProject, geoTiles } from '../../board.js';
+import { MapDetailContext, staticMapUrl, tileUrl, useStaticMapAvailable } from './map-context.js';
 
 /**
  * Map background for place and route widgets. With real coordinates and map
@@ -23,7 +23,9 @@ export function MapSketch({
   className = '',
 }) {
   const detail = useContext(MapDetailContext);
-  const [failed, setFailed] = useState(false);
+  const staticOk = useStaticMapAvailable();
+  // static image → raster tiles → generated sketch, each step on failure
+  const [failed, setFailed] = useState({ static: false, tiles: false });
   const bgMarkup = useMemo(() => mapSvg(seed, w, h), [seed, w, h]);
 
   const located = useMemo(() => stops.filter((s) => s.lng != null && s.lat != null), [stops]);
@@ -47,8 +49,17 @@ export function MapSketch({
   }, [lng, lat, ax, ay, located, box, w, h]);
 
   const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-  const useStatic = Boolean(detail && view && !failed && !offline);
-  const showOfflineBadge = Boolean(detail && view && (failed || offline));
+  const real = Boolean(detail && view && !offline);
+  const mode = !real
+    ? 'sketch'
+    : staticOk && !failed.static
+      ? 'static'
+      : !failed.tiles
+        ? 'tiles'
+        : 'sketch';
+  const useStatic = mode !== 'sketch';
+  const showOfflineBadge = Boolean(detail && view && mode === 'sketch');
+  const tiles = useMemo(() => (mode === 'tiles' ? geoTiles(view, w, h) : []), [mode, view, w, h]);
 
   const projectPoints = (pts) =>
     useStatic ? geoProject(pts, view, w, h) : project(pts, box || { x: 0, y: 0, w, h });
@@ -141,15 +152,30 @@ export function MapSketch({
       className={`map-sketch-container ${useStatic ? 'is-static' : ''} ${className}`}
       style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}
     >
-      {useStatic ? (
+      {mode === 'static' ? (
         <img
           className="static-map"
           src={staticMapUrl(view, w, h)}
           alt=""
           draggable={false}
           loading="lazy"
-          onError={() => setFailed(true)}
+          onError={() => setFailed((f) => ({ ...f, static: true }))}
         />
+      ) : mode === 'tiles' ? (
+        <div className="map-tiles" aria-hidden="true">
+          {tiles.map((t) => (
+            <img
+              key={`${t.z}/${t.x}/${t.y}`}
+              src={tileUrl(t)}
+              alt=""
+              draggable={false}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              style={{ left: t.left, top: t.top, width: t.size, height: t.size }}
+              onError={() => setFailed((f) => ({ ...f, tiles: true }))}
+            />
+          ))}
+        </div>
       ) : (
         <div
           className="sketch-map"
@@ -159,7 +185,7 @@ export function MapSketch({
       )}
       {paths}
       {stopElements}
-      {showOfflineBadge && <span className="map-offline">离线</span>}
+      {showOfflineBadge && <span className="map-offline">{offline ? '离线' : '地图未载入'}</span>}
     </div>
   );
 }

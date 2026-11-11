@@ -32,9 +32,13 @@ export function BoardRecentDeletions({
                   <b>{b.payload?.title || '白板'}</b>
                   <span>整块白板及其内容</span>
                 </div>
-                <button className="restore-btn" onClick={() => onRestoreBoard?.(b)}>
-                  恢复
-                </button>
+                {onRestoreBoard ? (
+                  <button className="restore-btn" onClick={() => onRestoreBoard(b)}>
+                    恢复
+                  </button>
+                ) : (
+                  <span className="hint">需创建者或管理员恢复</span>
+                )}
               </div>
             ))}
             <div className="group">对象</div>

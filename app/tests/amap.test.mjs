@@ -22,15 +22,19 @@ test('map proxy relays static map images as bytes and refuses JSON errors as ima
  const png=Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0xff,0xfe,0x00,0x80]);
  let mode='image';
  globalThis.fetch=async(url,options)=>{const u=new URL(url);if(u.hostname==='restapi.amap.com'){requests.push(u);return mode==='image'?new Response(png,{status:200,headers:{'content-type':'image/png'}}):new Response('{"status":"0","info":"INVALID_USER_KEY"}',{status:200,headers:{'content-type':'application/json'}});}return nativeFetch(url,options);};
- const app=express();app.use(createAmapRouter({amapKey:'server-key',amapSecurityJsCode:'server-secret'}));const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const root=`http://127.0.0.1:${server.address().port}`;
+ const app=express();app.use(createAmapRouter({amapKey:'server-key',amapSecurityJsCode:'server-secret',amapWebKey:'web-key'}));const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const root=`http://127.0.0.1:${server.address().port}`;
  try{
   const ok=await nativeFetch(root+'/v3/staticmap?location=117.227000,31.820000&zoom=16&size=168*168&scale=2');
   assert.equal(ok.status,200);assert.equal(ok.headers.get('content-type'),'image/png');
   assert.match(ok.headers.get('cache-control'),/max-age=604800/);
   assert.deepEqual(Buffer.from(await ok.arrayBuffer()),png);
-  assert.equal(requests.at(-1).pathname,'/v3/staticmap');assert.equal(requests.at(-1).searchParams.get('key'),'server-key');assert.equal(requests.at(-1).searchParams.get('size'),'168*168');
+  assert.equal(requests.at(-1).pathname,'/v3/staticmap');// Static maps need the Web 服务 key and never carry the JS API security code.
+  assert.equal(requests.at(-1).searchParams.get('key'),'web-key');assert.equal(requests.at(-1).searchParams.get('jscode'),null);assert.equal(requests.at(-1).searchParams.get('size'),'168*168');
   mode='error';
   const bad=await nativeFetch(root+'/v3/staticmap?location=117.2,31.8&zoom=16&size=168*168');
   assert.equal(bad.status,502);assert.equal(bad.headers.get('cache-control'),'no-store');
  }finally{globalThis.fetch=nativeFetch;await new Promise(r=>server.close(r));}
+ // Without a Web 服务 key the endpoint is unavailable instead of failing upstream.
+ const plain=express();plain.use(createAmapRouter({amapKey:'server-key',amapSecurityJsCode:'server-secret'}));const s2=plain.listen(0,'127.0.0.1');await new Promise(r=>s2.once('listening',r));
+ try{const before=requests.length;const r=await nativeFetch(`http://127.0.0.1:${s2.address().port}/v3/staticmap?location=1,1&zoom=3&size=10*10`);assert.equal(r.status,503);assert.equal(requests.length,before);}finally{await new Promise(r=>s2.close(r));}
 });

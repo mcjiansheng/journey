@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { openDB } from 'idb';
 import { api, onPresence, onTripChange, getDeviceId } from './sync.js';
 import { WIDGET_SIZES } from './board-widgets.js';
+import { reconcilePending, mergeExpected } from './board-pending.js';
 
 let databasePromise = null;
 function getDb() {
@@ -238,6 +239,11 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
   cursorRef.current = cursor;
   const epochRef = useRef(epoch);
   epochRef.current = epoch;
+  const pendingRef = useRef(new Map());
+  const expectLocal = useCallback((id, expect) => {
+    const prev = pendingRef.current.get(id);
+    pendingRef.current.set(id, { expect: mergeExpected(prev?.expect, expect), at: Date.now() });
+  }, []);
 
   const presenceTimerRef = useRef(null);
   const lastPresenceSendRef = useRef(0);
@@ -281,7 +287,7 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
       }
 
       if (res) {
-        const merged = replace
+        const fromServer = replace
           ? (res.items || []).map(normalizeBoardItem)
           : Array.from(
               (() => {
@@ -297,6 +303,7 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
                 return map;
               })().values(),
             );
+        const merged = reconcilePending(fromServer, itemsRef.current, pendingRef.current);
 
         setItems(merged);
         setCursor(res.cursor || 0);
@@ -350,6 +357,7 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
         } else {
           merged = (res.items || []).map(normalizeBoardItem);
         }
+        merged = reconcilePending(merged, itemsRef.current, pendingRef.current);
 
         setItems(merged);
         setCursor(res.cursor || 0);
@@ -495,6 +503,7 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
         ...itemData,
       });
 
+      expectLocal(id, { state: 'active' });
       setItems((prev) => {
         const next = [...prev, newItem];
         writeBoardCache(tripId, boardId, {
@@ -554,6 +563,7 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
             updatedAt: now,
           })
         : null;
+      if (updatedItem) expectLocal(itemId, cleaned);
       setItems((prev) => {
         const next = prev.map((it) => (it.id === itemId && updatedItem ? updatedItem : it));
         writeBoardCache(tripId, boardId, {
@@ -580,6 +590,7 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
   const deleteBoardItem = useCallback(
     async (itemId) => {
       const target = itemsRef.current.find((it) => it.id === itemId);
+      if (target) expectLocal(itemId, { state: 'deleted' });
       setItems((prev) => {
         const next = prev.map((it) =>
           it.id === itemId
@@ -614,6 +625,7 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
   const restoreBoardItem = useCallback(
     async (itemId) => {
       const target = itemsRef.current.find((it) => it.id === itemId);
+      if (target) expectLocal(itemId, { state: 'active' });
       setItems((prev) => {
         const next = prev.map((it) =>
           it.id === itemId

@@ -6,7 +6,7 @@
 
 JSON 请求/响应；错误 {error:{code,message,details?}}。Cookie HttpOnly 会话，变更检查 Origin + CSRF（GET /api/session 返回 csrfToken）。
 
-- GET /api/config -> {basePath,amapKey,auth:{email:boolean,phone:boolean},version}
+- GET /api/config -> {basePath,amapKey,staticMap:boolean,auth:{email:boolean,phone:boolean},version}（`staticMap` 表示服务端配置了高德「Web 服务」key `AMAP_WEB_KEY`，可用 `/_AMapService/v3/staticmap`；否则白板地图小组件直接拼接高德栅格瓦片）
 - POST /api/auth/register {identifier,password,displayName}、POST /api/auth/login {identifier,password} -> session；本轮正式 UI 使用密码账号。
 - 可选验证码渠道：POST /api/auth/request {identifier} -> {challengeId,expiresIn}，POST /api/auth/verify {challengeId,code,displayName?} -> session。
 - GET /api/session -> {user:{id,displayName,identifier,isAdmin,preferences},csrfToken,serverTime}，未登录返回 401。

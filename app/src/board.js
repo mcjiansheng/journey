@@ -400,3 +400,32 @@ export function geoProject(points, view, w, h) {
     mercY(lat) * world - cy + h / 2,
   ]);
 }
+
+/**
+ * Raster tiles covering a `w`×`h` container centered on `view`. Tiles come one
+ * zoom level deeper and are drawn at half size, so they stay sharp on 2× screens.
+ * Returns { x, y, z, left, top, size } in container pixels.
+ */
+export function geoTiles(view, w, h, { maxZoom = 18 } = {}) {
+  const z = Math.min(maxZoom, view.zoom + 1);
+  const size = TILE / 2 ** (z - view.zoom);
+  const world = TILE * 2 ** view.zoom;
+  const left0 = mercX(view.lng) * world - w / 2;
+  const top0 = mercY(view.lat) * world - h / 2;
+  const n = 2 ** z;
+  const tiles = [];
+  for (let ty = Math.floor(top0 / size); ty * size < top0 + h; ty++) {
+    if (ty < 0 || ty >= n) continue;
+    for (let tx = Math.floor(left0 / size); tx * size < left0 + w; tx++) {
+      tiles.push({
+        x: ((tx % n) + n) % n,
+        y: ty,
+        z,
+        left: Math.round(tx * size - left0),
+        top: Math.round(ty * size - top0),
+        size,
+      });
+    }
+  }
+  return tiles;
+}

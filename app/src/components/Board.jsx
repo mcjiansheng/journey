@@ -233,10 +233,12 @@ export function Board({
     }
     if (entries.length) pushHistory({ type: 'patch', changes: entries });
   };
-  const addItem = async (data) => {
+  // `pop` marks objects placed by the app (stickers, uploads, copies) so people
+  // see where they landed; strokes and text appear where the pointer already is.
+  const addItem = async (data, { pop = false } = {}) => {
     const item = await addBoardItem(data);
     pushHistory({ type: 'add', ids: [item.id] });
-    flash(item.id);
+    if (pop) flash(item.id);
     return item;
   };
   const removeItems = (ids, { toast = true, record = true } = {}) => {
@@ -387,33 +389,42 @@ export function Board({
   const addWidget = async (content, size = 'M', at) => {
     const [w, h] = WIDGET_SIZES[size] || [352, 168];
     const pt = spawnAt(w, h, at);
-    const item = await addItem({
-      content: { type: 'widget', ...content },
-      style: { size },
-      frame: { x: pt.x, y: pt.y, w, h, scale: 1 },
-      z: topZ(activeItemsRef.current),
-    });
+    const item = await addItem(
+      {
+        content: { type: 'widget', ...content },
+        style: { size },
+        frame: { x: pt.x, y: pt.y, w, h, scale: 1 },
+        z: topZ(activeItemsRef.current),
+      },
+      { pop: true },
+    );
     select([item.id]);
   };
   const addNote = async (color = 'yellow', at) => {
     const pt = spawnAt(200, 200, at);
-    const item = await addItem({
-      content: { type: 'note', text: '' },
-      style: { color },
-      frame: { x: pt.x, y: pt.y, w: 200, h: 200, scale: 1 },
-      z: topZ(activeItemsRef.current),
-    });
+    const item = await addItem(
+      {
+        content: { type: 'note', text: '' },
+        style: { color },
+        frame: { x: pt.x, y: pt.y, w: 200, h: 200, scale: 1 },
+        z: topZ(activeItemsRef.current),
+      },
+      { pop: true },
+    );
     select([item.id]);
     setEditingId(item.id);
   };
   const addEmoji = async (char, at) => {
     const pt = spawnAt(80, 80, at);
-    const item = await addItem({
-      content: { type: 'emoji', char },
-      style: {},
-      frame: { x: pt.x, y: pt.y, w: 80, h: 80, scale: 1 },
-      z: topZ(activeItemsRef.current),
-    });
+    const item = await addItem(
+      {
+        content: { type: 'emoji', char },
+        style: {},
+        frame: { x: pt.x, y: pt.y, w: 80, h: 80, scale: 1 },
+        z: topZ(activeItemsRef.current),
+      },
+      { pop: true },
+    );
     select([item.id]);
   };
   const addSpec = (spec, at) => {
@@ -446,26 +457,29 @@ export function Board({
       const w = Math.round(Math.min(320, res.width || 320));
       const h = Math.round(w * aspect);
       setUploads((u) => u.filter((x) => x.id !== id));
-      const item = await addItem({
-        content: {
-          type: 'image',
-          assetId: res.assetId,
-          mime: res.mime || 'image/png',
-          width: res.width || 400,
-          height: res.height || 300,
-          animated: Boolean(res.isGif),
-          caption: '',
+      const item = await addItem(
+        {
+          content: {
+            type: 'image',
+            assetId: res.assetId,
+            mime: res.mime || 'image/png',
+            width: res.width || 400,
+            height: res.height || 300,
+            animated: Boolean(res.isGif),
+            caption: '',
+          },
+          style: { frameStyle: 'none' },
+          frame: {
+            x: Math.round(frame.x + frame.w / 2 - w / 2),
+            y: Math.round(frame.y + frame.h / 2 - h / 2),
+            w,
+            h,
+            scale: 1,
+          },
+          z: topZ(activeItemsRef.current),
         },
-        style: { frameStyle: 'none' },
-        frame: {
-          x: Math.round(frame.x + frame.w / 2 - w / 2),
-          y: Math.round(frame.y + frame.h / 2 - h / 2),
-          w,
-          h,
-          scale: 1,
-        },
-        z: topZ(activeItemsRef.current),
-      });
+        { pop: true },
+      );
       select([item.id]);
     } catch (err) {
       setUploads((u) =>
@@ -479,22 +493,6 @@ export function Board({
   // ---------- Object operations ----------
   const primarySelected = activeItems.find((it) => selectedIds.has(it.id));
 
-  const changeWidgetSize = (newSize) => {
-    const it = primarySelected;
-    if (!it || it.content?.type !== 'widget') return;
-    const wk = widgetScale(it);
-    const [bw, bh] = WIDGET_SIZES[newSize] || [168, 168];
-    const prev = it.frame || { x: 0, y: 0 };
-    applyPatches([
-      {
-        id: it.id,
-        patch: {
-          style: { ...(it.style || {}), size: newSize },
-          frame: { ...prev, w: Math.round(bw * wk), h: Math.round(bh * wk) },
-        },
-      },
-    ]);
-  };
   const changeNoteColor = (color) => {
     if (primarySelected?.content?.type !== 'note') return;
     applyPatches([
@@ -509,12 +507,15 @@ export function Board({
   const duplicate = async () => {
     if (!primarySelected) return;
     const f = primarySelected.frame || { x: 0, y: 0, w: 100, h: 100, scale: 1 };
-    const item = await addItem({
-      content: { ...primarySelected.content },
-      style: { ...(primarySelected.style || {}) },
-      frame: { ...f, x: f.x + 20, y: f.y + 20 },
-      z: topZ(activeItems),
-    });
+    const item = await addItem(
+      {
+        content: { ...primarySelected.content },
+        style: { ...(primarySelected.style || {}) },
+        frame: { ...f, x: f.x + 20, y: f.y + 20 },
+        z: topZ(activeItems),
+      },
+      { pop: true },
+    );
     select([item.id]);
   };
   const toggleLock = () => {
@@ -607,6 +608,13 @@ export function Board({
     };
   }, [menuOpen, boards, boardId, tripId]);
 
+  // Same rule as the server: deleting a board is for the trip owner (and admins
+  // in an admin-run team); restoring for the owner and any admin.
+  const me = (snapshot?.members || []).find((m) => m.userId === currentUserId);
+  const isOwner = snapshot?.trip?.ownerId === currentUserId;
+  const canDeleteBoard = isOwner || (snapshot?.trip?.teamMode === 'admin' && Boolean(me?.isAdmin));
+  const canRestoreBoard = isOwner || Boolean(me?.isAdmin);
+
   const switchBoard = (id, extra = {}) =>
     onBoardContext?.({ boardId: id, renaming: null, ...extra });
   const createBoard = async () => {
@@ -632,7 +640,7 @@ export function Board({
     }
   };
   const deleteBoard = async (board) => {
-    if (boards.length <= 1) return;
+    if (boards.length <= 1 || !canDeleteBoard) return;
     const idx = boards.findIndex((b) => b.id === board.id);
     const neighbor = boards[idx + 1] || boards[idx - 1];
     try {
@@ -1147,8 +1155,11 @@ export function Board({
     return out;
   };
 
+  // The bar stays mounted while a gesture runs and only fades, so starting or
+  // ending a drag/scale no longer pops it in and out.
+  const actionsHidden = gestureActive || Boolean(editingId) || Boolean(drawing);
   let actionsRect = null;
-  if (primarySelected && !gestureActive && !editingId && !drawing) {
+  if (primarySelected) {
     const f = frameOf(primarySelected) || { x: 0, y: 0, w: 100, h: 100 };
     const p = toScreen({ x: f.x, y: f.y }, view);
     actionsRect = { x: p.x, y: p.y, w: f.w * view.k, h: f.h * view.k };
@@ -1178,6 +1189,7 @@ export function Board({
         onCreate={createBoard}
         onRename={renameBoard}
         onDelete={deleteBoard}
+        canDelete={canDeleteBoard}
         onOpenDeletions={() => {
           setPanelOpen(false);
           setDeletionsOpen(true);
@@ -1303,7 +1315,7 @@ export function Board({
           rect={actionsRect}
           stage={stageSize}
           topSafe={topSafe}
-          onChangeWidgetSize={changeWidgetSize}
+          hidden={actionsHidden}
           onChangeNoteColor={changeNoteColor}
           onBringToFront={bringToFront}
           onSendToBack={sendToBack}
@@ -1383,7 +1395,7 @@ export function Board({
         deletedItems={deletedItems}
         onRestore={(id) => restoreBoardItem(id)}
         deletedBoards={deletedBoards}
-        onRestoreBoard={restoreBoard}
+        onRestoreBoard={canRestoreBoard ? restoreBoard : null}
       />
     </div>
   );

@@ -8,12 +8,15 @@ const blockedParams=new Set(['jscode','securityJsCode','sig','signature','secret
 export function createAmapRouter(config) {
  const router=express.Router(),hits=new Map(),staticHits=new Map();
  router.get(/.*/,async(req,res)=>{
-   const key=config.amapKey||config.amap?.key;
+   const isStatic=req.path===STATIC_PATH;
+   // /v3/staticmap only accepts a "Web 服务" key (a JS API key answers
+   // USERKEY_PLAT_NOMATCH), so it uses its own key and no JS API security code.
+   const key=isStatic?(config.amapWebKey||config.amap?.webKey):(config.amapKey||config.amap?.key);
    const secret=config.amapSecurityJsCode||config.amap?.securityJsCode;
-   if(!key||!secret)return res.status(503).json({error:{code:'MAP_UNAVAILABLE',message:'地图暂时无法载入，请稍后重试'}});
+   if(!key||(!isStatic&&!secret))return res.status(503).json({error:{code:'MAP_UNAVAILABLE',message:'地图暂时无法载入，请稍后重试'}});
    if(!allowedPaths.has(req.path))return res.status(404).json({error:{code:'MAP_PATH',message:'地图请求不受支持'}});
    const actor=req.user?.id||req.session?.userId||req.ip;
-   const isStatic=req.path===STATIC_PATH,table=isStatic?staticHits:hits;
+   const table=isStatic?staticHits:hits;
    const now=Date.now(),old=table.get(actor);
    const bucket=!old||now-old.start>60000?{start:now,count:0}:old;bucket.count++;table.set(actor,bucket);
    if(table.size>5000)for(const[k,v]of table)if(now-v.start>60000)table.delete(k);
@@ -26,7 +29,7 @@ export function createAmapRouter(config) {
      if(k==='callback'&&!/^[A-Za-z_$][0-9A-Za-z_$.]{0,127}$/.test(v))return res.status(400).end();
      if(k!=='key')target.searchParams.set(k,v);
    }
-   target.searchParams.set('key',key);target.searchParams.set('jscode',secret);
+   target.searchParams.set('key',key);if(!isStatic)target.searchParams.set('jscode',secret);
    try {
      const upstream=await fetch(target,{signal:AbortSignal.timeout(12000),redirect:'error'});
      if(isStatic){

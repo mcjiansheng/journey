@@ -546,7 +546,7 @@ test('board: dragging a widget edge switches its form and keeps its scale', asyn
   const widget = page.locator('.board-item.item-widget');
   await widget.click();
 
-  const handle = page.locator('.board-item.item-widget .handle.edge.e');
+  const handle = page.locator('.board-item.item-widget .handle.h-e');
   await expect(handle).toBeVisible();
   const hb = await handle.boundingBox();
   await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
@@ -562,7 +562,7 @@ test('board: dragging a widget edge switches its form and keeps its scale', asyn
 
   // Back to square by pulling the edge in again.
   await widget.click();
-  const hb2 = await page.locator('.board-item.item-widget .handle.edge.e').boundingBox();
+  const hb2 = await page.locator('.board-item.item-widget .handle.h-e').boundingBox();
   await page.mouse.move(hb2.x + hb2.width / 2, hb2.y + hb2.height / 2);
   await page.mouse.down();
   await page.mouse.move(hb2.x - 200, hb2.y + hb2.height / 2, { steps: 8 });
@@ -650,16 +650,139 @@ test('board: sticker panel docks to the nearest edge and remembers it', async ({
   await expect(page.locator('#panel')).toHaveClass(/dock-bottom/);
 });
 
-test('board: place widget requests a static map and falls back to the sketch', async ({ page }) => {
+test('board: place widget draws AMap tiles and falls back to the sketch', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await register(page);
   await createTrip(page);
   await seedPlaceWidget(page);
-  const staticRequest = page.waitForRequest((r) => r.url().includes('_AMapService/v3/staticmap'));
+  // No AMAP_WEB_KEY on the test server → tiles, not /v3/staticmap.
+  const staticRequests = [];
+  page.on('request', (r) => r.url().includes('/v3/staticmap') && staticRequests.push(r.url()));
+  // Keep the test offline-safe: answer tile requests with a tiny PNG.
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  await page.route(/autonavi\.com\/appmaptile/, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/png', body: png }),
+  );
   await openBoard(page);
-  const req = await staticRequest;
-  expect(new URL(req.url()).searchParams.get('location')).toMatch(/^120\.\d+,30\.\d+$/);
-  // The test server has no AMap key, so the image fails and the sketch returns.
+  const tiles = page.locator('.w-place .map-tiles img');
+  await expect(tiles.first()).toBeVisible();
+  const src = await tiles.first().getAttribute('src');
+  expect(src).toMatch(
+    /webrd0[1-4]\.is\.autonavi\.com\/appmaptile\?.*style=8.*x=\d+&y=\d+&z=1[0-8]/,
+  );
+  expect(staticRequests).toEqual([]);
+
+  // When tiles cannot load, the sketch comes back with a small notice.
+  await page.unroute(/autonavi\.com\/appmaptile/);
+  await page.route(/autonavi\.com\/appmaptile/, (route) => route.abort());
+  await page.reload();
+  await page.getByRole('button', { name: /继续旅程/ }).click();
+  await openBoard(page);
   await expect(page.locator('.w-place .sketch-map')).toBeVisible();
-  await expect(page.locator('.w-place .map-offline')).toHaveText('离线');
+  await expect(page.locator('.w-place .map-offline')).toBeVisible();
+});
+
+test('board: new strokes stay in place and presence does not report a lost connection', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="pen"]').click();
+  const box = await page.locator('#stage').boundingBox();
+  // Far from the origin, where scaling the item (old pop animation) moved it most.
+  const x = box.x + 900;
+  const y = box.y + 600;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 30, y - 40, { steps: 4 });
+  await page.mouse.move(x + 60, y, { steps: 4 });
+  await page.mouse.up();
+  const stroke = page.locator('.board-item.item-stroke');
+  await expect(stroke).toHaveCount(1);
+  const positions = [];
+  for (let i = 0; i < 8; i++) {
+    positions.push(await stroke.boundingBox());
+    await page.waitForTimeout(40);
+  }
+  for (const p of positions) {
+    expect(Math.abs(p.x - positions.at(-1).x)).toBeLessThan(1);
+    expect(Math.abs(p.y - positions.at(-1).y)).toBeLessThan(1);
+  }
+  await expect(stroke).not.toHaveClass(/just-added/);
+
+  // Presence heartbeats answer 204; they must not flip sync status to offline.
+  await page.waitForTimeout(6000);
+  await expect(page.locator('.sync-status')).not.toHaveClass(/offline/);
+});
+
+test('board: released drags and scales never flash back to the old frame', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  await page.locator('#panel .gallery button:has-text("当地时间")').click();
+  await page.locator('#panel button[aria-label="关闭"]').click();
+  const widget = page.locator('.board-item.item-widget');
+  await widget.click();
+  // Record every frame the widget's rect changes, through release and the
+  // server round trip that follows.
+  await page.evaluate(() => {
+    const el = document.querySelector('.board-item.item-widget');
+    window.__frames = [];
+    const tick = () => {
+      const r = el.getBoundingClientRect();
+      window.__frames.push([Math.round(r.x), Math.round(r.width)]);
+      if (window.__frames.length < 240) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  const wb = await widget.boundingBox();
+  await page.mouse.move(wb.x + wb.width / 2, wb.y + wb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(wb.x + wb.width / 2 + 160, wb.y + wb.height / 2, { steps: 10 });
+  await page.mouse.up();
+  const se = page.locator('.board-item.item-widget .handle.h-se');
+  const hb = await se.boundingBox();
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb.x + hb.width / 2 + 60, hb.y + hb.height / 2 + 60, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForFunction(() => window.__frames.length >= 240, null, { timeout: 15000 });
+  const frames = await page.evaluate(() => window.__frames);
+  // x only moves forward (drag right) and width only grows (scale up): any step
+  // back is the flash this test guards against.
+  for (let i = 1; i < frames.length; i++) {
+    expect(frames[i][0]).toBeGreaterThanOrEqual(frames[i - 1][0] - 1);
+    expect(frames[i][1]).toBeGreaterThanOrEqual(frames[i - 1][1] - 1);
+  }
+  // The action bar stays mounted and only fades while the gesture runs.
+  await expect(page.locator('#actions')).toBeVisible();
+  await expect(page.locator('#actions .seg')).toHaveCount(0);
+});
+
+test('board: sticker panel shows places up top and one day at a time', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await seedPlaceWidget(page);
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  const panel = page.locator('#panel');
+  const groups = await panel
+    .locator('.group-block > .group, .group-block > .group-head .group')
+    .allInnerTexts();
+  expect(groups.map((g) => g.replace(/\s*\d+$/, '').trim())).toEqual(['概览', '地点', '日程']);
+  await expect(panel.locator('.tile-grid').first().locator('.tile')).toHaveCount(3);
+  // The trip has 3 days: chips, not three rows of buttons.
+  await expect(panel.locator('.day-chip')).toHaveCount(3);
+  await expect(panel.locator('.day-chip[aria-selected="true"]')).toHaveCount(1);
+  await panel.locator('.day-chip').nth(1).click();
+  await expect(panel.locator('.day-title')).toContainText('第2天');
+  await expect(panel.locator('.day-previews .tile')).toHaveCount(2);
 });

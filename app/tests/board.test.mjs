@@ -219,3 +219,50 @@ test('board: static map fit puts points inside the requested box', () => {
   const [[px, py]] = geoProject([[117.227, 31.82]], one, 168, 168);
   assert.ok(Math.abs(px - 84) < 0.01 && Math.abs(py - 67) < 0.01);
 });
+
+test('board: pending local changes survive an older server copy', async () => {
+  const { reconcilePending, mergeExpected, PENDING_TTL } = await import('../src/board-pending.js');
+  const local = [{ id: 'a', state: 'active', frame: { x: 200, y: 0, w: 168, h: 168 } }];
+  const stale = [{ id: 'a', state: 'active', frame: { x: 10, y: 0, w: 168, h: 168 } }];
+  const pending = new Map([['a', { expect: { frame: { x: 200 } }, at: 1000 }]]);
+  // An echo of an earlier operation must not move the object back.
+  assert.equal(reconcilePending(stale, local, pending, 2000)[0].frame.x, 200);
+  assert.ok(pending.has('a'));
+  // Once the server has the change, its copy wins and the entry is cleared.
+  const fresh = [{ id: 'a', state: 'active', frame: { x: 200, y: 0, w: 168, h: 168 } }];
+  assert.equal(reconcilePending(fresh, local, pending, 2500)[0], fresh[0]);
+  assert.equal(pending.size, 0);
+  // A conflicting peer change wins after the grace period.
+  pending.set('a', { expect: { frame: { x: 200 } }, at: 0 });
+  assert.equal(reconcilePending(stale, local, pending, PENDING_TTL + 1)[0].frame.x, 10);
+  // A local item the server has not seen yet is kept.
+  const created = new Map([['b', { expect: { state: 'active' }, at: 1000 }]]);
+  const out = reconcilePending([], [{ id: 'b', state: 'active' }], created, 1200);
+  assert.deepEqual(out.map((i) => i.id), ['b']);
+  assert.deepEqual(mergeExpected({ frame: { x: 1 } }, { frame: { y: 2 }, z: 3 }), {
+    frame: { x: 1, y: 2 },
+    z: 3,
+  });
+});
+
+test('board: map tiles cover the container and align with projected points', async () => {
+  const { geoTiles } = await import('../src/board.js');
+  const view = geoFit([[117.227, 31.82]], { x: 84, y: 67, w: 0, h: 0 }, 168, 168, {
+    singleZoom: 16,
+  });
+  const tiles = geoTiles(view, 168, 168);
+  assert.ok(tiles.length >= 4 && tiles.length <= 9);
+  assert.ok(tiles.every((t) => t.z === 17 && t.size === 128));
+  // Union of tiles covers the whole container.
+  assert.ok(Math.min(...tiles.map((t) => t.left)) <= 0);
+  assert.ok(Math.min(...tiles.map((t) => t.top)) <= 0);
+  assert.ok(Math.max(...tiles.map((t) => t.left + t.size)) >= 168);
+  assert.ok(Math.max(...tiles.map((t) => t.top + t.size)) >= 168);
+  // The tile holding the place, at z17, contains the anchor pixel.
+  const n = 2 ** 17;
+  const tx = Math.floor(((117.227 + 180) / 360) * n);
+  const s = Math.sin((31.82 * Math.PI) / 180);
+  const ty = Math.floor((0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n);
+  const t = tiles.find((t) => t.x === tx && t.y === ty);
+  assert.ok(t && t.left <= 84 && t.left + t.size >= 84 && t.top <= 67 && t.top + t.size >= 67);
+});

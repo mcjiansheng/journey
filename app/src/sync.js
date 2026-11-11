@@ -257,6 +257,9 @@ export async function api(path, { body, method = 'GET', raw = false, ...options 
     error.code = 'NETWORK';
     throw error;
   }
+  // 204/205 carry no body (board presence answers 204). Parsing them as JSON
+  // used to fail and mark the whole app "连接中断" every heartbeat.
+  if (res.status === 204 || res.status === 205) return null;
   let value;
   try {
     value = await res.json();

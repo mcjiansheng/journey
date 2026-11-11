@@ -14,6 +14,7 @@ export function BoardSwitcher({
   onCreate,
   onRename,
   onDelete,
+  canDelete = true,
   onOpenDeletions,
   onOpenChange,
 }) {
@@ -192,8 +193,14 @@ export function BoardSwitcher({
               <button
                 role="menuitem"
                 className="danger"
-                disabled={boards.length <= 1}
-                title={boards.length <= 1 ? '至少保留一块白板' : ''}
+                disabled={boards.length <= 1 || !canDelete}
+                title={
+                  boards.length <= 1
+                    ? '至少保留一块白板'
+                    : !canDelete
+                      ? '只有旅程创建者或管理员可以删除白板'
+                      : ''
+                }
                 onClick={() => setMode('confirm-delete')}
               >
                 🗑 删除当前白板

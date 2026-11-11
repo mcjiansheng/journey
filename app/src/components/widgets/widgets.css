@@ -1031,11 +1031,23 @@
   pointer-events: none;
   user-select: none;
 }
-:root:where([data-theme='dark']) .static-map {
+.map-tiles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--map-land, #e5e3df);
+}
+.map-tiles img {
+  position: absolute;
+  max-width: none;
+  user-select: none;
+}
+:root:where([data-theme='dark']) :is(.static-map, .map-tiles) {
   filter: brightness(0.8) saturate(0.85);
 }
 @media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme='light']):not([data-theme='dark'])) .static-map {
+  :root:where(:not([data-theme='light']):not([data-theme='dark'])) :is(.static-map, .map-tiles) {
     filter: brightness(0.8) saturate(0.85);
   }
 }
@@ -1056,17 +1068,20 @@
   right: 10px;
 }
 
-/* 形态切换（边缘拉球拖动时）：只在形态改变的那一刻做尺寸过渡 */
-.board-item.reshaping .widget-frame {
-  transition:
-    width 0.16s cubic-bezier(0.2, 0.8, 0.2, 1),
-    height 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+/* 形态切换（边缘拉球拖动时）：外框尺寸过渡见 board.css，这里让新形态的内容淡入 */
+.board-item.reshaping .w {
+  animation: widget-form-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-@media (prefers-reduced-motion: reduce) {
-  .board-item.reshaping .widget-frame {
-    transition: none;
+@keyframes widget-form-in {
+  from {
+    opacity: 0.4;
   }
 }
-:root[data-motion='true'] .board-item.reshaping .widget-frame {
-  transition: none;
+@media (prefers-reduced-motion: reduce) {
+  .board-item.reshaping .w {
+    animation: none;
+  }
+}
+:root[data-motion='true'] .board-item.reshaping .w {
+  animation: none;
 }

@@ -1,9 +1,9 @@
 import React, { useState, useRef, useMemo, useLayoutEffect, useEffect } from 'react';
 import { BoardWidget } from './widgets/index.jsx';
+import { MapDetailContext } from './widgets/map-context.js';
 import { WIDGET_SIZES } from '../board-widgets.js';
 import { NOTE, NOTE_NAMES, nearestDock } from '../board.js';
 import { orderedActivities, visibleDays, dayLabel, timeLabel } from '../domain.js';
-import { markColors, markPaths, defaultMark } from '../marks.js';
 
 const EMOJIS = [
   '✈️',
@@ -47,19 +47,15 @@ function dateText(iso) {
 }
 
 /** Scaled, non-interactive widget preview (旧 P2-16). */
-const Preview = React.memo(function Preview({ content, size, snapshot }) {
+const Preview = React.memo(function Preview({ content, size, snapshot, scale = PREVIEW_SCALE }) {
   const [bw, bh] = WIDGET_SIZES[size] || [168, 168];
   const item = {
     content: { type: 'widget', ...content },
     style: { size },
-    frame: { x: 0, y: 0, w: bw * PREVIEW_SCALE, h: bh * PREVIEW_SCALE },
+    frame: { x: 0, y: 0, w: bw * scale, h: bh * scale },
   };
   return (
-    <div
-      className="thumb"
-      style={{ width: bw * PREVIEW_SCALE, height: bh * PREVIEW_SCALE }}
-      aria-hidden="true"
-    >
+    <div className="thumb" style={{ width: bw * scale, height: bh * scale }} aria-hidden="true">
       <BoardWidget item={item} snapshot={snapshot} />
     </div>
   );
@@ -82,8 +78,9 @@ export function BoardStickerPanel({
   const [dockDrag, setDockDrag] = useState(null); // { x, y, target }
   const [dockMenu, setDockMenu] = useState(false);
   const [announce, setAnnounce] = useState('');
-  const [hover, setHover] = useState(null); // { spec, rect }
   const [itemDrag, setItemDrag] = useState(null); // { spec, x, y }
+  const [dayId, setDayId] = useState(null);
+  const [allPlaces, setAllPlaces] = useState(false);
   const fileInputRef = useRef(null);
   const panelRef = useRef(null);
   const dockGestureRef = useRef(null);
@@ -228,7 +225,6 @@ export function BoardStickerPanel({
       if (!g) return;
       if (!g.started && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < DRAG_THRESHOLD) return;
       g.started = true;
-      setHover(null);
       setItemDrag({ spec, x: e.clientX, y: e.clientY });
     },
     onPointerUp: (e) => {
@@ -255,11 +251,6 @@ export function BoardStickerPanel({
       if (Date.now() - lastDragEndRef.current < 300) return;
       onAdd?.(spec);
     },
-    onMouseEnter: (e) => {
-      if (spec.type !== 'widget' || !spec.hoverPreview) return;
-      setHover({ spec, rect: e.currentTarget.getBoundingClientRect() });
-    },
-    onMouseLeave: () => setHover(null),
   });
   const widgetSpec = (content, size, extra = {}) => ({ type: 'widget', content, size, ...extra });
 
@@ -270,10 +261,11 @@ export function BoardStickerPanel({
   };
 
   const overviews = [
-    { label: '倒计时', content: { kind: 'countdown' }, size: 'M' },
+    { label: '倒计时', content: { kind: 'countdown' }, size: 'S' },
     { label: '当地时间', content: { kind: 'clock' }, size: 'S' },
-    { label: '费用概览', content: { kind: 'expense' }, size: 'M' },
+    { label: '费用', content: { kind: 'expense' }, size: 'S' },
   ];
+  const PLACE_LIMIT = 6;
 
   const visibleDayRows = dayRows.filter((r) =>
     matches(
@@ -286,6 +278,25 @@ export function BoardStickerPanel({
   const visibleFavorites = favorites.filter((f) =>
     matches(f.payload.name, f.payload.address, f.payload.category),
   );
+  const shownPlaces = allPlaces || q ? visibleFavorites : visibleFavorites.slice(0, PLACE_LIMIT);
+  // One day at a time: a row of day chips instead of a list that grows with
+  // the trip. Defaults to today when the trip is under way.
+  let todayIso = '';
+  try {
+    todayIso = new Intl.DateTimeFormat('en-CA', {
+      timeZone: snapshot?.trip?.timezone || undefined,
+    }).format(new Date());
+  } catch {}
+  const currentRow =
+    visibleDayRows.find((r) => r.day.id === dayId) ||
+    visibleDayRows.find((r) => r.day.payload.date === todayIso) ||
+    visibleDayRows[0];
+  const currentActs = currentRow
+    ? currentRow.acts.filter((a) =>
+        matches(a.payload.title, a.payload.place?.name, currentRow.label, currentRow.date),
+      )
+    : [];
+  const online = typeof navigator === 'undefined' || navigator.onLine !== false;
 
   const layout = narrow ? 'sheet-bottom' : `dock-${dockDrag ? 'floating' : dock}`;
   const floatingStyle = dockDrag ? { left: dockDrag.x - 140, top: dockDrag.y - 20 } : undefined;
@@ -385,99 +396,146 @@ export function BoardStickerPanel({
 
           <div className="body">
             {tab === 'widget' && (
-              <div className="widget-gallery">
-                <input
-                  className="panel-search"
-                  type="search"
-                  value={query}
-                  placeholder="搜索活动、地点或第几天"
-                  aria-label="搜索小组件"
-                  onChange={(e) => setQuery(e.target.value)}
-                />
+              <MapDetailContext.Provider value={online}>
+                <div className="widget-gallery">
+                  <input
+                    className="panel-search"
+                    type="search"
+                    value={query}
+                    placeholder="搜索活动、地点或第几天"
+                    aria-label="搜索小组件"
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
 
-                {!q && (
-                  <section className="group-block">
-                    <div className="group">概览</div>
-                    <div className="gallery overview-grid">
-                      {overviews.map((o) => (
-                        <button
-                          key={o.label}
-                          className={`overview size-${o.size}`}
-                          {...itemHandlers(widgetSpec(o.content, o.size))}
-                        >
-                          <Preview content={o.content} size={o.size} snapshot={snapshot} />
-                          <span>{o.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                )}
+                  {!q && (
+                    <section className="group-block">
+                      <div className="group">概览</div>
+                      <div className="gallery tile-grid">
+                        {overviews.map((o) => (
+                          <button
+                            key={o.label}
+                            className="tile"
+                            aria-label={`添加${o.label}`}
+                            {...itemHandlers(widgetSpec(o.content, o.size))}
+                          >
+                            <Preview
+                              content={o.content}
+                              size={o.size}
+                              snapshot={snapshot}
+                              scale={0.55}
+                            />
+                            <span>{o.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  )}
 
-                {visibleDayRows.length > 0 && (
-                  <section className="group-block">
-                    <div className="group">日程</div>
-                    <ul className="day-rows">
-                      {visibleDayRows.map((r) => {
-                        const routeOk = r.located >= 2;
-                        return (
-                          <li key={r.day.id} className="day-row">
-                            <div className="day-text">
-                              <b>{r.label}</b>
-                              <span>
-                                {r.date}
-                                {r.date ? ' · ' : ''}
-                                {r.acts.length ? `${r.acts.length} 项安排` : '还没有安排'}
-                              </span>
-                            </div>
+                  {visibleFavorites.length > 0 && (
+                    <section className="group-block">
+                      <div className="group-head">
+                        <div className="group">
+                          地点 <small>{visibleFavorites.length}</small>
+                        </div>
+                        {!q && visibleFavorites.length > PLACE_LIMIT && (
+                          <button className="link-btn" onClick={() => setAllPlaces((v) => !v)}>
+                            {allPlaces ? '收起' : `全部 ${visibleFavorites.length} 个`}
+                          </button>
+                        )}
+                      </div>
+                      <div className="tile-grid">
+                        {shownPlaces.map((f) => (
+                          <button
+                            key={f.id}
+                            className="tile"
+                            aria-label={`添加地点：${f.payload.name}`}
+                            title={f.payload.name}
+                            {...itemHandlers(widgetSpec({ kind: 'place', favoriteId: f.id }, 'S'))}
+                          >
+                            <Preview
+                              content={{ kind: 'place', favoriteId: f.id }}
+                              size="S"
+                              snapshot={snapshot}
+                              scale={0.55}
+                            />
+                            <span className="ellipsis">{f.payload.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {visibleDayRows.length > 0 && currentRow && (
+                    <section className="group-block">
+                      <div className="group">日程</div>
+                      <div className="day-chips" role="tablist" aria-label="选择哪一天">
+                        {visibleDayRows.map((r) => (
+                          <button
+                            key={r.day.id}
+                            role="tab"
+                            aria-selected={r === currentRow}
+                            className={`day-chip ${r.acts.length ? 'has-acts' : ''}`}
+                            title={`${r.label} ${r.date}`}
+                            onClick={() => setDayId(r.day.id)}
+                          >
+                            <b>{r.label.replace(/[第天]/g, '')}</b>
+                            <small>{r.date.split(' ')[0]}</small>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="day-detail">
+                        <div className="day-title">
+                          <b>{currentRow.label}</b>
+                          <span>
+                            {currentRow.date}
+                            {currentRow.date ? ' · ' : ''}
+                            {currentRow.acts.length
+                              ? `${currentRow.acts.length} 项安排`
+                              : '还没有安排'}
+                          </span>
+                        </div>
+                        <div className="day-previews">
+                          <button
+                            className="tile"
+                            aria-label={`添加${currentRow.label}概览`}
+                            {...itemHandlers(
+                              widgetSpec({ kind: 'day', dayId: currentRow.day.id }, 'M'),
+                            )}
+                          >
+                            <Preview
+                              content={{ kind: 'day', dayId: currentRow.day.id }}
+                              size="M"
+                              snapshot={snapshot}
+                              scale={0.44}
+                            />
+                            <span>概览</span>
+                          </button>
+                          {currentRow.located >= 2 ? (
                             <button
-                              className="chip-btn"
-                              aria-label={`添加${r.label}概览`}
+                              className="tile"
+                              aria-label={`添加${currentRow.label}路线`}
                               {...itemHandlers(
-                                widgetSpec({ kind: 'day', dayId: r.day.id }, 'M', {
-                                  hoverPreview: true,
-                                }),
+                                widgetSpec({ kind: 'route', dayId: currentRow.day.id }, 'M'),
                               )}
                             >
-                              概览
+                              <Preview
+                                content={{ kind: 'route', dayId: currentRow.day.id }}
+                                size="M"
+                                snapshot={snapshot}
+                                scale={0.44}
+                              />
+                              <span>路线</span>
                             </button>
-                            <button
-                              className="chip-btn"
-                              aria-label={`添加${r.label}路线`}
-                              disabled={!routeOk}
-                              title={routeOk ? '' : '至少 2 个有位置的安排'}
-                              {...(routeOk
-                                ? itemHandlers(
-                                    widgetSpec({ kind: 'route', dayId: r.day.id }, 'M', {
-                                      hoverPreview: true,
-                                    }),
-                                  )
-                                : {})}
-                            >
-                              路线
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </section>
-                )}
-
-                {dayRows.some((r) => r.acts.length) && (
-                  <section className="group-block">
-                    <div className="group">活动</div>
-                    {dayRows.map((r) => {
-                      const acts = r.acts.filter((a) =>
-                        matches(a.payload.title, a.payload.place?.name, r.label, r.date),
-                      );
-                      if (!acts.length) return null;
-                      return (
-                        <details key={r.day.id} className="act-group" open={Boolean(q)}>
-                          <summary>
-                            {r.label}
-                            <small>{acts.length}</small>
-                          </summary>
-                          <ul>
-                            {acts.map((a) => (
+                          ) : (
+                            <div className="tile tile-empty" aria-label="路线不可用">
+                              <div className="thumb-empty">至少 2 个有位置的安排才能显示路线</div>
+                              <span>路线</span>
+                            </div>
+                          )}
+                        </div>
+                        {currentActs.length > 0 && (
+                          <ul className="act-list">
+                            {currentActs.map((a) => (
                               <li key={a.id} className="act-row">
                                 <span className="act-icon" aria-hidden="true">
                                   {a.payload.place ? '📍' : '•'}
@@ -507,49 +565,16 @@ export function BoardStickerPanel({
                               </li>
                             ))}
                           </ul>
-                        </details>
-                      );
-                    })}
-                  </section>
-                )}
+                        )}
+                      </div>
+                    </section>
+                  )}
 
-                {visibleFavorites.length > 0 && (
-                  <section className="group-block">
-                    <div className="group">收藏</div>
-                    <div className="fav-grid">
-                      {visibleFavorites.map((f) => {
-                        const mark = f.payload.mark || defaultMark();
-                        return (
-                          <button
-                            key={f.id}
-                            className="fav-cell"
-                            aria-label={`添加收藏：${f.payload.name}`}
-                            {...itemHandlers(
-                              widgetSpec({ kind: 'place', favoriteId: f.id }, 'S', {
-                                hoverPreview: true,
-                              }),
-                            )}
-                          >
-                            <svg
-                              viewBox="0 0 24 24"
-                              className="fav-mark"
-                              style={{ color: markColors[mark.color] || markColors.amber }}
-                              aria-hidden="true"
-                            >
-                              <path d={markPaths[mark.icon] || markPaths.star} />
-                            </svg>
-                            <span className="fav-name">{f.payload.name}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-                )}
-
-                {q && !visibleDayRows.length && !visibleFavorites.length && (
-                  <p className="panel-empty">没有找到「{query.trim()}」</p>
-                )}
-              </div>
+                  {q && !visibleDayRows.length && !visibleFavorites.length && (
+                    <p className="panel-empty">没有找到「{query.trim()}」</p>
+                  )}
+                </div>
+              </MapDetailContext.Provider>
             )}
 
             {tab === 'note' && (
@@ -604,16 +629,6 @@ export function BoardStickerPanel({
         </div>
       </div>
 
-      {hover && !itemDrag && (
-        <div
-          className="panel-hover-preview glass"
-          aria-hidden="true"
-          style={hoverStyle(hover.rect, dock, narrow, hover.spec.size)}
-        >
-          <Preview content={hover.spec.content} size={hover.spec.size} snapshot={snapshot} />
-        </div>
-      )}
-
       {itemDrag && (
         <div
           className="panel-drag-ghost"
@@ -635,15 +650,4 @@ export function BoardStickerPanel({
       )}
     </>
   );
-}
-
-function hoverStyle(rect, dock, narrow, size) {
-  const [bw, bh] = WIDGET_SIZES[size] || [168, 168];
-  const w = bw * PREVIEW_SCALE + 16;
-  const h = bh * PREVIEW_SCALE + 16;
-  if (narrow || dock === 'bottom') {
-    return { left: Math.max(8, rect.left + rect.width / 2 - w / 2), top: rect.top - h - 8 };
-  }
-  const top = Math.min(window.innerHeight - h - 8, Math.max(8, rect.top + rect.height / 2 - h / 2));
-  return dock === 'right' ? { left: rect.left - w - 12, top } : { left: rect.right + 12, top };
 }

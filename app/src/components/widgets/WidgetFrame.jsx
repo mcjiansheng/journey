@@ -23,6 +23,7 @@ export function WidgetFrame({ item, model, children, className = '', style = {},
       }}
     >
       <div
+        key={size}
         className={`w ${className}`}
         style={{
           width: baseW,
