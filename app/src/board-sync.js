@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { openDB } from 'idb';
 import { api, onPresence, onTripChange, getDeviceId } from './sync.js';
 import { WIDGET_SIZES } from './board-widgets.js';
+import { cleanBoardStylePatch } from './board.js';
 import { reconcilePending, mergeExpected } from './board-pending.js';
 
 let databasePromise = null;
@@ -66,12 +67,7 @@ export function cleanBoardItemPatch(rawPatch) {
     stylePatch = { ...(stylePatch || {}), locked: Boolean(source.locked) };
   }
   if (stylePatch !== undefined) {
-    const validStyle = {};
-    if (stylePatch.color !== undefined) validStyle.color = stylePatch.color;
-    if (stylePatch.size !== undefined) validStyle.size = stylePatch.size;
-    if (stylePatch.frameStyle !== undefined) validStyle.frameStyle = stylePatch.frameStyle;
-    if (stylePatch.locked !== undefined) validStyle.locked = Boolean(stylePatch.locked);
-    cleaned.style = validStyle;
+    cleaned.style = cleanBoardStylePatch(stylePatch);
   }
 
   for (const k of ALLOWED_PATCH_KEYS) {
@@ -121,7 +117,7 @@ export async function writeBoardCache(tripId, boardId, data) {
   }
 }
 
-export async function processImageFile(file) {
+export async function processImageFile(file, { keepAlpha = false } = {}) {
   const isGif = file.type === 'image/gif' || file.name?.toLowerCase().endsWith('.gif');
   if (isGif) {
     if (file.size > 5 * 1024 * 1024) {
@@ -179,6 +175,37 @@ export async function processImageFile(file) {
       };
     }
 
+    // Stickers keep their transparency: a PNG/WebP stays a PNG instead of being
+    // flattened into an opaque JPEG (which showed a black background).
+    if (keepAlpha && (file.type === 'image/png' || file.type === 'image/webp')) {
+      if (file.size <= 5 * 1024 * 1024 && Math.max(origW, origH) <= 1024) {
+        return {
+          fullBlob: file,
+          thumbBlob: file,
+          width: origW,
+          height: origH,
+          isGif: false,
+          mime: file.type,
+        };
+      }
+      const scale = Math.min(1, 1024 / Math.max(origW, origH));
+      const w = Math.max(1, Math.round(origW * scale));
+      const h = Math.max(1, Math.round(origH * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+      return {
+        fullBlob: blob || file,
+        thumbBlob: blob || file,
+        width: origW,
+        height: origH,
+        isGif: false,
+        mime: 'image/png',
+      };
+    }
+
     // Static image: clamp to max 2048px
     const fullScale = Math.min(1, 2048 / Math.max(origW, origH));
     const fullW = Math.max(1, Math.round(origW * fullScale));
@@ -216,8 +243,8 @@ export async function processImageFile(file) {
   }
 }
 
-export async function uploadAsset(tripId, file) {
-  const processed = await processImageFile(file);
+export async function uploadAsset(tripId, file, { keepAlpha = false } = {}) {
+  const processed = await processImageFile(file, { keepAlpha });
   const assetId = crypto.randomUUID();
 
   // Upload full variant
@@ -698,7 +725,7 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
     deleteBoardItem,
     restoreBoardItem,
     sendPresence,
-    uploadAsset: (file) => uploadAsset(tripId, file),
+    uploadAsset: (file, options) => uploadAsset(tripId, file, options),
     reload: loadData,
   };
 }

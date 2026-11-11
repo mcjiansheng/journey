@@ -82,8 +82,13 @@ export function NoteFormatBar({ rect, stage, fontSize = 'm', onFontSize }) {
     const bw = el.offsetWidth;
     const bh = el.offsetHeight;
     const above = rect.y - 10 - bh;
-    const top = above >= 70 ? above : Math.min(rect.y + rect.h + 10, stage.h - bh - 90);
-    const left = Math.min(stage.w - 8 - bw, Math.max(8, rect.x + rect.w / 2 - bw / 2));
+    const top = Math.max(
+      8,
+      above >= 70 ? above : Math.min(rect.y + rect.h + 10, stage.h - bh - 90),
+    );
+    // Never let the bar leave the screen on narrow boards; it wraps instead.
+    const maxLeft = Math.max(8, stage.w - 8 - bw);
+    const left = Math.min(maxLeft, Math.max(8, rect.x + rect.w / 2 - bw / 2));
     setPos((p) => (p && p.left === left && p.top === top ? p : { left, top }));
   });
 

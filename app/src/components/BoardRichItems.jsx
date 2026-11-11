@@ -62,7 +62,10 @@ export function GalleryView({ item, tripId, isEditing, selected, onChange, onAdd
       acc += e.deltaX;
       const now = Date.now();
       if (Math.abs(acc) > 60 && now - last > 350) {
-        setIndex((v) => v + (acc > 0 ? 1 : -1));
+        // Snapshot the direction: the setState updater may run later, after
+        // `acc` has been reset (that made every swipe go backwards).
+        const dir = acc > 0 ? 1 : -1;
+        setIndex((v) => (v + dir + count) % count);
         acc = 0;
         last = now;
       }
@@ -77,7 +80,8 @@ export function GalleryView({ item, tripId, isEditing, selected, onChange, onAdd
       if (e.target.closest?.('input, textarea, [contenteditable="true"]')) return;
       if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
         e.preventDefault();
-        setIndex((v) => v + (e.key === 'ArrowRight' ? 1 : -1));
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        setIndex((v) => (v + dir + count) % count);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -171,7 +175,7 @@ export function GalleryView({ item, tripId, isEditing, selected, onChange, onAdd
             className="gallery-nav prev"
             aria-label="上一张"
             onPointerDown={stop}
-            onClick={() => setIndex(i - 1)}
+            onClick={() => setIndex((i - 1 + count) % count)}
           >
             ‹
           </button>
@@ -179,7 +183,7 @@ export function GalleryView({ item, tripId, isEditing, selected, onChange, onAdd
             className="gallery-nav next"
             aria-label="下一张"
             onPointerDown={stop}
-            onClick={() => setIndex(i + 1)}
+            onClick={() => setIndex((i + 1) % count)}
           >
             ›
           </button>

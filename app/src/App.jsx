@@ -403,6 +403,11 @@ export default function App() {
                     }
                     onPeersChange={onBoardPeers}
                     stickers={j.user?.preferences?.stickers}
+                    onStickersChange={(list) =>
+                      j.updateLocalUser({
+                        preferences: { ...(j.user?.preferences || {}), stickers: list },
+                      })
+                    }
                     onNavigate={(targetPage, targetContext) => {
                       j.setContext({ page: targetPage, ...targetContext });
                     }}

@@ -1106,6 +1106,21 @@ async function retry(options = {}) {
     throw e;
   }
 }
+// Local-only user update for state the server owns (the sticker library is
+// written through /api/me/stickers, so PATCH /api/me would drop it). Keeps the
+// in-memory account in step so other trips see it without a reload.
+function updateLocalUser(patch) {
+  if (!account) return;
+  account.user = {
+    ...account.user,
+    ...patch,
+    preferences: { ...(account.user.preferences || {}), ...(patch.preferences || {}) },
+  };
+  // The server already holds the truth; a local cache write failure must not
+  // break the screen that just changed.
+  persist().catch(() => {});
+  renderAccount();
+}
 async function updateProfile(patch) {
   const epoch = authEpoch,
     owner = account;
@@ -1168,6 +1183,7 @@ export function useJourney() {
     clearError,
     retry,
     updateProfile,
+    updateLocalUser,
     isCurrentUser: (id) => account?.user?.id === id,
     refreshTrips,
     getDeviceId,

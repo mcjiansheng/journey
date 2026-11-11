@@ -468,6 +468,27 @@ export const IMAGE_FRAMES = [
   ['sticker', '透明贴纸'],
 ];
 export const GALLERY_RATIOS = ['1:1', '3:4', '4:3', '16:9', '9:16'];
+// Style fields the board may patch. Keep in sync with the style schema in
+// server/model.mjs; the sync layer drops everything else before saving.
+export const BOARD_STYLE_KEYS = [
+  'color',
+  'size',
+  'frameStyle',
+  'variant',
+  'fontSize',
+  'tilt',
+  'ratio',
+  'locked',
+];
+/** Drop style fields the board does not know before they reach the server. */
+export function cleanBoardStylePatch(stylePatch = {}) {
+  const out = {};
+  for (const key of BOARD_STYLE_KEYS) {
+    if (stylePatch[key] !== undefined)
+      out[key] = key === 'locked' ? Boolean(stylePatch[key]) : stylePatch[key];
+  }
+  return out;
+}
 export function ratioValue(ratio = '1:1') {
   const [a, b] = String(ratio).split(':').map(Number);
   return a > 0 && b > 0 ? a / b : 1;

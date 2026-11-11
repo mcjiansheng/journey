@@ -15,7 +15,9 @@
   position: relative;
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  /* `clip` (not `hidden`): focusing a note must not scroll the whole canvas,
+     which would slide the fixed board UI (and the note format bar) off screen. */
+  overflow: clip;
   user-select: none;
   background: transparent;
 }
@@ -184,6 +186,11 @@
   word-break: break-word;
   outline: none;
   cursor: text;
+  /* Text never spills past the paper; the editor scrolls instead. */
+  overflow: hidden;
+}
+.note-text[contenteditable='true'] {
+  overflow-y: auto;
 }
 .note-text:empty::before,
 .text-inner:empty::before {
@@ -200,6 +207,12 @@
   position: absolute;
   left: 0;
   top: 0;
+  /* Lay the text out at its natural width, not the (initially narrow) frame:
+     otherwise the first characters stack one per line until the frame is
+     committed and grows. The inner span still caps at 480px, and the extra
+     layout width must not swallow clicks meant for the canvas. */
+  width: 480px;
+  pointer-events: none;
   transform-origin: 0 0;
   color: var(--text);
   line-height: 1.35;
@@ -212,6 +225,7 @@
   white-space: pre-wrap;
   word-break: break-word;
   outline: none;
+  pointer-events: auto;
 }
 .board-item.editing .text-inner {
   cursor: text;
@@ -1622,18 +1636,18 @@
   --tape: #f3e3a6b8;
 }
 :root:where([data-theme='dark']) .board-container {
-  --ink-red: #ff9a8c;
+  --ink-red: #ffa89c;
   --ink-orange: #ffb871;
-  --ink-blue: #8fb8ff;
-  --ink-purple: #c9a6ff;
+  --ink-blue: #9fc4ff;
+  --ink-purple: #d2b2ff;
   --tape: #e9d48fa0;
 }
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme='light']):not([data-theme='dark'])) .board-container {
-    --ink-red: #ff9a8c;
+    --ink-red: #ffa89c;
     --ink-orange: #ffb871;
-    --ink-blue: #8fb8ff;
-    --ink-purple: #c9a6ff;
+    --ink-blue: #9fc4ff;
+    --ink-purple: #d2b2ff;
     --tape: #e9d48fa0;
   }
 }
@@ -2299,7 +2313,10 @@
 #note-format {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 2px;
+  max-width: calc(100vw - 16px);
   padding: 4px 6px;
   border-radius: 14px;
   z-index: 110;

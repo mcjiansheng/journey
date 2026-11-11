@@ -486,6 +486,10 @@ test('board: pen draft follows the pointer before release; text replaces placeho
   const textFrame = (await boardItems(page)).items.find((i) => i.payload.content.type === 'text')
     .payload.frame;
   expect(textFrame.w).toBeLessThan(160);
+  // Regression: the first characters used to stack one per line inside the
+  // initial 40px frame, so the label must come out wider than it is tall.
+  const textBox = await page.locator('.board-item.item-text .text-inner').boundingBox();
+  expect(textBox.width).toBeGreaterThan(textBox.height);
 
   // An empty text object is discarded, not left behind invisibly.
   await page.locator('#toolbar button[data-tool="text"]').click();
@@ -844,7 +848,9 @@ test('board: rich note formatting is saved and survives a reload', async ({ page
   await bar.getByRole('button', { name: '居中' }).click();
   await bar.getByRole('button', { name: '大字' }).click();
   await expect(text.locator('b')).toContainText('出发清单');
-  await page.keyboard.press('End');
+  // macOS 浏览器里 End 不会把整段选区收起到行尾；向右一次即可把插入点
+  // 放到选中文字之后，随后的换行和勾选清单接在它后面（不是替换整段）。
+  await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
   await bar.getByRole('button', { name: '勾选清单' }).click();
   await page.keyboard.type('护照');
@@ -858,7 +864,11 @@ test('board: rich note formatting is saved and survives a reload', async ({ page
     })
     .toEqual([expect.stringContaining('<b>'), 'l']);
   await page.reload();
-  await expect(page.locator('.board-item.item-note .note-text b')).toContainText('出发清单');
+  await page.getByRole('button', { name: /继续旅程/ }).click();
+  await openBoard(page);
+  await expect(page.locator('.board-item.item-note .note-text b').first()).toContainText(
+    '出发清单',
+  );
   await expect(page.locator('.board-item.item-note ul[data-list="check"] li')).toContainText(
     '护照',
   );
@@ -891,9 +901,20 @@ test('board: dropped and pasted images actually show; styles apply', async ({ pa
   await page.locator('#actions').getByRole('button', { name: '样式' }).click();
   const pop = page.locator('.style-pop');
   await expect(pop).toBeVisible();
-  for (const name of ['拍立得', '胶带', '邮票', '圆形', '卡片', '透明贴纸']) {
+  const frames = [
+    ['无边框', 'none'],
+    ['拍立得', 'polaroid'],
+    ['胶带', 'tape'],
+    ['邮票', 'stamp'],
+    ['圆形', 'circle'],
+    ['卡片', 'card'],
+    ['透明贴纸', 'sticker'],
+  ];
+  for (const [name, frame] of frames) {
     await pop.getByRole('button', { name, exact: true }).click();
-    await expect(page.locator('.board-item.item-image .image-sticker')).toHaveClass(/frame-/);
+    await expect(page.locator('.board-item.item-image .image-sticker')).toHaveClass(
+      new RegExp(`frame-${frame}`),
+    );
   }
   await pop.getByRole('button', { name: '邮票', exact: true }).click();
   await pop.getByRole('button', { name: /歪一点/ }).click();
@@ -949,6 +970,13 @@ test('board: gallery holds several photos, switches ratio and pans a photo', asy
     })
     .toBe(true);
 
+  // A 9:16 gallery is taller than the canvas: drag it up so its tools row is
+  // on screen (the canvas is panned by gestures, not by page scrolling).
+  const tall = await gallery.boundingBox();
+  await page.mouse.move(tall.x + tall.width / 2, tall.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(tall.x + tall.width / 2, tall.y + 40 - 120, { steps: 6 });
+  await page.mouse.up();
   await actions.getByRole('button', { name: '调整显示' }).click();
   await expect(gallery.locator('.gallery-tools')).toBeVisible();
   await gallery.getByRole('button', { name: '放大' }).click();
@@ -971,6 +999,23 @@ test('board: gallery holds several photos, switches ratio and pans a photo', asy
       );
     })
     .toEqual(['9:16', 2, true]);
+
+  // A sideways trackpad swipe always advances to the next photo and wraps:
+  // the direction used to flip because the accumulator was read too late.
+  const current = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.gallery-dots button')].findIndex(
+        (d) => d.getAttribute('aria-current') === 'true',
+      ),
+    );
+  const gb = await gallery.boundingBox();
+  expect(await current()).toBe(1);
+  for (const expected of [0, 1]) {
+    await page.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2);
+    await page.mouse.wheel(100, 0);
+    await expect.poll(current).toBe(expected);
+    await page.waitForTimeout(400); // the swipe throttle takes 350ms
+  }
 });
 
 test('board: todo list can be built, ticked without selecting, and reordered', async ({ page }) => {
@@ -1019,6 +1064,12 @@ test('board: emoji search, recent emoji and my own stickers', async ({ page }) =
   expect(await panel.locator('.emoji-cats button').count()).toBeGreaterThanOrEqual(10);
   await panel.getByLabel('搜索表情').fill('飞机');
   await expect(panel.locator('.pick-emoji', { hasText: '✈' }).first()).toBeVisible();
+  // Category words and everyday synonyms find something instead of nothing.
+  await panel.getByLabel('搜索表情').fill('美食');
+  await expect(panel.locator('.pick-emoji').first()).toBeVisible();
+  await panel.getByLabel('搜索表情').fill('开心');
+  await expect(panel.locator('.pick-emoji', { hasText: '😀' }).first()).toBeVisible();
+  await panel.getByLabel('搜索表情').fill('飞机');
   await panel.locator('.pick-emoji', { hasText: '✈' }).first().click();
   await expect(page.locator('.board-item.item-emoji')).toHaveCount(1);
   await panel.getByLabel('搜索表情').fill('');
@@ -1038,9 +1089,29 @@ test('board: emoji search, recent emoji and my own stickers', async ({ page }) =
   await expect.poll(() => loaded(placed)).toBe(true);
   await page.screenshot({ path: evidence('emoji-stickers.png') });
 
-  // The library follows the account: another trip sees it too.
+  // My stickers keep PNG (transparency) instead of being flattened into JPEG.
   const prefs = await page.evaluate(() => fetch('/api/session').then((r) => r.json()));
   expect((prefs.user || prefs).preferences.stickers).toHaveLength(1);
+  expect((prefs.user || prefs).preferences.stickers[0].mime).toBe('image/png');
+
+  // The library follows the account: another trip opened in this session sees
+  // it without a reload.
+  await page.locator('#panel button[aria-label="关闭"]').click();
+  await page.locator('button.back-home').click();
+  await page.getByRole('button', { name: '创建旅程', exact: true }).click();
+  await page.getByLabel('旅程名称').fill('表情随账号走');
+  await page.getByLabel('目的地', { exact: true }).fill('苏州');
+  await page.getByLabel('出发日期', { exact: true }).fill('2026-12-05');
+  await page.getByText('更多设置', { exact: true }).click();
+  await page.getByLabel('旅程时区', { exact: true }).selectOption('Asia/Shanghai');
+  await page.getByLabel('结束日期', { exact: true }).fill('2026-12-06');
+  await page.getByRole('radio', { name: '平等团队', exact: true }).check();
+  await page.getByRole('dialog').getByRole('button', { name: '创建旅程' }).click();
+  await expect(page.locator('.itinerary-page')).toBeVisible();
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  await page.locator('#panel .tabs button:has-text("表情")').click();
+  await expect(page.locator('#panel .my-sticker')).toHaveCount(1);
 });
 
 test('board: places panel groups by mark and adds a whole group as one map', async ({ page }) => {
@@ -1054,7 +1125,8 @@ test('board: places panel groups by mark and adds a whole group as one map', asy
   await expect(panel.locator('.mark-chip')).toHaveCount(1);
   await expect(panel.locator('.place-row')).toContainText('西湖断桥');
   await panel.getByRole('button', { name: /整类加入/ }).click();
-  const map = page.locator('.board-item .w-places');
+  const map = page.locator('.board-item .widget-frame.w-places');
+  await expect(map).toHaveCount(1);
   await expect(map).toBeVisible();
   await expect(map).toContainText('西湖断桥');
   await panel.getByLabel('搜索小组件').fill('断桥');

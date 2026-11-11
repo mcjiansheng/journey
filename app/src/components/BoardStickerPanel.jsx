@@ -784,14 +784,27 @@ function EmojiTab({ itemHandlers, recent, stickers, onUploadSticker, onRemoveSti
   const q = query.trim().toLowerCase();
   const results = useMemo(() => {
     if (!q || !data) return [];
-    const out = new Set();
-    for (const [key, chars] of Object.entries(data.EMOJI_ZH)) {
-      if (key.includes(q) || (q.length > 1 && q.includes(key)))
-        graphemes(chars).forEach((c) => out.add(c));
+    const out = [];
+    const seen = new Set();
+    const push = (char) => {
+      if (!seen.has(char)) {
+        seen.add(char);
+        out.push(char);
+      }
+    };
+    // Most specific first: the exact keyword, then the category it names
+    // (「美食」「旅行」…), then the keyword's emoji, then names.
+    if (data.EMOJI_ZH[q]) graphemes(data.EMOJI_ZH[q]).forEach(push);
+    for (const g of data.EMOJI_GROUPS)
+      if (g.label.includes(q) || q.includes(g.label)) g.items.forEach(([char]) => push(char));
+    const keys = Object.keys(data.EMOJI_ZH).sort((a, b) => b.length - a.length);
+    for (const key of keys) {
+      if (key === q || !(key.includes(q) || q.includes(key))) continue;
+      graphemes(data.EMOJI_ZH[key]).forEach(push);
     }
     for (const g of data.EMOJI_GROUPS)
-      for (const [char, name] of g.items) if (name.includes(q)) out.add(char);
-    return [...out].slice(0, 160);
+      for (const [char, name] of g.items) if (name.includes(q)) push(char);
+    return out.slice(0, 160);
   }, [q, data]);
 
   const tabs = data

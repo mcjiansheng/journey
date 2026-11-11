@@ -79,6 +79,7 @@ export function Board({
   onBoardContext,
   onPeersChange,
   stickers: accountStickers = NO_STICKERS,
+  onStickersChange,
 }) {
   // ---------- Boards ----------
   const boards = useMemo(
@@ -470,7 +471,8 @@ export function Board({
     let error = null;
     for (const file of list) {
       try {
-        const res = await uploadAsset(file);
+        // Keep PNG/WebP transparency instead of flattening onto black.
+        const res = await uploadAsset(file, { keepAlpha: true });
         uploaded.push({
           assetId: res.assetId,
           mime: res.mime || 'image/png',
@@ -512,10 +514,18 @@ export function Board({
 
   // ---------- My stickers (account library) ----------
   const [stickers, setStickers] = useState(accountStickers);
+  const stickersRef = useRef(stickers);
+  stickersRef.current = stickers;
   useEffect(() => setStickers(accountStickers || NO_STICKERS), [accountStickers]);
+  // The library follows the account: tell the app so another trip opened in the
+  // same session sees the change without a reload.
+  const updateStickers = (next) => {
+    setStickers(next);
+    onStickersChange?.(next);
+  };
   const uploadSticker = async (file) => {
     try {
-      const processed = await processImageFile(file);
+      const processed = await processImageFile(file, { keepAlpha: true });
       // Stickers stay small: GIFs are kept as they are, stills use the processed full size.
       const id = crypto.randomUUID();
       const sticker = await api(
@@ -527,7 +537,7 @@ export function Board({
           body: processed.fullBlob,
         },
       );
-      setStickers((list) => [sticker, ...list.filter((x) => x.id !== sticker.id)]);
+      updateStickers([sticker, ...stickersRef.current.filter((x) => x.id !== sticker.id)]);
       return sticker;
     } catch (err) {
       notify?.({ message: err?.message || '表情上传失败' });
@@ -535,7 +545,7 @@ export function Board({
     }
   };
   const removeSticker = async (id) => {
-    setStickers((list) => list.filter((x) => x.id !== id));
+    updateStickers(stickersRef.current.filter((x) => x.id !== id));
     try {
       await api(`/api/me/stickers/${id}`, { method: 'DELETE' });
     } catch (err) {
@@ -562,7 +572,8 @@ export function Board({
       const file = new File([blob], `sticker.${(sticker.mime || 'image/png').split('/')[1]}`, {
         type: sticker.mime || blob.type,
       });
-      const res = await uploadAsset(file);
+      // Keep PNG/WebP transparency instead of flattening onto black.
+      const res = await uploadAsset(file, { keepAlpha: true });
       const item = await addItem(
         {
           content: {
@@ -631,7 +642,8 @@ export function Board({
       { id, file, frame, status: 'uploading', message: '' },
     ]);
     try {
-      const res = await uploadAsset(file);
+      // Keep PNG/WebP transparency instead of flattening onto black.
+      const res = await uploadAsset(file, { keepAlpha: true });
       const aspect = (res.height || 300) / (res.width || 400);
       const w = Math.round(Math.min(320, res.width || 320));
       const h = Math.round(w * aspect);
@@ -948,7 +960,7 @@ export function Board({
       addItem({
         content: { type: 'text', text: '' },
         style: { size: 'body' },
-        frame: { x: Math.round(pt.x), y: Math.round(pt.y - 16), w: 40, h: 32, scale: 1 },
+        frame: { x: Math.round(pt.x), y: Math.round(pt.y - 16), w: 120, h: 32, scale: 1 },
         z: topZ(activeItemsRef.current),
       }).then((item) => {
         select([item.id]);

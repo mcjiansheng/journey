@@ -10,6 +10,7 @@ import {
   ratioValue,
   STYLE_VARIANTS,
   IMAGE_FRAMES,
+  cleanBoardStylePatch,
 } from '../src/board.js';
 import { EMOJI_GROUPS, EMOJI_ZH } from '../src/emoji-data.js';
 import { BOARD_VARIANTS, IMAGE_FRAMES as SERVER_FRAMES, GALLERY_RATIOS } from '../server/model.mjs';
@@ -120,6 +121,33 @@ test('tilt cycles back to straight', () => {
   let t = 0;
   for (let i = 0; i < TILTS.length; i++) t = nextTilt(t);
   assert.equal(t, 0);
+});
+
+test('board patches keep every style the UI can set', () => {
+  // Regression: the second-round styles (variant/fontSize/tilt/ratio) were
+  // dropped by the sync whitelist, so format bar, 样式 and 歪一点 never saved.
+  const patched = cleanBoardStylePatch({
+    color: 'yellow',
+    size: 'M',
+    frameStyle: 'stamp',
+    variant: 'tape',
+    fontSize: 'l',
+    tilt: -4,
+    ratio: '9:16',
+    locked: true,
+    unknown: 'x',
+  });
+  assert.deepEqual(patched, {
+    color: 'yellow',
+    size: 'M',
+    frameStyle: 'stamp',
+    variant: 'tape',
+    fontSize: 'l',
+    tilt: -4,
+    ratio: '9:16',
+    locked: true,
+  });
+  assert.deepEqual(cleanBoardStylePatch({}), {});
 });
 
 test('client style choices are accepted by the server schema', () => {
