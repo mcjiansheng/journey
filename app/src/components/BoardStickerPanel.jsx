@@ -1,30 +1,36 @@
 import React, { useState, useRef, useMemo, useLayoutEffect, useEffect } from 'react';
 import { BoardWidget } from './widgets/index.jsx';
 import { MapDetailContext } from './widgets/map-context.js';
-import { WIDGET_SIZES } from '../board-widgets.js';
-import { NOTE, NOTE_NAMES, nearestDock } from '../board.js';
+import { WIDGET_SIZES, placeGroups, markGroupName } from '../board-widgets.js';
+import { NOTE, NOTE_NAMES, nearestDock, stickerUrl } from '../board.js';
+import { markColors, markPaths } from '../marks.js';
 import { orderedActivities, visibleDays, dayLabel, timeLabel } from '../domain.js';
 
-const EMOJIS = [
-  '✈️',
-  '🚄',
-  '🏨',
-  '🍜',
-  '☕️',
-  '🍣',
-  '⛩️',
-  '🎡',
-  '📸',
-  '🗺️',
-  '🛍️',
-  '🌸',
-  '🏔️',
-  '🏖️',
-  '🎉',
-  '✨',
-  '❤️',
-  '💡',
-];
+const RECENT_KEY = 'journey.recentEmoji';
+const RECENT_MAX = 24;
+const STICKER_TYPES = 'image/png,image/jpeg,image/webp,image/gif';
+
+function loadRecent() {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, RECENT_MAX) : [];
+  } catch {
+    return [];
+  }
+}
+function saveRecent(list) {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  } catch {}
+}
+function graphemes(text) {
+  try {
+    const seg = new Intl.Segmenter('zh', { granularity: 'grapheme' });
+    return Array.from(seg.segment(text), (x) => x.segment);
+  } catch {
+    return Array.from(text);
+  }
+}
 
 export const DOCKS = ['left', 'right', 'bottom'];
 const DOCK_NAMES = { left: '左侧', right: '右侧', bottom: '底部' };
@@ -71,6 +77,9 @@ export function BoardStickerPanel({
   onAdd,
   onDropOnCanvas,
   onUploadImage,
+  stickers = [],
+  onUploadSticker,
+  onRemoveSticker,
 }) {
   const [tab, setTab] = useState('widget');
   const [query, setQuery] = useState('');
@@ -80,7 +89,8 @@ export function BoardStickerPanel({
   const [announce, setAnnounce] = useState('');
   const [itemDrag, setItemDrag] = useState(null); // { spec, x, y }
   const [dayId, setDayId] = useState(null);
-  const [allPlaces, setAllPlaces] = useState(false);
+  const [placeKey, setPlaceKey] = useState(null);
+  const [recentEmoji, setRecentEmoji] = useState(loadRecent);
   const fileInputRef = useRef(null);
   const panelRef = useRef(null);
   const dockGestureRef = useRef(null);
@@ -93,6 +103,7 @@ export function BoardStickerPanel({
     () => (snapshot?.objects || []).filter((o) => o.kind === 'favorite' && o.state === 'active'),
     [snapshot],
   );
+  const groups = useMemo(() => placeGroups(snapshot), [snapshot]);
   const q = query.trim().toLowerCase();
   const dayRows = useMemo(
     () =>
@@ -212,6 +223,14 @@ export function BoardStickerPanel({
   };
 
   // ---- Items: click to add at center, drag onto the canvas ----
+  const used = (spec) => {
+    if (spec.type !== 'emoji') return;
+    setRecentEmoji((list) => {
+      const next = [spec.char, ...list.filter((c) => c !== spec.char)].slice(0, RECENT_MAX);
+      saveRecent(next);
+      return next;
+    });
+  };
   const itemHandlers = (spec) => ({
     onPointerDown: (e) => {
       if (e.button !== 0) return;
@@ -240,7 +259,10 @@ export function BoardStickerPanel({
         e.clientX <= panelRect.right &&
         e.clientY >= panelRect.top &&
         e.clientY <= panelRect.bottom;
-      if (!overPanel) onDropOnCanvas?.(spec, e.clientX, e.clientY);
+      if (!overPanel) {
+        used(spec);
+        onDropOnCanvas?.(spec, e.clientX, e.clientY);
+      }
     },
     onPointerCancel: () => {
       itemGestureRef.current = null;
@@ -249,6 +271,7 @@ export function BoardStickerPanel({
     onClick: () => {
       // A drag ends with a click event too; only a plain click adds at center.
       if (Date.now() - lastDragEndRef.current < 300) return;
+      used(spec);
       onAdd?.(spec);
     },
   });
@@ -265,7 +288,6 @@ export function BoardStickerPanel({
     { label: '当地时间', content: { kind: 'clock' }, size: 'S' },
     { label: '费用', content: { kind: 'expense' }, size: 'S' },
   ];
-  const PLACE_LIMIT = 6;
 
   const visibleDayRows = dayRows.filter((r) =>
     matches(
@@ -278,7 +300,10 @@ export function BoardStickerPanel({
   const visibleFavorites = favorites.filter((f) =>
     matches(f.payload.name, f.payload.address, f.payload.category),
   );
-  const shownPlaces = allPlaces || q ? visibleFavorites : visibleFavorites.slice(0, PLACE_LIMIT);
+  // Places are organised by the mark preset they carry, one group at a time.
+  const currentGroup = groups.find((g) => g.key === placeKey) || groups[0];
+  const groupOf = (f) => groups.find((g) => g.favorites.includes(f));
+  const shownPlaces = q ? visibleFavorites : currentGroup?.favorites || [];
   // One day at a time: a row of day chips instead of a list that grows with
   // the trip. Defaults to today when the trip is under way.
   let todayIso = '';
@@ -431,37 +456,120 @@ export function BoardStickerPanel({
                     </section>
                   )}
 
-                  {visibleFavorites.length > 0 && (
+                  {!q && (
                     <section className="group-block">
+                      <div className="group">新建</div>
+                      <div className="tile-grid create-grid">
+                        <button
+                          className="tile create-tile"
+                          aria-label="添加图库"
+                          {...itemHandlers({ type: 'gallery' })}
+                        >
+                          <span className="create-art gallery-art" aria-hidden="true">
+                            <i />
+                            <i />
+                            <i />
+                          </span>
+                          <span>图库</span>
+                        </button>
+                        <button
+                          className="tile create-tile"
+                          aria-label="添加待办"
+                          {...itemHandlers({ type: 'todo' })}
+                        >
+                          <span className="create-art todo-art" aria-hidden="true">
+                            <i className="done" />
+                            <i />
+                            <i />
+                          </span>
+                          <span>待办</span>
+                        </button>
+                      </div>
+                    </section>
+                  )}
+
+                  {groups.length > 0 && (!q || visibleFavorites.length > 0) && (
+                    <section className="group-block places-block">
                       <div className="group-head">
                         <div className="group">
-                          地点 <small>{visibleFavorites.length}</small>
+                          地点 <small>{q ? visibleFavorites.length : favorites.length}</small>
                         </div>
-                        {!q && visibleFavorites.length > PLACE_LIMIT && (
-                          <button className="link-btn" onClick={() => setAllPlaces((v) => !v)}>
-                            {allPlaces ? '收起' : `全部 ${visibleFavorites.length} 个`}
-                          </button>
-                        )}
                       </div>
-                      <div className="tile-grid">
-                        {shownPlaces.map((f) => (
-                          <button
-                            key={f.id}
-                            className="tile"
-                            aria-label={`添加地点：${f.payload.name}`}
-                            title={f.payload.name}
-                            {...itemHandlers(widgetSpec({ kind: 'place', favoriteId: f.id }, 'S'))}
-                          >
-                            <Preview
-                              content={{ kind: 'place', favoriteId: f.id }}
-                              size="S"
-                              snapshot={snapshot}
-                              scale={0.55}
-                            />
-                            <span className="ellipsis">{f.payload.name}</span>
-                          </button>
-                        ))}
-                      </div>
+                      {!q && (
+                        <div className="mark-chips" role="tablist" aria-label="按标记筛选地点">
+                          {groups.map((g) => (
+                            <button
+                              key={g.key}
+                              role="tab"
+                              aria-selected={g === currentGroup}
+                              className="mark-chip"
+                              style={{ '--mc': markColors[g.mark.color] || '#b7791f' }}
+                              onClick={() => setPlaceKey(g.key)}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d={markPaths[g.mark.icon] || markPaths.star} />
+                              </svg>
+                              {markGroupName(g)}
+                              <small>{g.favorites.length}</small>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {!q && currentGroup && (
+                        <button
+                          className="tile wide-tile"
+                          aria-label={`整类加入：${markGroupName(currentGroup)}`}
+                          {...itemHandlers(
+                            widgetSpec({ kind: 'places', mark: currentGroup.mark }, 'M'),
+                          )}
+                        >
+                          <Preview
+                            content={{ kind: 'places', mark: currentGroup.mark }}
+                            size="M"
+                            snapshot={snapshot}
+                            scale={0.62}
+                          />
+                          <span>
+                            整类加入 · {markGroupName(currentGroup)} {currentGroup.favorites.length}{' '}
+                            处
+                          </span>
+                        </button>
+                      )}
+                      <ul className="place-list">
+                        {shownPlaces.map((f) => {
+                          const g = groupOf(f);
+                          return (
+                            <li key={f.id} className="place-row">
+                              <span
+                                className="place-dot"
+                                style={{ '--mc': markColors[g?.mark.color] || '#b7791f' }}
+                                aria-hidden="true"
+                              >
+                                <svg viewBox="0 0 24 24">
+                                  <path d={markPaths[g?.mark.icon] || markPaths.star} />
+                                </svg>
+                              </span>
+                              <span className="act-title">
+                                <b>{f.payload.name}</b>
+                                <small>
+                                  {q && g ? `${markGroupName(g)} · ` : ''}
+                                  {f.payload.address || f.payload.category || '没有地址'}
+                                </small>
+                              </span>
+                              <button
+                                className="chip-btn"
+                                aria-label={`添加地点：${f.payload.name}`}
+                                title="拖到白板或点击添加"
+                                {...itemHandlers(
+                                  widgetSpec({ kind: 'place', favoriteId: f.id }, 'S'),
+                                )}
+                              >
+                                ＋
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
                     </section>
                   )}
 
@@ -593,18 +701,13 @@ export function BoardStickerPanel({
             )}
 
             {tab === 'emoji' && (
-              <div className="grid c6 emoji-grid">
-                {EMOJIS.map((e) => (
-                  <button
-                    key={e}
-                    className="pick-emoji"
-                    aria-label={`添加表情 ${e}`}
-                    {...itemHandlers({ type: 'emoji', char: e })}
-                  >
-                    {e}
-                  </button>
-                ))}
-              </div>
+              <EmojiTab
+                itemHandlers={itemHandlers}
+                recent={recentEmoji}
+                stickers={stickers}
+                onUploadSticker={onUploadSticker}
+                onRemoveSticker={onRemoveSticker}
+              />
             )}
 
             {tab === 'image' && (
@@ -643,11 +746,191 @@ export function BoardStickerPanel({
             />
           ) : itemDrag.spec.type === 'note' ? (
             <div className="ghost-note" style={{ background: NOTE[itemDrag.spec.color] }} />
+          ) : itemDrag.spec.type === 'sticker' ? (
+            <img className="ghost-sticker" src={stickerUrl(itemDrag.spec.sticker.id)} alt="" />
+          ) : itemDrag.spec.type === 'todo' || itemDrag.spec.type === 'gallery' ? (
+            <div className={`ghost-card ${itemDrag.spec.type}`}>
+              {itemDrag.spec.type === 'todo' ? '待办' : '图库'}
+            </div>
           ) : (
             <div className="ghost-emoji">{itemDrag.spec.char}</div>
           )}
         </div>
       )}
     </>
+  );
+}
+
+function EmojiTab({ itemHandlers, recent, stickers, onUploadSticker, onRemoveSticker }) {
+  const [data, setData] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const [group, setGroup] = useState(recent.length ? 'recent' : 'smileys');
+  const [query, setQuery] = useState('');
+  const [busy, setBusy] = useState(0);
+  const [manage, setManage] = useState(false);
+  const fileRef = useRef(null);
+  const gridRef = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+    import('../emoji-data.js')
+      .then((m) => alive && setData(m))
+      .catch(() => alive && setFailed(true));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const q = query.trim().toLowerCase();
+  const results = useMemo(() => {
+    if (!q || !data) return [];
+    const out = new Set();
+    for (const [key, chars] of Object.entries(data.EMOJI_ZH)) {
+      if (key.includes(q) || (q.length > 1 && q.includes(key)))
+        graphemes(chars).forEach((c) => out.add(c));
+    }
+    for (const g of data.EMOJI_GROUPS)
+      for (const [char, name] of g.items) if (name.includes(q)) out.add(char);
+    return [...out].slice(0, 160);
+  }, [q, data]);
+
+  const tabs = data
+    ? [
+        ...(recent.length ? [{ id: 'recent', label: '最近', icon: '🕘' }] : []),
+        ...data.EMOJI_GROUPS.map((g) => ({ id: g.id, label: g.label, icon: g.icon })),
+      ]
+    : [];
+  const current =
+    group === 'recent'
+      ? recent
+      : (data?.EMOJI_GROUPS.find((g) => g.id === group) || data?.EMOJI_GROUPS[0])?.items.map(
+          (x) => x[0],
+        ) || [];
+  const names = useMemo(() => {
+    const m = new Map();
+    data?.EMOJI_GROUPS.forEach((g) => g.items.forEach(([c, n]) => m.set(c, n)));
+    return m;
+  }, [data]);
+  const shown = q ? results : current;
+
+  const pick = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    for (const f of files) {
+      setBusy((n) => n + 1);
+      try {
+        await onUploadSticker?.(f);
+      } finally {
+        setBusy((n) => n - 1);
+      }
+    }
+  };
+
+  return (
+    <div className="emoji-tab">
+      <input
+        className="panel-search"
+        type="search"
+        value={query}
+        placeholder="搜索表情，例如 开心、美食、飞机"
+        aria-label="搜索表情"
+        onChange={(e) => setQuery(e.target.value)}
+      />
+
+      {!q && (
+        <section className="my-stickers" aria-label="我的表情">
+          <div className="group-head">
+            <div className="group">
+              我的表情 <small>{stickers.length}</small>
+            </div>
+            {stickers.length > 0 && (
+              <button className="link-btn" onClick={() => setManage((v) => !v)}>
+                {manage ? '完成' : '管理'}
+              </button>
+            )}
+          </div>
+          <div className="sticker-grid">
+            <input
+              ref={fileRef}
+              type="file"
+              accept={STICKER_TYPES}
+              multiple
+              hidden
+              onChange={pick}
+            />
+            <button
+              className="sticker-add"
+              aria-label="上传自己的表情"
+              title="上传图片或 GIF，所有行程都能用"
+              disabled={busy > 0}
+              onClick={() => fileRef.current?.click()}
+            >
+              {busy > 0 ? <span className="spin" aria-hidden="true" /> : '＋'}
+            </button>
+            {stickers.map((st) =>
+              manage ? (
+                <button
+                  key={st.id}
+                  className="my-sticker removing"
+                  aria-label="删除这个表情"
+                  onClick={() => onRemoveSticker?.(st.id)}
+                >
+                  <img src={stickerUrl(st.id)} alt="" loading="lazy" draggable="false" />
+                  <span className="x" aria-hidden="true">
+                    ×
+                  </span>
+                </button>
+              ) : (
+                <button
+                  key={st.id}
+                  className="my-sticker"
+                  aria-label={st.animated ? '添加我的动图表情' : '添加我的表情'}
+                  {...itemHandlers({ type: 'sticker', sticker: st })}
+                >
+                  <img src={stickerUrl(st.id)} alt="" loading="lazy" draggable="false" />
+                </button>
+              ),
+            )}
+          </div>
+        </section>
+      )}
+
+      {!q && tabs.length > 0 && (
+        <div className="emoji-cats" role="tablist" aria-label="表情分类">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={t.id === group}
+              title={t.label}
+              aria-label={t.label}
+              onClick={() => {
+                setGroup(t.id);
+                gridRef.current?.scrollTo?.({ top: 0 });
+              }}
+            >
+              {t.icon}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {failed && <p className="panel-empty">表情库没能载入，请刷新后重试</p>}
+      {!data && !failed && <p className="panel-empty">正在载入表情…</p>}
+      {data && q && !results.length && <p className="panel-empty">没有找到「{query.trim()}」</p>}
+      <div className="grid emoji-grid" ref={gridRef}>
+        {shown.map((e) => (
+          <button
+            key={e}
+            className="pick-emoji"
+            aria-label={`添加表情 ${e}`}
+            title={names.get(e) || ''}
+            {...itemHandlers({ type: 'emoji', char: e })}
+          >
+            {e}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

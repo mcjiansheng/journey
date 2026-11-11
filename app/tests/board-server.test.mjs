@@ -629,3 +629,78 @@ test('P1: presence 的 live 键数超过 200 返回 422 VALIDATION', async t => 
   assert.equal(r.status, 422);
   assert.doesNotMatch(r.data.error.message, /实况对象最多/);
 });
+
+test('board: rich notes, gallery, todo, place groups, sticker styles and the personal sticker library', async t => {
+  const f = await fixture(t);
+  const a = await f.account('carol');
+  const s = await f.trip(a);
+  const tid = s.trip.id;
+  const boardId = randomUUID();
+  await f.op(a, tid, { objectId: boardId, kind: 'create', objectType: 'board', patch: { title: '素材板', order: 0, background: 'dots' } });
+  const frameOf = (w = 200, h = 200) => ({ x: 0, y: 0, w, h, rotation: 0, scale: 1 });
+  const create = (content, style = {}) =>
+    f.op(a, tid, { objectId: randomUUID(), kind: 'create', objectType: 'boardItem', patch: { boardId, frame: frameOf(), z: 1, content, style } });
+
+  // Rich note with paper style and size step
+  let r = await create({ type: 'note', text: '买伞', html: '<b>买伞</b>' }, { color: 'yellow', variant: 'lined', fontSize: 'l', tilt: -3 });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await create({ type: 'note', text: 'x' }, { color: 'yellow', variant: 'polaroid' });
+  assert.equal(r.status, 422, 'note variants are checked per type');
+  r = await create({ type: 'text', text: 'x' }, { size: 'body', fontSize: 'l' });
+  assert.equal(r.status, 422, 'only notes take font size steps');
+
+  // Image frames
+  const assetId = randomUUID();
+  r = await create({ type: 'image', assetId, mime: 'image/png', width: 10, height: 10 }, { frameStyle: 'stamp', tilt: 4 });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await create({ type: 'image', assetId, mime: 'image/png', width: 10, height: 10 }, { frameStyle: 'hexagon' });
+  assert.equal(r.status, 422);
+
+  // Gallery and todo
+  r = await create(
+    { type: 'gallery', images: [{ assetId, mime: 'image/png', width: 10, height: 10, crop: { x: 0.2, y: -0.1, zoom: 1.5 } }] },
+    { ratio: '3:4' },
+  );
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await create({ type: 'gallery', images: [] }, { ratio: '2:1' });
+  assert.equal(r.status, 422);
+  r = await create({ type: 'todo', title: '出发前', items: [{ id: randomUUID(), text: '换外币', done: true }] }, { color: 'green', variant: 'paper' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+
+  // Places-by-mark widget
+  r = await create({ type: 'widget', kind: 'places', mark: { icon: 'heart', color: 'rose' } }, { size: 'L' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await create({ type: 'widget', kind: 'places' }, { size: 'M' });
+  assert.equal(r.status, 422, 'a place group needs its mark');
+
+  // Emoji: longer ZWJ sequences and sticker style
+  r = await create({ type: 'emoji', char: '👨‍👩‍👧‍👦' }, { variant: 'sticker' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+
+  // Personal sticker library
+  const gif = Buffer.from('GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;', 'binary');
+  const stickerId = randomUUID();
+  r = await f.req(`/api/me/stickers/${stickerId}?w=120&h=90`, { actor: a, method: 'PUT', body: gif, headers: { 'content-type': 'image/gif' } });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.deepEqual([r.data.mime, r.data.width, r.data.height, r.data.animated], ['image/gif', 120, 90, true]);
+  r = await f.req('/api/session', { actor: a });
+  const me = r.data.user || r.data;
+  assert.equal(me.preferences.stickers[0].id, stickerId);
+  r = await f.req(`/api/me/stickers/${stickerId}`, { actor: a });
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'image/gif');
+  // Another account cannot read it
+  const b = await f.account('dave');
+  r = await f.req(`/api/me/stickers/${stickerId}`, { actor: b });
+  assert.equal(r.status, 404);
+  // The list is server-owned: PATCH /api/me cannot overwrite it
+  await f.req('/api/me', { actor: a, method: 'PATCH', body: { preferences: { stickers: [] } } });
+  r = await f.req('/api/session', { actor: a });
+  assert.equal((r.data.user || r.data).preferences.stickers.length, 1);
+  r = await f.req(`/api/me/stickers/${stickerId}`, { actor: a, method: 'DELETE' });
+  assert.equal(r.status, 204);
+  r = await f.req('/api/session', { actor: a });
+  assert.equal((r.data.user || r.data).preferences.stickers.length, 0);
+  r = await f.req(`/api/me/stickers/${randomUUID()}`, { actor: a, method: 'PUT', body: Buffer.from('nope'), headers: { 'content-type': 'image/png' } });
+  assert.equal(r.status, 415);
+});

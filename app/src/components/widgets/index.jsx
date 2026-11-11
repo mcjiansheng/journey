@@ -5,6 +5,7 @@ import { ActivityWidget } from './ActivityWidget.jsx';
 import { DayWidget } from './DayWidget.jsx';
 import { PlaceWidget } from './PlaceWidget.jsx';
 import { RouteWidget } from './RouteWidget.jsx';
+import { PlacesWidget } from './PlacesWidget.jsx';
 import { CountdownWidget } from './CountdownWidget.jsx';
 import { ClockWidget } from './ClockWidget.jsx';
 import { ExpenseWidget } from './ExpenseWidget.jsx';
@@ -29,6 +30,8 @@ export const BoardWidget = React.memo(function BoardWidget({ item, snapshot, dev
       return <DayWidget item={item} model={model} />;
     case 'place':
       return <PlaceWidget item={item} model={model} />;
+    case 'places':
+      return <PlacesWidget item={item} model={model} />;
     case 'route':
       return <RouteWidget item={item} model={model} />;
     case 'countdown':
@@ -51,6 +54,7 @@ export {
   DayWidget,
   PlaceWidget,
   RouteWidget,
+  PlacesWidget,
   CountdownWidget,
   ClockWidget,
   ExpenseWidget,

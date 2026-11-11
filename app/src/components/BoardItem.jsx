@@ -1,6 +1,8 @@
-import React, { useRef, useEffect, useCallback, useLayoutEffect } from 'react';
+import React, { useRef, useEffect, useCallback, useLayoutEffect, useState } from 'react';
 import { BoardWidget } from './widgets/index.jsx';
-import { pathD, strokeLook, noteColor } from '../board.js';
+import { GalleryView, TodoView } from './BoardRichItems.jsx';
+import { pathD, strokeLook, noteColor, assetUrl } from '../board.js';
+import { sanitizeRichText, richTextToPlain, plainToRichText } from '../rich-text.js';
 import { widgetEdgeHandles, widgetSize, widgetScale } from '../board-widgets.js';
 
 const SIZE_NAMES = { S: '小', M: '中', L: '大' };
@@ -28,6 +30,10 @@ export const BoardItem = React.memo(function BoardItem({
   onHandlePointerDown,
   onCommitText,
   onEndEditing,
+  tripId,
+  onContentChange,
+  onGalleryAddImages,
+  onAutoHeight,
 }) {
   const content = item.content || {};
   const f = item.frame || { x: 0, y: 0, w: 100, h: 100, scale: 1 };
@@ -38,13 +44,25 @@ export const BoardItem = React.memo(function BoardItem({
 
   const textRef = useRef(null);
   const editedRef = useRef(false);
+  const isNote = type === 'note';
+  // Notes are rich text (sanitized on every render, peers included); text
+  // stickers stay plain.
+  const noteHtml = isNote
+    ? content.html
+      ? sanitizeRichText(content.html)
+      : plainToRichText(content.text || '')
+    : '';
 
-  // Keep the DOM text in sync with remote edits while not editing.
+  // Keep the DOM in sync with remote edits while not editing.
   useLayoutEffect(() => {
-    if (!isEditing && textRef.current && textRef.current.innerText !== (content.text || '')) {
-      textRef.current.innerText = content.text || '';
+    const el = textRef.current;
+    if (isEditing || !el) return;
+    if (isNote) {
+      if (el.innerHTML !== noteHtml) el.innerHTML = noteHtml;
+    } else if (el.innerText !== (content.text || '')) {
+      el.innerText = content.text || '';
     }
-  }, [content.text, isEditing]);
+  }, [content.text, noteHtml, isEditing, isNote]);
 
   // Entering edit mode: an empty object gets a caret; existing text is fully
   // selected so typing replaces it (Figma / Keynote behaviour).
@@ -64,7 +82,12 @@ export const BoardItem = React.memo(function BoardItem({
   const commit = useCallback(() => {
     const el = textRef.current;
     if (!el) return;
-    const text = (el.innerText || '').replace(/\r?\n$/, '').slice(0, 500);
+    let text = (el.innerText || '').replace(/\r?\n$/, '').slice(0, 500);
+    let html;
+    if (isNote) {
+      html = sanitizeRichText(el.innerHTML).slice(0, 8000);
+      text = richTextToPlain(html).slice(0, 500);
+    }
     let size = null;
     if (type === 'text') {
       // Grow the frame to the laid-out text (frame = what you see, N-2).
@@ -74,8 +97,8 @@ export const BoardItem = React.memo(function BoardItem({
         h: Math.max(20, Math.ceil(el.offsetHeight * scale)),
       };
     }
-    onCommitText?.(item.id, text, size);
-  }, [item.id, type, f.scale, onCommitText]);
+    onCommitText?.(item.id, text, size, html);
+  }, [item.id, type, isNote, f.scale, onCommitText]);
 
   // Leaving edit mode by any route (blur, Esc, selecting elsewhere) commits once.
   const prevEditingRef = useRef(isEditing);
@@ -105,6 +128,16 @@ export const BoardItem = React.memo(function BoardItem({
 
   const handlePointerDown = (e) => {
     if (isEditing) return;
+    // Checklist boxes in a note tick without entering edit mode.
+    const li = isNote && e.button === 0 ? e.target.closest?.('ul[data-list="check"] > li') : null;
+    if (li && !locked && e.clientX - li.getBoundingClientRect().left < 24) {
+      e.stopPropagation();
+      if (li.dataset.checked === 'true') delete li.dataset.checked;
+      else li.dataset.checked = 'true';
+      const html = sanitizeRichText(textRef.current.innerHTML);
+      onCommitText?.(item.id, richTextToPlain(html), null, html);
+      return;
+    }
     onItemPointerDown?.(e, item.id);
   };
 
@@ -133,33 +166,66 @@ export const BoardItem = React.memo(function BoardItem({
     renderedContent = <BoardWidget item={item} snapshot={snapshot} />;
   } else if (type === 'note') {
     renderedContent = (
-      <div className={`note-card ${noteColor(style.color)}`}>
+      <div
+        className={`note-card ${noteColor(style.color)} v-${style.variant || 'plain'} fs-${style.fontSize || 'm'}`}
+      >
         {editable('note-text', '写点什么')}
       </div>
     );
   } else if (type === 'text') {
     const size = style.size || 'body';
     renderedContent = (
-      <div className={`text-sticker ${size}`} style={{ transform: `scale(${f.scale || 1})` }}>
+      <div
+        className={`text-sticker ${size} v-${style.variant || 'plain'}`}
+        style={{ transform: `scale(${f.scale || 1})` }}
+      >
         {editable('text-inner', '输入文字')}
       </div>
     );
   } else if (type === 'emoji') {
     const fontSize = Math.round(Math.min(f.w, f.h) * 0.72);
     renderedContent = (
-      <div className="emoji-sticker" style={{ fontSize: `${fontSize}px` }}>
-        {content.char || content.emoji || '✨'}
+      <div
+        className={`emoji-sticker v-${style.variant || 'plain'}`}
+        style={{ fontSize: `${fontSize}px` }}
+      >
+        <span>{content.char || content.emoji || '✨'}</span>
       </div>
     );
   } else if (type === 'image') {
-    const isPolaroid = style.frameStyle === 'polaroid' || Boolean(style.polaroid);
-    const src = content.assetId
-      ? `/api/trips/${item.tripId}/assets/${content.assetId}?variant=full`
-      : content.src || '';
     renderedContent = (
-      <div className={`image-sticker ${isPolaroid ? 'polaroid' : ''}`}>
-        <img src={src} alt={content.caption || '贴纸图片'} draggable={false} />
-        {isPolaroid && content.caption && <div className="cap">{content.caption}</div>}
+      <ImageSticker
+        content={content}
+        frameStyle={style.frameStyle || (style.polaroid ? 'polaroid' : 'none')}
+        src={content.assetId ? assetUrl(item.tripId || tripId, content.assetId) : content.src || ''}
+      />
+    );
+  } else if (type === 'gallery') {
+    renderedContent = (
+      <div className={`gallery-sticker frame-${style.frameStyle || 'none'}`}>
+        <GalleryView
+          item={item}
+          tripId={item.tripId || tripId}
+          isEditing={isEditing}
+          selected={selected}
+          onChange={(next) => onContentChange?.(item.id, next)}
+          onAddImages={() => onGalleryAddImages?.(item.id)}
+          onDone={() => onEndEditing?.(item.id)}
+        />
+      </div>
+    );
+  } else if (type === 'todo') {
+    renderedContent = (
+      <div
+        className={`todo-sticker ${noteColor(style.color || 'gray')} v-${style.variant || 'plain'}`}
+      >
+        <TodoView
+          item={item}
+          isEditing={isEditing}
+          onChange={(next) => onContentChange?.(item.id, next)}
+          onAutoHeight={(h) => onAutoHeight?.(item.id, h)}
+          onDone={() => onEndEditing?.(item.id)}
+        />
       </div>
     );
   } else if (type === 'stroke') {
@@ -206,13 +272,14 @@ export const BoardItem = React.memo(function BoardItem({
 
   return (
     <div
-      className={`board-item item-${type} ${locked ? 'locked' : ''} ${isEditing ? 'editing' : ''} ${reshape ? 'reshaping' : ''} ${flash ? 'just-added' : ''}`}
+      className={`board-item item-${type} ${style.tilt ? 'tilted' : ''} ${locked ? 'locked' : ''} ${isEditing ? 'editing' : ''} ${reshape ? 'reshaping' : ''} ${flash ? 'just-added' : ''}`}
       data-item-id={item.id}
       style={{
         transform: `translate(${f.x}px, ${f.y}px)`,
         width: f.w,
         height: f.h,
         zIndex: z,
+        ...(style.tilt ? { '--tilt': `${style.tilt}deg` } : {}),
       }}
       onPointerDown={handlePointerDown}
       onDoubleClick={handleDoubleClick}
@@ -266,3 +333,37 @@ export const BoardItem = React.memo(function BoardItem({
     </div>
   );
 });
+
+/** Photo sticker with frame styles; a failed load shows a retry card, not alt text. */
+function ImageSticker({ content, frameStyle, src }) {
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => setFailed(false), [src]);
+  const url = attempt ? `${src}${src.includes('?') ? '&' : '?'}r=${attempt}` : src;
+  return (
+    <div className={`image-sticker frame-${frameStyle}`}>
+      {failed ? (
+        <div className="image-failed">
+          <span>图片未能载入</span>
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              setFailed(false);
+              setAttempt((a) => a + 1);
+            }}
+          >
+            重试
+          </button>
+        </div>
+      ) : (
+        <img
+          src={url}
+          alt={content.caption || ''}
+          draggable={false}
+          onError={() => setFailed(true)}
+        />
+      )}
+      {frameStyle === 'polaroid' && content.caption && <div className="cap">{content.caption}</div>}
+    </div>
+  );
+}

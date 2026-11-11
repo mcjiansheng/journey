@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { deflateSync, crc32 } from 'node:zlib';
 import { createApp, shutdownServer } from '../../server/index.mjs';
 
 let app, server, base;
@@ -778,12 +779,285 @@ test('board: sticker panel shows places up top and one day at a time', async ({ 
   const groups = await panel
     .locator('.group-block > .group, .group-block > .group-head .group')
     .allInnerTexts();
-  expect(groups.map((g) => g.replace(/\s*\d+$/, '').trim())).toEqual(['概览', '地点', '日程']);
+  expect(groups.map((g) => g.replace(/\s*\d+$/, '').trim())).toEqual([
+    '概览',
+    '新建',
+    '地点',
+    '日程',
+  ]);
   await expect(panel.locator('.tile-grid').first().locator('.tile')).toHaveCount(3);
+  await expect(panel.locator('.create-tile')).toHaveCount(2);
   // The trip has 3 days: chips, not three rows of buttons.
   await expect(panel.locator('.day-chip')).toHaveCount(3);
   await expect(panel.locator('.day-chip[aria-selected="true"]')).toHaveCount(1);
   await panel.locator('.day-chip').nth(1).click();
   await expect(panel.locator('.day-title')).toContainText('第2天');
   await expect(panel.locator('.day-previews .tile')).toHaveCount(2);
+});
+
+// A real, decodable PNG so uploads exercise the whole pipeline (blank-image regression).
+function png(w, h, [r, g, b]) {
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  const rows = [];
+  for (let y = 0; y < h; y++) {
+    const row = Buffer.alloc(1 + w * 3);
+    for (let x = 0; x < w; x++) row.set([r, (g + x) & 255, (b + y) & 255], 1 + x * 3);
+    rows.push(row);
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(Buffer.concat(rows))),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+const evidence = (name) => resolve(process.cwd(), '../.local/evidence/1111-白板界面', name);
+const loaded = (img) => img.evaluate((el) => el.complete && el.naturalWidth > 0);
+
+test('board: rich note formatting is saved and survives a reload', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await addFromPanel(page, '便签', '.pick-note');
+  const note = page.locator('.board-item.item-note').first();
+  await note.dblclick();
+  const bar = page.locator('#note-format');
+  await expect(bar).toBeVisible();
+  const text = note.locator('.note-text');
+  await text.click();
+  await page.keyboard.type('出发清单');
+  await page.keyboard.press('ControlOrMeta+A');
+  await bar.getByRole('button', { name: /粗体/ }).click();
+  await bar.getByRole('button', { name: '居中' }).click();
+  await bar.getByRole('button', { name: '大字' }).click();
+  await expect(text.locator('b')).toContainText('出发清单');
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await bar.getByRole('button', { name: '勾选清单' }).click();
+  await page.keyboard.type('护照');
+  await page.screenshot({ path: evidence('rich-note.png') });
+  await page.locator('#stage').click({ position: { x: 900, y: 600 } });
+  await expect(bar).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const n = (await boardItems(page)).items.find((i) => i.payload.content.type === 'note');
+      return n && [n.payload.content.html, n.payload.style.fontSize];
+    })
+    .toEqual([expect.stringContaining('<b>'), 'l']);
+  await page.reload();
+  await expect(page.locator('.board-item.item-note .note-text b')).toContainText('出发清单');
+  await expect(page.locator('.board-item.item-note ul[data-list="check"] li')).toContainText(
+    '护照',
+  );
+  await expect(page.locator('.board-item.item-note .note-card')).toHaveClass(/fs-l/);
+});
+
+test('board: dropped and pasted images actually show; styles apply', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  const dt = await page.evaluateHandle(
+    (b64) => {
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const t = new DataTransfer();
+      t.items.add(new File([bytes], 'drop.png', { type: 'image/png' }));
+      return t;
+    },
+    png(64, 48, [200, 60, 40]).toString('base64'),
+  );
+  await page.dispatchEvent('#stage', 'dragover', { dataTransfer: dt, clientX: 600, clientY: 380 });
+  await expect(page.locator('.drop-hint')).toBeVisible();
+  await page.dispatchEvent('#stage', 'drop', { dataTransfer: dt, clientX: 600, clientY: 380 });
+  const img = page.locator('.board-item.item-image img');
+  await expect(img).toBeVisible();
+  await expect.poll(() => loaded(img)).toBe(true);
+  await expect(page.locator('.image-failed')).toHaveCount(0);
+
+  await page.locator('.board-item.item-image').click();
+  await page.locator('#actions').getByRole('button', { name: '样式' }).click();
+  const pop = page.locator('.style-pop');
+  await expect(pop).toBeVisible();
+  for (const name of ['拍立得', '胶带', '邮票', '圆形', '卡片', '透明贴纸']) {
+    await pop.getByRole('button', { name, exact: true }).click();
+    await expect(page.locator('.board-item.item-image .image-sticker')).toHaveClass(/frame-/);
+  }
+  await pop.getByRole('button', { name: '邮票', exact: true }).click();
+  await pop.getByRole('button', { name: /歪一点/ }).click();
+  await expect(page.locator('.board-item.item-image')).toHaveClass(/tilted/);
+  await page.screenshot({ path: evidence('image-frames.png') });
+  await expect
+    .poll(async () => {
+      const it = (await boardItems(page)).items.find((i) => i.payload.content.type === 'image');
+      return it && [it.payload.style.frameStyle, it.payload.style.tilt];
+    })
+    .toEqual(['stamp', -4]);
+});
+
+test('board: gallery holds several photos, switches ratio and pans a photo', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.locator('#panel').getByRole('button', { name: '添加图库' }).click();
+  await (
+    await chooser
+  ).setFiles([
+    { name: 'a.png', mimeType: 'image/png', buffer: png(80, 60, [30, 120, 200]) },
+    { name: 'b.png', mimeType: 'image/png', buffer: png(60, 90, [220, 180, 40]) },
+  ]);
+  const gallery = page.locator('.board-item.item-gallery');
+  await expect(gallery).toBeVisible();
+  await expect(gallery.locator('.gallery-dots button')).toHaveCount(2);
+  await expect.poll(() => loaded(gallery.locator('.gallery-window img'))).toBe(true);
+  await gallery.hover();
+  await gallery.getByRole('button', { name: '下一张' }).click();
+  await expect(gallery.locator('.gallery-dots button').nth(1)).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
+
+  await gallery.click();
+  const actions = page.locator('#actions');
+  await actions.getByRole('button', { name: '16:9' }).click();
+  await expect
+    .poll(async () => {
+      const b = await gallery.boundingBox();
+      return Math.round((b.width / b.height) * 10) / 10;
+    })
+    .toBe(1.8);
+  await actions.getByRole('button', { name: /横竖/ }).click();
+  await expect
+    .poll(async () => {
+      const b = await gallery.boundingBox();
+      return b.width < b.height;
+    })
+    .toBe(true);
+
+  await actions.getByRole('button', { name: '调整显示' }).click();
+  await expect(gallery.locator('.gallery-tools')).toBeVisible();
+  await gallery.getByRole('button', { name: '放大' }).click();
+  const win = await gallery.locator('.gallery-window').boundingBox();
+  await page.mouse.move(win.x + win.width / 2, win.y + win.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(win.x + win.width / 2 + 30, win.y + win.height / 2 + 20, { steps: 5 });
+  await page.mouse.up();
+  await page.screenshot({ path: evidence('gallery.png') });
+  await gallery.getByRole('button', { name: '完成' }).click();
+  await expect
+    .poll(async () => {
+      const it = (await boardItems(page)).items.find((i) => i.payload.content.type === 'gallery');
+      return (
+        it && [
+          it.payload.style.ratio,
+          it.payload.content.images.length,
+          it.payload.content.images[1].crop?.zoom > 1,
+        ]
+      );
+    })
+    .toEqual(['9:16', 2, true]);
+});
+
+test('board: todo list can be built, ticked without selecting, and reordered', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await addFromPanel(page, '小组件', '#panel button[aria-label="添加待办"]');
+  const todo = page.locator('.board-item.item-todo');
+  await expect(todo).toBeVisible();
+  const input = todo.locator('.todo-add input');
+  await input.click();
+  for (const t of ['带护照', '换些现金', '订接机']) {
+    await input.fill(t);
+    await input.press('Enter');
+  }
+  await input.press('Escape');
+  await expect(todo.locator('.todo-row')).toHaveCount(3);
+  await page.locator('#stage').click({ position: { x: 1000, y: 650 } });
+  await todo.locator('.todo-check').first().click();
+  await expect(todo.locator('.todo-check').first()).toHaveAttribute('aria-checked', 'true');
+  await expect(todo.locator('.todo-count')).toContainText('1/3');
+  await expect(page.locator('#actions')).toHaveCount(0);
+  await page.screenshot({ path: evidence('todo.png') });
+  await expect
+    .poll(async () => {
+      const it = (await boardItems(page)).items.find((i) => i.payload.content.type === 'todo');
+      return it?.payload.content.items.map((x) => [x.text, x.done]);
+    })
+    .toEqual([
+      ['带护照', true],
+      ['换些现金', false],
+      ['订接机', false],
+    ]);
+});
+
+test('board: emoji search, recent emoji and my own stickers', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  const panel = page.locator('#panel');
+  await panel.locator('.tabs button:has-text("表情")').click();
+  await expect(panel.locator('.emoji-cats button').first()).toBeVisible();
+  expect(await panel.locator('.emoji-cats button').count()).toBeGreaterThanOrEqual(10);
+  await panel.getByLabel('搜索表情').fill('飞机');
+  await expect(panel.locator('.pick-emoji', { hasText: '✈' }).first()).toBeVisible();
+  await panel.locator('.pick-emoji', { hasText: '✈' }).first().click();
+  await expect(page.locator('.board-item.item-emoji')).toHaveCount(1);
+  await panel.getByLabel('搜索表情').fill('');
+  await expect(panel.getByRole('tab', { name: '最近' })).toBeVisible();
+
+  const chooser = page.waitForEvent('filechooser');
+  await panel.getByRole('button', { name: '上传自己的表情' }).click();
+  await (
+    await chooser
+  ).setFiles({ name: 'me.png', mimeType: 'image/png', buffer: png(40, 40, [250, 120, 160]) });
+  const mine = panel.locator('.my-sticker');
+  await expect(mine).toHaveCount(1);
+  await expect.poll(() => loaded(mine.locator('img'))).toBe(true);
+  await mine.click();
+  const placed = page.locator('.board-item.item-image .image-sticker.frame-sticker img');
+  await expect(placed).toBeVisible();
+  await expect.poll(() => loaded(placed)).toBe(true);
+  await page.screenshot({ path: evidence('emoji-stickers.png') });
+
+  // The library follows the account: another trip sees it too.
+  const prefs = await page.evaluate(() => fetch('/api/session').then((r) => r.json()));
+  expect((prefs.user || prefs).preferences.stickers).toHaveLength(1);
+});
+
+test('board: places panel groups by mark and adds a whole group as one map', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await seedPlaceWidget(page);
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  const panel = page.locator('#panel');
+  await expect(panel.locator('.mark-chip')).toHaveCount(1);
+  await expect(panel.locator('.place-row')).toContainText('西湖断桥');
+  await panel.getByRole('button', { name: /整类加入/ }).click();
+  const map = page.locator('.board-item .w-places');
+  await expect(map).toBeVisible();
+  await expect(map).toContainText('西湖断桥');
+  await panel.getByLabel('搜索小组件').fill('断桥');
+  await expect(panel.locator('.place-row')).toHaveCount(1);
+  await page.screenshot({ path: evidence('places-group.png') });
 });

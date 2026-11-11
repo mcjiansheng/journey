@@ -429,3 +429,75 @@ export function geoTiles(view, w, h, { maxZoom = 18 } = {}) {
   }
   return tiles;
 }
+
+// ---------- Sticker styles (mirrors server/model.mjs BOARD_VARIANTS) ----------
+export const STYLE_VARIANTS = {
+  note: [
+    ['plain', '纯色'],
+    ['lined', '横线'],
+    ['grid', '方格'],
+    ['kraft', '牛皮纸'],
+    ['tape', '胶带'],
+    ['torn', '撕边'],
+  ],
+  text: [
+    ['plain', '默认'],
+    ['hand', '手写'],
+    ['marker', '荧光底'],
+    ['outline', '描边'],
+    ['label', '标签'],
+  ],
+  emoji: [
+    ['plain', '原样'],
+    ['sticker', '贴纸白边'],
+    ['shadow', '投影'],
+  ],
+  todo: [
+    ['plain', '卡片'],
+    ['paper', '便签纸'],
+    ['glass', '玻璃'],
+  ],
+};
+export const IMAGE_FRAMES = [
+  ['none', '无边框'],
+  ['polaroid', '拍立得'],
+  ['tape', '胶带'],
+  ['stamp', '邮票'],
+  ['circle', '圆形'],
+  ['card', '卡片'],
+  ['sticker', '透明贴纸'],
+];
+export const GALLERY_RATIOS = ['1:1', '3:4', '4:3', '16:9', '9:16'];
+export function ratioValue(ratio = '1:1') {
+  const [a, b] = String(ratio).split(':').map(Number);
+  return a > 0 && b > 0 ? a / b : 1;
+}
+/** Frame for a gallery of width `w` at `ratio` (w / h). Polaroid adds a caption strip. */
+// Border of each gallery frame style (top, right, bottom, left); the photo
+// window inside keeps the chosen ratio.
+export const GALLERY_PADDING = {
+  none: [0, 0, 0, 0],
+  tape: [0, 0, 0, 0],
+  card: [6, 6, 6, 6],
+  polaroid: [8, 8, 30, 8],
+};
+export function galleryFrameSize(w, ratio, frameStyle = 'none') {
+  const [pt, pr, pb, pl] = GALLERY_PADDING[frameStyle] || GALLERY_PADDING.none;
+  const inner = Math.max(40, w - pl - pr);
+  return { w: Math.round(w), h: Math.round(inner / ratioValue(ratio) + pt + pb) };
+}
+// A few gentle angles people can cycle through ("歪一点").
+export const TILTS = [0, -4, 3, -2, 5];
+export function nextTilt(tilt = 0) {
+  const i = TILTS.indexOf(tilt);
+  return TILTS[(i + 1) % TILTS.length];
+}
+
+export function assetUrl(tripId, assetId, variant = 'full') {
+  const base = (import.meta.env?.BASE_URL ?? '/').replace(/\/?$/, '/');
+  return `${base}api/trips/${tripId}/assets/${assetId}?variant=${variant}`;
+}
+export function stickerUrl(stickerId) {
+  const base = (import.meta.env?.BASE_URL ?? '/').replace(/\/?$/, '/');
+  return `${base}api/me/stickers/${stickerId}`;
+}

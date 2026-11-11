@@ -7,6 +7,9 @@ import { BoardActions } from './BoardActions.jsx';
 import { BoardStickerPanel } from './BoardStickerPanel.jsx';
 import { BoardRecentDeletions } from './BoardRecentDeletions.jsx';
 import { BoardSwitcher } from './BoardSwitcher.jsx';
+import { NoteFormatBar } from './NoteFormatBar.jsx';
+import { api } from '../sync.js';
+import { processImageFile } from '../board-sync.js';
 import { MapDetailContext } from './widgets/map-context.js';
 import {
   toWorld,
@@ -19,6 +22,8 @@ import {
   pathD,
   scaled,
   strokeLook,
+  galleryFrameSize,
+  stickerUrl,
 } from '../board.js';
 import { WIDGET_SIZES, widgetSize, widgetScale, pickWidgetSize } from '../board-widgets.js';
 
@@ -57,6 +62,8 @@ function useOnline() {
 
 const sameSet = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
 
+const NO_STICKERS = [];
+
 export function Board({
   tripId,
   boardId: initialBoardId,
@@ -71,6 +78,7 @@ export function Board({
   boardContext = {},
   onBoardContext,
   onPeersChange,
+  stickers: accountStickers = NO_STICKERS,
 }) {
   // ---------- Boards ----------
   const boards = useMemo(
@@ -427,11 +435,168 @@ export function Board({
     );
     select([item.id]);
   };
+  const addTodo = async (at) => {
+    const pt = spawnAt(260, 160, at);
+    const item = await addItem(
+      {
+        content: { type: 'todo', title: '待办', items: [] },
+        style: { color: 'gray', variant: 'plain' },
+        frame: { x: pt.x, y: pt.y, w: 260, h: 160, scale: 1 },
+        z: topZ(activeItemsRef.current),
+      },
+      { pop: true },
+    );
+    select([item.id]);
+    setEditingId(item.id);
+  };
+  // 图库: pick photos first, then the gallery appears with all of them.
+  const galleryPicker = useRef(null);
+  const galleryTarget = useRef(null); // { id } to append, or { at } to create
+  const openGalleryPicker = (target) => {
+    galleryTarget.current = target;
+    galleryPicker.current?.click();
+  };
+  const onGalleryFiles = async (files) => {
+    const target = galleryTarget.current || {};
+    galleryTarget.current = null;
+    const list = [...files].filter((f) => f.type.startsWith('image/')).slice(0, 30);
+    if (!list.length) return;
+    const placeholder = target.id
+      ? null
+      : { id: crypto.randomUUID(), frame: { ...spawnAt(320, 320, target.at), w: 320, h: 320 } };
+    if (placeholder)
+      setUploads((u) => [...u, { ...placeholder, file: null, status: 'uploading', message: '' }]);
+    const uploaded = [];
+    let error = null;
+    for (const file of list) {
+      try {
+        const res = await uploadAsset(file);
+        uploaded.push({
+          assetId: res.assetId,
+          mime: res.mime || 'image/png',
+          width: res.width || 400,
+          height: res.height || 300,
+          animated: Boolean(res.isGif),
+          crop: { x: 0, y: 0, zoom: 1 },
+        });
+      } catch (err) {
+        error = err;
+      }
+    }
+    if (placeholder) setUploads((u) => u.filter((x) => x.id !== placeholder.id));
+    if (error)
+      notify?.({ message: `${uploaded.length ? '部分' : ''}图片上传失败：${error.message || ''}` });
+    if (!uploaded.length) return;
+    if (target.id) {
+      const g = itemsByIdRef.current.get(target.id);
+      if (!g) return;
+      const images = [...(g.content.images || []), ...uploaded].slice(0, 30);
+      applyPatches([{ id: g.id, patch: { content: { ...g.content, images } } }]);
+      return;
+    }
+    const first = uploaded[0];
+    const ratio = first.width >= first.height ? '4:3' : '3:4';
+    const { w, h } = galleryFrameSize(320, ratio);
+    const item = await addItem(
+      {
+        content: { type: 'gallery', images: uploaded },
+        style: { ratio },
+        frame: { x: placeholder.frame.x, y: placeholder.frame.y, w, h, scale: 1 },
+        z: topZ(activeItemsRef.current),
+      },
+      { pop: true },
+    );
+    select([item.id]);
+  };
+  const addPlaces = (mark, at) => addWidget({ kind: 'places', mark }, 'M', at);
+
+  // ---------- My stickers (account library) ----------
+  const [stickers, setStickers] = useState(accountStickers);
+  useEffect(() => setStickers(accountStickers || NO_STICKERS), [accountStickers]);
+  const uploadSticker = async (file) => {
+    try {
+      const processed = await processImageFile(file);
+      // Stickers stay small: GIFs are kept as they are, stills use the processed full size.
+      const id = crypto.randomUUID();
+      const sticker = await api(
+        `/api/me/stickers/${id}?w=${processed.width}&h=${processed.height}`,
+        {
+          method: 'PUT',
+          raw: true,
+          headers: { 'Content-Type': processed.mime },
+          body: processed.fullBlob,
+        },
+      );
+      setStickers((list) => [sticker, ...list.filter((x) => x.id !== sticker.id)]);
+      return sticker;
+    } catch (err) {
+      notify?.({ message: err?.message || '表情上传失败' });
+      return null;
+    }
+  };
+  const removeSticker = async (id) => {
+    setStickers((list) => list.filter((x) => x.id !== id));
+    try {
+      await api(`/api/me/stickers/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      notify?.({ message: err?.message || '删除表情失败' });
+    }
+  };
+  // Placing a sticker copies it into this trip so everyone on the board sees it.
+  const addSticker = async (sticker, at) => {
+    const side = 140;
+    const ratio = (sticker.height || 1) / (sticker.width || 1);
+    const w = ratio > 1 ? Math.round(side / ratio) : side;
+    const h = ratio > 1 ? side : Math.round(side * ratio);
+    const pt = spawnAt(w, h, at);
+    const uid = crypto.randomUUID();
+    setUploads((u) => [
+      ...u,
+      { id: uid, file: null, frame: { x: pt.x, y: pt.y, w, h }, status: 'uploading', message: '' },
+    ]);
+    try {
+      const blob = await fetch(stickerUrl(sticker.id), { credentials: 'same-origin' }).then((r) => {
+        if (!r.ok) throw new Error('表情已不存在');
+        return r.blob();
+      });
+      const file = new File([blob], `sticker.${(sticker.mime || 'image/png').split('/')[1]}`, {
+        type: sticker.mime || blob.type,
+      });
+      const res = await uploadAsset(file);
+      const item = await addItem(
+        {
+          content: {
+            type: 'image',
+            assetId: res.assetId,
+            mime: res.mime || sticker.mime,
+            width: res.width || sticker.width || side,
+            height: res.height || sticker.height || side,
+            animated: Boolean(res.isGif),
+            caption: '',
+          },
+          style: { frameStyle: 'sticker' },
+          frame: { x: pt.x, y: pt.y, w, h, scale: 1 },
+          z: topZ(activeItemsRef.current),
+        },
+        { pop: true },
+      );
+      select([item.id]);
+    } catch (err) {
+      notify?.({ message: err?.message || '表情贴到白板失败' });
+    } finally {
+      setUploads((u) => u.filter((x) => x.id !== uid));
+    }
+  };
+
   const addSpec = (spec, at) => {
     setTool('select');
     if (spec.type === 'widget') return addWidget(spec.content, spec.size, at);
     if (spec.type === 'note') return addNote(spec.color, at);
     if (spec.type === 'emoji') return addEmoji(spec.char, at);
+    if (spec.type === 'todo') return addTodo(at);
+    if (spec.type === 'gallery') return openGalleryPicker({ at });
+    if (spec.type === 'places') return addPlaces(spec.mark, at);
+    if (spec.type === 'sticker') return addSticker(spec.sticker, at);
     return null;
   };
   const dropSpec = (spec, clientX, clientY) => {
@@ -444,9 +609,23 @@ export function Board({
   // Image uploads show a placeholder with progress where the image will land,
   // and turn into "上传失败 · 重试" instead of an alert (N-14).
   const [uploads, setUploads] = useState([]);
-  const startUpload = async (file, placeholder) => {
+  const [dropping, setDropping] = useState(false);
+  // Paste images straight onto the board.
+  useEffect(() => {
+    const onPaste = (e) => {
+      if (modalOpenRef.current) return;
+      if (e.target?.closest?.('input, textarea, [contenteditable="true"]')) return;
+      const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
+      if (!files.length) return;
+      e.preventDefault();
+      files.slice(0, 12).forEach((file) => handlers.current.upload(file));
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, []);
+  const startUpload = async (file, placeholder, at) => {
     const id = placeholder?.id || crypto.randomUUID();
-    const frame = placeholder?.frame || { ...getCenterSpawnPoint(240, 180), w: 240, h: 180 };
+    const frame = placeholder?.frame || { ...spawnAt(240, 180, at), w: 240, h: 180 };
     setUploads((u) => [
       ...u.filter((x) => x.id !== id),
       { id, file, frame, status: 'uploading', message: '' },
@@ -493,6 +672,27 @@ export function Board({
   // ---------- Object operations ----------
   const primarySelected = activeItems.find((it) => selectedIds.has(it.id));
 
+  const changeStyle = (patch) => {
+    const it = primarySelected;
+    if (!it) return;
+    const style = { ...(it.style || {}), ...patch };
+    const next = { style };
+    // A gallery keeps its photo ratio when its frame border changes.
+    if (it.content?.type === 'gallery' && 'frameStyle' in patch) {
+      const { w, h } = galleryFrameSize(it.frame.w, style.ratio || '4:3', style.frameStyle);
+      next.frame = { ...it.frame, w, h };
+    }
+    applyPatches([{ id: it.id, patch: next }]);
+  };
+  const changeGalleryRatio = (ratio) => {
+    const it = primarySelected;
+    if (it?.content?.type !== 'gallery') return;
+    const f = it.frame;
+    const { w, h } = galleryFrameSize(f.w, ratio, it.style?.frameStyle);
+    applyPatches([
+      { id: it.id, patch: { style: { ...(it.style || {}), ratio }, frame: { ...f, w, h } } },
+    ]);
+  };
   const changeNoteColor = (color) => {
     if (primarySelected?.content?.type !== 'note') return;
     applyPatches([
@@ -586,6 +786,7 @@ export function Board({
     else if (kind === 'day' || kind === 'route')
       onNavigate?.('itinerary', { dayId: item.content.dayId });
     else if (kind === 'place') onNavigate?.('map', { favoriteId: item.content.favoriteId });
+    else if (kind === 'places') onNavigate?.('map', {});
     else if (kind === 'expense') onNavigate?.('ledger', {});
   };
 
@@ -1009,7 +1210,7 @@ export function Board({
   }, []);
 
   // ---------- Text ----------
-  const commitText = (id, text, size) => {
+  const commitText = (id, text, size, html) => {
     const item = itemsByIdRef.current.get(id);
     if (!item) return;
     if (item.content?.type === 'text' && !text.trim()) {
@@ -1019,7 +1220,10 @@ export function Board({
       return;
     }
     const patch = {};
-    if (text !== (item.content?.text || '')) patch.content = { ...item.content, text };
+    if (html !== undefined) {
+      if (html !== (item.content?.html || '') || text !== (item.content?.text || ''))
+        patch.content = { ...item.content, text, html };
+    } else if (text !== (item.content?.text || '')) patch.content = { ...item.content, text };
     if (size) {
       const f = item.frame || {};
       if (Math.abs((f.w || 0) - size.w) > 1 || Math.abs((f.h || 0) - size.h) > 1)
@@ -1035,7 +1239,7 @@ export function Board({
     const item = itemsByIdRef.current.get(id);
     if (!item || item.style?.locked) return;
     const type = item.content?.type;
-    if (type === 'note' || type === 'text') {
+    if (type === 'note' || type === 'text' || type === 'todo' || type === 'gallery') {
       select([id]);
       setEditingId(id);
       sendPresence({ editing: id, selected: [id] });
@@ -1046,18 +1250,38 @@ export function Board({
 
   // Stable callbacks for memoized BoardItem.
   const handlers = useRef({});
+  const contentChange = (id, content) => {
+    const item = itemsByIdRef.current.get(id);
+    if (!item) return;
+    const patch = { content };
+    // A gallery that loses its last photo keeps its frame; nothing else to fix.
+    applyPatches([{ id, patch }]);
+  };
+  const autoHeight = (id, h) => {
+    const item = itemsByIdRef.current.get(id);
+    const f = item?.frame;
+    if (!f || Math.abs(f.h - h) < 3 || gestureRef.current) return;
+    patchBoardItem(id, { frame: { ...f, h: Math.max(80, Math.min(1200, h)) } }).catch(() => {});
+  };
   handlers.current = {
     itemPointerDown,
     handlePointerDown,
     commitText,
     endEditing,
     itemDoubleClick,
+    contentChange,
+    autoHeight,
+    galleryAdd: (id) => openGalleryPicker({ id }),
+    upload: (file) => startUpload(file),
   };
   const itemCallbacks = useMemo(
     () => ({
       onItemPointerDown: (e, id) => handlers.current.itemPointerDown(e, id),
       onHandlePointerDown: (e, id, a) => handlers.current.handlePointerDown(e, id, a),
-      onCommitText: (id, text, size) => handlers.current.commitText(id, text, size),
+      onCommitText: (id, text, size, html) => handlers.current.commitText(id, text, size, html),
+      onContentChange: (id, content) => handlers.current.contentChange(id, content),
+      onAutoHeight: (id, h) => handlers.current.autoHeight(id, h),
+      onGalleryAddImages: (id) => handlers.current.galleryAdd(id),
       onEndEditing: (id) => handlers.current.endEditing(id),
       onItemDoubleClick: (id) => handlers.current.itemDoubleClick(id),
     }),
@@ -1111,6 +1335,7 @@ export function Board({
       else if (k === 'h') setTool('highlighter');
       else if (k === 'e') setTool('eraser');
       else if (e.key === 'Escape') {
+        setEditingId(null);
         select([]);
         setPanelOpen(false);
         setDeletionsOpen(false);
@@ -1165,6 +1390,14 @@ export function Board({
     actionsRect = { x: p.x, y: p.y, w: f.w * view.k, h: f.h * view.k };
   }
 
+  const editingItem = editingId ? itemsById.get(editingId) : null;
+  let formatRect = null;
+  if (editingItem?.content?.type === 'note') {
+    const f = frameOf(editingItem);
+    const p = toScreen({ x: f.x, y: f.y }, view);
+    formatRect = { x: p.x, y: p.y, w: f.w * view.k, h: f.h * view.k };
+  }
+
   const mapDetail = view.k >= 0.4;
   const gridSize = (view.k < 0.4 ? 48 : 24) * view.k;
   const empty = !loading && activeItems.length === 0 && uploads.length === 0;
@@ -1206,6 +1439,28 @@ export function Board({
           '--grid-y': `${view.y}px`,
           '--grid-size': `${gridSize}px`,
         }}
+        onDragOver={(e) => {
+          if (![...(e.dataTransfer?.types || [])].includes('Files')) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+          setDropping(true);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) setDropping(false);
+        }}
+        onDrop={(e) => {
+          const files = [...(e.dataTransfer?.files || [])].filter((f) =>
+            f.type.startsWith('image/'),
+          );
+          setDropping(false);
+          if (!files.length) return;
+          e.preventDefault();
+          const at = screenToWorld(e.clientX, e.clientY);
+          files
+            .slice(0, 12)
+            .forEach((file, i) => startUpload(file, null, { x: at.x + i * 28, y: at.y + i * 28 }));
+        }}
+        data-dropping={dropping ? 'true' : undefined}
         onPointerDown={handleStagePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={endGesture}
@@ -1238,6 +1493,7 @@ export function Board({
                     peerEditing={Boolean(peer?.editing)}
                     resizing={resizingId === item.id}
                     reshape={size ? { size, box: localLive.boxes[item.id] } : null}
+                    tripId={tripId}
                     {...itemCallbacks}
                   />
                 );
@@ -1263,7 +1519,7 @@ export function Board({
                     <>
                       <span>上传失败 · {u.message}</span>
                       <span className="row">
-                        <button onClick={() => startUpload(u.file, u)}>重试</button>
+                        {u.file && <button onClick={() => startUpload(u.file, u)}>重试</button>}
                         <button
                           onClick={() => setUploads((list) => list.filter((x) => x.id !== u.id))}
                         >
@@ -1317,6 +1573,10 @@ export function Board({
           topSafe={topSafe}
           hidden={actionsHidden}
           onChangeNoteColor={changeNoteColor}
+          onChangeStyle={changeStyle}
+          onGalleryRatio={changeGalleryRatio}
+          onGalleryAdd={() => openGalleryPicker({ id: primarySelected.id })}
+          onEdit={() => itemDoubleClick(primarySelected.id)}
           onBringToFront={bringToFront}
           onSendToBack={sendToBack}
           onDuplicate={duplicate}
@@ -1387,7 +1647,36 @@ export function Board({
         onAdd={(spec) => addSpec(spec)}
         onDropOnCanvas={dropSpec}
         onUploadImage={(file) => startUpload(file)}
+        stickers={stickers}
+        onUploadSticker={uploadSticker}
+        onRemoveSticker={removeSticker}
       />
+
+      {formatRect && (
+        <NoteFormatBar
+          rect={formatRect}
+          stage={stageSize}
+          fontSize={editingItem.style?.fontSize || 'm'}
+          onFontSize={(fontSize) =>
+            applyPatches([
+              { id: editingItem.id, patch: { style: { ...(editingItem.style || {}), fontSize } } },
+            ])
+          }
+        />
+      )}
+
+      <input
+        ref={galleryPicker}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        multiple
+        hidden
+        onChange={(e) => {
+          onGalleryFiles(e.target.files || []);
+          e.target.value = '';
+        }}
+      />
+      {dropping && <div className="drop-hint">松手把图片放到这里</div>}
 
       <BoardRecentDeletions
         open={deletionsOpen}

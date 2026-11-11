@@ -7,7 +7,7 @@ import {
   visibleDays,
 } from './domain.js';
 import { expenseDate, expenseTitle } from './expenses.js';
-import { markColors, markPaths, defaultMark } from './marks.js';
+import { markColors, markPaths, defaultMark, colorNames, iconNames } from './marks.js';
 import { hourOf, sky } from './board.js';
 
 export const WIDGET_SIZES = {
@@ -24,7 +24,41 @@ export const WIDGET_KINDS = {
   countdown: ['S', 'M'],
   clock: ['S', 'M'],
   expense: ['S', 'M'],
+  places: ['M', 'L'],
 };
+
+const sameMark = (a, b) => Boolean(a && b && a.icon === b.icon && a.color === b.color);
+/** Favorites grouped by their mark; named by the matching mark preset when there is one. */
+export function placeGroups(snapshot) {
+  const objects = snapshot?.objects || [];
+  const presets = objects
+    .filter((o) => o.kind === 'markPreset' && o.state === 'active')
+    .sort((a, b) => (a.payload.order ?? 0) - (b.payload.order ?? 0));
+  const favorites = objects.filter((o) => o.kind === 'favorite' && o.state === 'active');
+  const groups = new Map();
+  for (const f of favorites) {
+    const mark = f.payload.mark || defaultMark();
+    const key = `${mark.icon}:${mark.color}`;
+    if (!groups.has(key)) {
+      const preset = presets.find((p) => sameMark(p.payload, mark));
+      groups.set(key, {
+        key,
+        mark,
+        name: preset?.payload.name || '',
+        order: preset ? presets.indexOf(preset) : presets.length + groups.size,
+        favorites: [],
+      });
+    }
+    groups.get(key).favorites.push(f);
+  }
+  return [...groups.values()].sort((a, b) => a.order - b.order);
+}
+export function markGroupName(group) {
+  return (
+    group?.name ||
+    `${colorNames[group?.mark?.color] || ''}${iconNames[group?.mark?.icon] || '标记'}`
+  );
+}
 
 // Corner handles scale a widget within this range of its form's base size.
 export const WIDGET_SCALE_MIN = 0.75;
@@ -152,6 +186,16 @@ export function widgetDeps(snapshot, item) {
       ? snapshot.objects.find((o) => o.id === linked.payload.dayId)
       : null;
     return `${fav?.id}:${fav?.state}:${fav?.generation}:${linked?.id}:${linked?.state}:${linkedDay?.id}:${linkedDay?.state}:${item.style?.size}`;
+  }
+
+  if (kind === 'places') {
+    const m = content.mark || {};
+    const favs = snapshot.objects
+      .filter((o) => o.kind === 'favorite' && sameMark(o.payload.mark || defaultMark(), m))
+      .map((o) => `${o.id}:${o.state}:${o.generation}:${o.payload.lng}:${o.payload.name}`)
+      .join('|');
+    const preset = snapshot.objects.find((o) => o.kind === 'markPreset' && sameMark(o.payload, m));
+    return `${favs}:${preset?.payload?.name}:${preset?.state}:${item.style?.size}`;
   }
 
   if (kind === 'countdown') {
@@ -288,6 +332,32 @@ export function widgetModel(snapshot, item, { now = Date.now(), deviceTimeZone }
       dayLabel: dayLabel(target, trip),
       count: acts.length,
       items,
+    };
+  }
+
+  if (kind === 'places') {
+    const mark = content.mark || defaultMark();
+    const group = placeGroups(snapshot).find((g) => sameMark(g.mark, mark));
+    const favorites = group?.favorites || [];
+    const stops = favorites.map((f, i) => ({
+      id: f.id,
+      n: i + 1,
+      title: f.payload.name,
+      address: f.payload.address || '',
+      lng: f.payload.lng,
+      lat: f.payload.lat,
+      located: f.payload.lng != null && f.payload.lat != null,
+      sky: { c: markColors[mark.color] || '#b7791f' },
+    }));
+    return {
+      size,
+      title: group ? markGroupName(group) : markGroupName({ mark }),
+      mark,
+      markColorHex: markColors[mark.color] || '#b7791f',
+      markPath: markPaths[mark.icon] || markPaths.star,
+      stops,
+      located: stops.filter((s) => s.located).length,
+      gone: !favorites.length,
     };
   }
 

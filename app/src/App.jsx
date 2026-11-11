@@ -402,6 +402,7 @@ export default function App() {
                       j.setContext({ board: { ...(j.context?.board || {}), ...patch } })
                     }
                     onPeersChange={onBoardPeers}
+                    stickers={j.user?.preferences?.stickers}
                     onNavigate={(targetPage, targetContext) => {
                       j.setContext({ page: targetPage, ...targetContext });
                     }}
