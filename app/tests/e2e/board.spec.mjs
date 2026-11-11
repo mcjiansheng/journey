@@ -14,7 +14,8 @@ test.beforeAll(async () => {
     distPath: fileURLToPath(new URL('../../dist/', import.meta.url)),
     databasePath: ':memory:',
     securityPath: ':memory:',
-    config: { amapKey: '' },
+    // No keys, even when ../.local/amap.json has them: map widgets use tiles.
+    config: { amapKey: '', amapWebKey: '' },
   });
   server = await new Promise((resolve) => {
     const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
