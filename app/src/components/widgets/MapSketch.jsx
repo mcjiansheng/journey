@@ -1,6 +1,23 @@
-import React, { useContext, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { mapSvg, project, geoFit, geoProject, geoTiles } from '../../board.js';
 import { MapDetailContext, staticMapUrl, tileUrl, useStaticMapAvailable } from './map-context.js';
+
+function useOnlineStatus() {
+  const [online, setOnline] = useState(() =>
+    typeof navigator === 'undefined' ? true : navigator.onLine !== false,
+  );
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener('online', up);
+    window.addEventListener('offline', down);
+    return () => {
+      window.removeEventListener('online', up);
+      window.removeEventListener('offline', down);
+    };
+  }, []);
+  return online;
+}
 
 /**
  * Map background for place and route widgets. With real coordinates and map
@@ -48,7 +65,8 @@ export function MapSketch({
     return null;
   }, [lng, lat, ax, ay, located, box, w, h]);
 
-  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  const online = useOnlineStatus();
+  const offline = !online;
   const real = Boolean(detail && view && !offline);
   const mode = !real
     ? 'sketch'

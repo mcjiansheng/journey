@@ -18,19 +18,39 @@ function getDb() {
 export function normalizeBoardItem(item) {
   if (!item) return item;
   const p = item.payload || {};
-  const style = p.style ?? item.style ?? {};
+  const style = item.style ?? p.style ?? {};
   const locked = Boolean(style.locked ?? item.locked);
+  const boardId = item.boardId ?? p.boardId;
+  const frame = item.frame ?? p.frame ?? { x: 0, y: 0, w: 100, h: 100, rotation: 0, scale: 1 };
+  const z = item.z ?? p.z ?? 0;
+  const content = item.content ?? p.content ?? {};
+  const linkedActivityId =
+    item.linkedActivityId !== undefined ? item.linkedActivityId : (p.linkedActivityId ?? null);
+  const createdBy = item.createdBy ?? p.createdBy;
   return {
     ...item,
-    boardId: p.boardId ?? item.boardId,
-    frame: p.frame ?? item.frame ?? { x: 0, y: 0, w: 100, h: 100, rotation: 0, scale: 1 },
-    z: p.z ?? item.z ?? 0,
-    content: p.content ?? item.content ?? {},
+    boardId,
+    frame,
+    z,
+    content,
     style,
     locked,
-    linkedActivityId:
-      p.linkedActivityId !== undefined ? p.linkedActivityId : (item.linkedActivityId ?? null),
-    createdBy: p.createdBy ?? item.createdBy,
+    linkedActivityId,
+    createdBy,
+    ...(item.payload
+      ? {
+          payload: {
+            ...p,
+            boardId,
+            frame,
+            z,
+            content,
+            style,
+            linkedActivityId,
+            createdBy,
+          },
+        }
+      : {}),
   };
 }
 
@@ -563,7 +583,10 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
             updatedAt: now,
           })
         : null;
-      if (updatedItem) expectLocal(itemId, cleaned);
+      if (updatedItem) {
+        expectLocal(itemId, cleaned);
+        itemsRef.current = itemsRef.current.map((it) => (it.id === itemId ? updatedItem : it));
+      }
       setItems((prev) => {
         const next = prev.map((it) => (it.id === itemId && updatedItem ? updatedItem : it));
         writeBoardCache(tripId, boardId, {

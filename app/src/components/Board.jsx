@@ -1165,7 +1165,7 @@ export function Board({
     actionsRect = { x: p.x, y: p.y, w: f.w * view.k, h: f.h * view.k };
   }
 
-  const mapDetail = online && view.k >= 0.4;
+  const mapDetail = view.k >= 0.4;
   const gridSize = (view.k < 0.4 ? 48 : 24) * view.k;
   const empty = !loading && activeItems.length === 0 && uploads.length === 0;
   const topSafe = narrow ? 84 : 76;
