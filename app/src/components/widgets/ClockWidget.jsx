@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { WidgetFrame } from './WidgetFrame.jsx';
+import { sky } from '../../board.js';
 
 export function ClockWidget({ item, model }) {
   const size = model.size || 'S';
@@ -77,6 +78,74 @@ export function ClockWidget({ item, model }) {
     );
   }
 
+  const variant = item.style?.variant || 'plain';
+  const hour = time.h + time.m / 60;
+  const sk = sky(hour);
+  const ss = String(time.s).padStart(2, '0');
+
+  const minimalFace = (
+    <svg className="face mini-face" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="48" className="plate" />
+      {Array.from({ length: 12 }, (_, i) => (
+        <line
+          key={i}
+          x1="50"
+          y1={i % 3 === 0 ? 7 : 8}
+          x2="50"
+          y2={i % 3 === 0 ? 15 : 12}
+          className={i % 3 === 0 ? 'tick major' : 'tick'}
+          transform={`rotate(${i * 30} 50 50)`}
+        />
+      ))}
+      <line
+        x1="50"
+        y1="54"
+        x2="50"
+        y2="28"
+        className="hand h"
+        transform={`rotate(${hDeg} 50 50)`}
+      />
+      <line
+        x1="50"
+        y1="55"
+        x2="50"
+        y2="16"
+        className="hand m"
+        transform={`rotate(${mDeg} 50 50)`}
+      />
+      <line
+        x1="50"
+        y1="58"
+        x2="50"
+        y2="13"
+        className="hand s"
+        transform={`rotate(${sDeg} 50 50)`}
+      />
+      <circle cx="50" cy="50" r="2.4" className="pin" />
+    </svg>
+  );
+  const digitalFace = (
+    <div className="digital">
+      <div className="dg-city">{model.destination}</div>
+      <div className="dg-time">
+        {String(time.h).padStart(2, '0')}
+        <span className="colon">:</span>
+        {String(time.m).padStart(2, '0')}
+        <small>{ss}</small>
+      </div>
+      <div className="dg-sub">{model.diffStr}</div>
+    </div>
+  );
+  const skyFace = (
+    <div className="skyface" style={{ '--a': sk.a, '--b': sk.b }}>
+      <i className="orb" style={{ left: `${sk.x}%`, top: `${sk.y}%`, background: sk.orb }} />
+      <div className="sky-time">{digiStr}</div>
+      <div className="sky-city">
+        {sk.night ? '夜晚' : hour < 11 ? '早上' : hour < 17 ? '白天' : '傍晚'} · {model.destination}
+      </div>
+    </div>
+  );
+
   const face = (
     <>
       <svg className="face" viewBox="0 0 100 100">
@@ -136,8 +205,14 @@ export function ClockWidget({ item, model }) {
       className={`w-clock ${size.toLowerCase()}`}
       ariaLabel={`时钟小组件：${model.destination} ${digiStr}`}
     >
-      {face}
-      {size === 'M' && (
+      {variant === 'digital'
+        ? digitalFace
+        : variant === 'sky'
+          ? skyFace
+          : variant === 'minimal'
+            ? minimalFace
+            : face}
+      {size === 'M' && variant !== 'digital' && variant !== 'sky' && (
         <div className="side">
           <div className="city">{model.destination} 当地时间</div>
           <div className="digi">{digiStr}</div>

@@ -1,11 +1,23 @@
 import React, { useRef, useEffect, useCallback, useLayoutEffect, useState } from 'react';
 import { BoardWidget } from './widgets/index.jsx';
 import { GalleryView, TodoView } from './BoardRichItems.jsx';
-import { pathD, strokeLook, noteColor, assetUrl } from '../board.js';
+import { pathD, strokeLook, noteColor, assetUrl, itemRotation } from '../board.js';
 import { sanitizeRichText, richTextToPlain, plainToRichText } from '../rich-text.js';
 import { widgetEdgeHandles, widgetSize, widgetScale } from '../board-widgets.js';
 
 const SIZE_NAMES = { S: '小', M: '中', L: '大' };
+// Side handles that change one dimension (widgets use their own form handles).
+const SIDES = {
+  text: ['e', 'w'],
+  note: ['n', 'e', 's', 'w'],
+  todo: ['n', 'e', 's', 'w'],
+  section: ['n', 'e', 's', 'w'],
+  gallery: ['n', 'e', 's', 'w'],
+};
+const SIDE_TITLES = {
+  text: '左右拖动改变换行宽度',
+  gallery: '拖动边缘切换比例 1:2 · 9:16 · 3:4 · 1:1 · 4:3 · 16:9 · 2:1',
+};
 // Handle classes are prefixed: bare `sw`/`w` collide with the swatch and
 // widget classes and drew stray circles around the left handles.
 const CORNERS = ['nw', 'ne', 'se', 'sw'];
@@ -18,6 +30,8 @@ export const BoardItem = React.memo(function BoardItem({
   item,
   snapshot,
   selected = false,
+  handles = false,
+  preview = false,
   isEditing = false,
   flash = false,
   peerName = null,
@@ -34,6 +48,9 @@ export const BoardItem = React.memo(function BoardItem({
   onContentChange,
   onGalleryAddImages,
   onAutoHeight,
+  onMeasure,
+  ratioLabel = null,
+  angleLabel = null,
 }) {
   const content = item.content || {};
   const f = item.frame || { x: 0, y: 0, w: 100, h: 100, scale: 1 };
@@ -43,7 +60,30 @@ export const BoardItem = React.memo(function BoardItem({
   const locked = Boolean(style.locked ?? item.locked);
 
   const textRef = useRef(null);
+  const stickerRef = useRef(null);
   const editedRef = useRef(false);
+  // Text: the frame follows the laid-out text, so the selection box always
+  // matches what is on screen (auto width grows as you type; a fixed width
+  // wraps and grows downwards).
+  const [measured, setMeasured] = useState(null);
+  const scale = f.scale || 1;
+  useLayoutEffect(() => {
+    const el = stickerRef.current;
+    if (type !== 'text' || !el) return undefined;
+    const update = () => {
+      const next = {
+        w: Math.max(24, Math.ceil(el.offsetWidth * scale)),
+        h: Math.max(20, Math.ceil(el.offsetHeight * scale)),
+      };
+      setMeasured((m) => (m && m.w === next.w && m.h === next.h ? m : next));
+      onMeasure?.(item.id, next);
+    };
+    update();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [type, scale, item.id, onMeasure]);
   const isNote = type === 'note';
   // Notes are rich text (sanitized on every render, peers included); text
   // stickers stay plain.
@@ -89,16 +129,16 @@ export const BoardItem = React.memo(function BoardItem({
       text = richTextToPlain(html).slice(0, 500);
     }
     let size = null;
-    if (type === 'text') {
+    if (type === 'text' && stickerRef.current) {
       // Grow the frame to the laid-out text (frame = what you see, N-2).
-      const scale = f.scale || 1;
+      const box = stickerRef.current;
       size = {
-        w: Math.max(24, Math.ceil(el.offsetWidth * scale)),
-        h: Math.max(20, Math.ceil(el.offsetHeight * scale)),
+        w: Math.max(24, Math.ceil(box.offsetWidth * scale)),
+        h: Math.max(20, Math.ceil(box.offsetHeight * scale)),
       };
     }
     onCommitText?.(item.id, text, size, html);
-  }, [item.id, type, isNote, f.scale, onCommitText]);
+  }, [item.id, type, isNote, scale, onCommitText]);
 
   // Leaving edit mode by any route (blur, Esc, selecting elsewhere) commits once.
   const prevEditingRef = useRef(isEditing);
@@ -174,13 +214,27 @@ export const BoardItem = React.memo(function BoardItem({
     );
   } else if (type === 'text') {
     const size = style.size || 'body';
+    const auto = style.autoWidth !== false;
     renderedContent = (
       <div
-        className={`text-sticker ${size} v-${style.variant || 'plain'}`}
-        style={{ transform: `scale(${f.scale || 1})` }}
+        ref={stickerRef}
+        className={`text-sticker ${size} v-${style.variant || 'plain'} ${auto ? 'auto' : 'fixed'}`}
+        style={{
+          transform: `scale(${scale})`,
+          width: auto ? undefined : Math.max(24, f.w / scale),
+        }}
       >
         {editable('text-inner', '输入文字')}
       </div>
+    );
+  } else if (type === 'section') {
+    renderedContent = (
+      <SectionBox
+        item={item}
+        isEditing={isEditing}
+        onRename={(title) => onContentChange?.(item.id, { ...content, title })}
+        onDone={() => onEndEditing?.(item.id)}
+      />
     );
   } else if (type === 'emoji') {
     const fontSize = Math.round(Math.min(f.w, f.h) * 0.72);
@@ -239,6 +293,7 @@ export const BoardItem = React.memo(function BoardItem({
       <svg
         className={`stroke-container ${tool === 'highlighter' ? 'highlighter' : ''}`}
         style={{ width: f.w, height: f.h }}
+        overflow="visible"
       >
         <path
           className="stroke-paint"
@@ -264,22 +319,32 @@ export const BoardItem = React.memo(function BoardItem({
   }
 
   const edges = type === 'widget' && !locked ? widgetEdgeHandles(item) : [];
-  const dimLabel = reshape
-    ? SIZE_NAMES[reshape.size]
-    : type === 'widget'
-      ? `${SIZE_NAMES[widgetSize(item)]} · ${Math.round(widgetScale(item) * 100)}%`
-      : `${Math.round(f.w)} × ${Math.round(f.h)}`;
+  const sides = type !== 'widget' && !locked ? SIDES[type] || [] : [];
+  const dimLabel =
+    angleLabel ??
+    ratioLabel ??
+    (reshape
+      ? SIZE_NAMES[reshape.size]
+      : type === 'widget'
+        ? `${SIZE_NAMES[widgetSize(item)]} · ${Math.round(widgetScale(item) * 100)}%`
+        : type === 'text'
+          ? `${Math.round(scale * 100)}%`
+          : `${Math.round(f.w)} × ${Math.round(f.h)}`);
+  // Text shows at its laid-out size; everything else at its frame.
+  const w = type === 'text' && measured ? (style.autoWidth !== false ? measured.w : f.w) : f.w;
+  const h = type === 'text' && measured ? measured.h : f.h;
+  const rotation = itemRotation(item);
+  const canRotate = type !== 'section' && !locked;
 
   return (
     <div
-      className={`board-item item-${type} ${style.tilt ? 'tilted' : ''} ${locked ? 'locked' : ''} ${isEditing ? 'editing' : ''} ${reshape ? 'reshaping' : ''} ${flash ? 'just-added' : ''}`}
+      className={`board-item item-${type} ${locked ? 'locked' : ''} ${isEditing ? 'editing' : ''} ${reshape ? 'reshaping' : ''} ${flash ? 'just-added' : ''} ${selected ? 'is-selected' : ''} ${preview ? 'is-preview' : ''}`}
       data-item-id={item.id}
       style={{
-        transform: `translate(${f.x}px, ${f.y}px)`,
-        width: f.w,
-        height: f.h,
+        transform: `translate(${f.x}px, ${f.y}px)${rotation ? ` rotate(${rotation}deg)` : ''}`,
+        width: w,
+        height: h,
         zIndex: z,
-        ...(style.tilt ? { '--tilt': `${style.tilt}deg` } : {}),
       }}
       onPointerDown={handlePointerDown}
       onDoubleClick={handleDoubleClick}
@@ -299,10 +364,24 @@ export const BoardItem = React.memo(function BoardItem({
       )}
 
       {selected && (
-        <div className="box" style={{ width: f.w, height: f.h }}>
+        <div
+          className={`box ${handles ? 'with-handles' : 'outline'}`}
+          style={{ width: w, height: h }}
+        >
           {locked && <span className="lock">🔒</span>}
-          {(resizing || reshape) && dimLabel && <span className="dim">{dimLabel}</span>}
-          {!locked &&
+          {handles && (resizing || reshape || angleLabel != null) && dimLabel && (
+            <span className="dim">{dimLabel}</span>
+          )}
+          {handles && canRotate && (
+            <div
+              className="handle rotate h-rot"
+              role="presentation"
+              title="拖动旋转，按住 Shift 每次 15°"
+              onPointerDown={(e) => onHandlePointerDown?.(e, item.id, 'rotate')}
+            />
+          )}
+          {handles &&
+            !locked &&
             CORNERS.map((a) => (
               <div
                 key={a}
@@ -310,22 +389,33 @@ export const BoardItem = React.memo(function BoardItem({
                 onPointerDown={(e) => onHandlePointerDown?.(e, item.id, a)}
               />
             ))}
-          {edges.map((a) => (
-            <div
-              key={a}
-              className={`handle edge h-${a}`}
-              role="presentation"
-              title={a === 's' ? '往下拉变成大号，往上收回中号' : '左右拉动切换正方形 / 长方形'}
-              onPointerDown={(e) => onHandlePointerDown?.(e, item.id, `edge-${a}`)}
-            />
-          ))}
+          {handles &&
+            edges.map((a) => (
+              <div
+                key={a}
+                className={`handle edge h-${a}`}
+                role="presentation"
+                title={a === 's' ? '往下拉变成大号，往上收回中号' : '左右拉动切换正方形 / 长方形'}
+                onPointerDown={(e) => onHandlePointerDown?.(e, item.id, `edge-${a}`)}
+              />
+            ))}
+          {handles &&
+            sides.map((a) => (
+              <div
+                key={a}
+                className={`handle edge side h-${a}`}
+                role="presentation"
+                title={SIDE_TITLES[type] || '拖动边缘调整大小'}
+                onPointerDown={(e) => onHandlePointerDown?.(e, item.id, `side-${a}`)}
+              />
+            ))}
         </div>
       )}
 
       {peerName && (
         <div
           className={`box peer ${peerEditing ? 'editing' : ''}`}
-          style={{ width: f.w, height: f.h, '--c': peerColor }}
+          style={{ width: w, height: h, '--c': peerColor }}
         >
           <span className="who">{peerName}</span>
         </div>
@@ -364,6 +454,59 @@ function ImageSticker({ content, frameStyle, src }) {
         />
       )}
       {frameStyle === 'polaroid' && content.caption && <div className="cap">{content.caption}</div>}
+    </div>
+  );
+}
+
+/** 分区: a labelled area. Only its title tab and border take the pointer, so
+ * the canvas inside stays usable (pan, draw, select what is inside). */
+function SectionBox({ item, isEditing, onRename, onDone }) {
+  const style = item.style || {};
+  const title = item.content?.title || '';
+  const [draft, setDraft] = useState(title);
+  const inputRef = useRef(null);
+  useEffect(() => {
+    if (!isEditing) return;
+    setDraft(title);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
+  }, [isEditing]);
+  const commit = () => {
+    const next = draft.trim().slice(0, 40);
+    if (next !== title) onRename(next);
+    onDone();
+  };
+  return (
+    <div
+      className={`section-box ${noteColor(style.color || 'blue')} v-${style.variant || 'plain'}`}
+    >
+      {['t', 'r', 'b', 'l'].map((e) => (
+        <i key={e} className={`section-edge ${e}`} aria-hidden="true" />
+      ))}
+      <div className="section-title">
+        {isEditing ? (
+          <input
+            ref={inputRef}
+            value={draft}
+            maxLength={40}
+            aria-label="分区名称"
+            placeholder="分区名称"
+            onChange={(e) => setDraft(e.target.value)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+              e.stopPropagation();
+              if (e.key === 'Enter') commit();
+              if (e.key === 'Escape') onDone();
+            }}
+            onBlur={commit}
+          />
+        ) : (
+          <span>{title || '未命名分区'}</span>
+        )}
+      </div>
     </div>
   );
 }

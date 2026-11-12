@@ -64,6 +64,99 @@ export function ExpenseWidget({ item, model }) {
   );
 
   const otherCurrencies = Object.keys(model.others || {});
+  const variant = item.style?.variant || 'plain';
+
+  if (variant === 'receipt') {
+    const lines = model.top.slice(0, size === 'S' ? 2 : 4);
+    return (
+      <WidgetFrame
+        item={item}
+        model={model}
+        className={`w-exp ${size.toLowerCase()}`}
+        ariaLabel={`费用小组件：已支付 ${sym}${num}`}
+      >
+        <div className="receipt">
+          <div className="rc-head">旅途小票 · {model.count} 笔</div>
+          <div className="rc-lines">
+            {lines.length ? (
+              lines.map((e, idx) => (
+                <div key={idx} className="rc-line">
+                  <span className="t ellipsis">{e.title}</span>
+                  <span className="v">{e.formatted}</span>
+                </div>
+              ))
+            ) : (
+              <div className="rc-line muted">还没有记账</div>
+            )}
+          </div>
+          <div className="rc-total">
+            <span>合计</span>
+            <b>
+              {sym}
+              {num}
+            </b>
+          </div>
+          {size === 'M' && model.formattedPer && (
+            <div className="rc-foot">人均 {model.formattedPer}</div>
+          )}
+        </div>
+      </WidgetFrame>
+    );
+  }
+  if (variant === 'ring' || variant === 'minimal') {
+    const planned = model.total + (model.est || 0);
+    const frac = planned ? model.total / planned : 0;
+    const c = 2 * Math.PI * 40;
+    return (
+      <WidgetFrame
+        item={item}
+        model={model}
+        className={`w-exp ${size.toLowerCase()}`}
+        ariaLabel={`费用小组件：已支付 ${sym}${num}`}
+      >
+        <div className={variant === 'ring' ? 'exp-ring' : 'exp-mini'}>
+          {variant === 'ring' && (
+            <svg viewBox="0 0 100 100" className="ring-svg">
+              <circle cx="50" cy="50" r="40" className="track" />
+              <circle
+                cx="50"
+                cy="50"
+                r="40"
+                className="bar"
+                strokeDasharray={`${(c * frac).toFixed(1)} ${c.toFixed(1)}`}
+              />
+            </svg>
+          )}
+          <div className="exp-center">
+            <small>已支付</small>
+            <b>
+              <i>{sym}</i>
+              {num}
+            </b>
+            <small>{sub}</small>
+          </div>
+          {size === 'M' && (
+            <div className="exp-side">
+              <div>
+                <em>已付</em>
+                {model.formattedTotal}
+              </div>
+              <div>
+                <em>预计</em>
+                {model.formattedEst || '—'}
+              </div>
+              {model.formattedPer && (
+                <div>
+                  <em>人均</em>
+                  {model.formattedPer}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </WidgetFrame>
+    );
+  }
 
   return (
     <WidgetFrame

@@ -1236,3 +1236,465 @@
   font-size: 10.5px;
   color: var(--muted, #666);
 }
+
+/* ==========================================================================
+   Widget looks (style.variant) — countdown, clock, expense
+   ========================================================================== */
+.w .ring-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.w .ring-svg circle {
+  fill: none;
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+/* 倒计时 · 翻页 */
+.w-count.v-flip {
+  background: linear-gradient(170deg, #26292f, #121418);
+}
+.w-count.v-flip .rings {
+  display: none;
+}
+.w-count .flip-digits {
+  margin-top: auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+.w-count .fd {
+  position: relative;
+  width: 40px;
+  height: 58px;
+  border-radius: 8px;
+  background: linear-gradient(#3a3e46 0 50%, #30343b 50% 100%);
+  box-shadow:
+    inset 0 1px 0 #ffffff1c,
+    0 4px 10px #0006;
+  display: grid;
+  place-items: center;
+}
+.w-count .fd::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: #0009;
+}
+.w-count .fd b {
+  font-size: 40px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #fdf6e3;
+}
+.w-count .flip-digits em {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 6px 4px;
+  opacity: 0.8;
+}
+
+/* 倒计时 · 日历 */
+.w-count.v-calendar {
+  background: #f6f2ea;
+  color: #2b2621;
+}
+.w-count.v-calendar .rings {
+  display: none;
+}
+.w-count.v-calendar .pad {
+  padding: 0;
+}
+.w-count.m.v-calendar .pad {
+  padding: 0 16px 0 0;
+}
+.w-count .cal {
+  position: relative;
+  width: 168px;
+  height: 100%;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.w-count .cal-top {
+  position: relative;
+  width: 100%;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(#e0533e, #c6402c);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+.w-count .cal-top i {
+  position: absolute;
+  top: -6px;
+  width: 8px;
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(#d9d4cb, #a59f95);
+  box-shadow: 0 1px 2px #0004;
+}
+.w-count .cal-top i:first-child {
+  left: 40px;
+}
+.w-count .cal-top i:nth-child(2) {
+  right: 40px;
+}
+.w-count .cal-num {
+  font-size: 70px;
+  font-weight: 800;
+  line-height: 1;
+  margin-top: 10px;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.w-count .cal-unit {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #7a7064;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.w-count.v-calendar .range,
+.w-count.v-calendar .sub {
+  color: #2b2621;
+}
+.w-count.v-calendar .dots i {
+  background: #2b262122;
+}
+.w-count.v-calendar .dots i.on {
+  background: #c6402c;
+}
+
+/* 倒计时 · 圆环 */
+.w-count.v-ring {
+  background: radial-gradient(130% 100% at 0% 0%, #2b5c4c, #13342b);
+}
+.w-count.v-ring .rings {
+  display: none;
+}
+.w-count .ring-face {
+  position: relative;
+  width: 138px;
+  height: 138px;
+  margin: auto;
+}
+.w-count.m .ring-face {
+  margin: auto 0;
+}
+.w-count .ring-face .track {
+  stroke: #ffffff22;
+}
+.w-count .ring-face .bar {
+  stroke: #9be3b8;
+}
+.w-count .ring-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.w-count .ring-text b {
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.w-count .ring-text small {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* 当地时间 · 数字 */
+.w-clock.v-digital {
+  background: linear-gradient(160deg, #1d2a3a, #0d141d);
+}
+.w-clock .digital {
+  position: absolute;
+  inset: 0;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+.w-clock .dg-city {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #7fd1ff;
+  letter-spacing: 0.04em;
+}
+.w-clock .dg-time {
+  font-size: 46px;
+  font-weight: 250;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.w-clock.m .dg-time {
+  font-size: 64px;
+}
+.w-clock .dg-time small {
+  font-size: 15px;
+  font-weight: 500;
+  margin-left: 4px;
+  opacity: 0.55;
+}
+.w-clock .colon {
+  animation: clock-blink 1s steps(1) infinite;
+}
+@keyframes clock-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+.w-clock .dg-sub {
+  font-size: 11.5px;
+  opacity: 0.6;
+}
+
+/* 当地时间 · 极简 */
+.w-clock.v-minimal {
+  background: #f4f3ef;
+  color: #22252a;
+}
+.w-clock .mini-face .plate {
+  fill: #fff;
+  stroke: #0000000f;
+}
+.w-clock .mini-face .tick {
+  stroke: #22252a66;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+.w-clock .mini-face .tick.major {
+  stroke: #22252a;
+  stroke-width: 2;
+}
+.w-clock .mini-face .hand {
+  stroke: #22252a;
+  stroke-linecap: round;
+}
+.w-clock .mini-face .hand.h {
+  stroke-width: 3.6;
+}
+.w-clock .mini-face .hand.m {
+  stroke-width: 2.4;
+}
+.w-clock .mini-face .hand.s {
+  stroke: #e0533e;
+  stroke-width: 1;
+}
+.w-clock .mini-face .pin {
+  fill: #e0533e;
+}
+.w-clock.v-minimal .city {
+  color: #e0533e;
+}
+.w-clock.v-minimal .diff {
+  opacity: 0.55;
+}
+
+/* 当地时间 · 天色 */
+.w-clock .skyface {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(170deg, var(--a), var(--b));
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.w-clock .skyface .orb {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  translate: -50% -50%;
+  box-shadow: 0 0 30px 8px #fff6;
+}
+.w-clock .sky-time {
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 12px #0003;
+}
+.w-clock.m .sky-time {
+  font-size: 60px;
+}
+.w-clock .sky-city {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+/* 费用 · 小票 */
+.w-exp.v-receipt {
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.w-exp .receipt {
+  position: absolute;
+  inset: 0 6px 0;
+  padding: 14px 14px 22px;
+  background: #fffdf7;
+  color: #2a2722;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  filter: drop-shadow(0 8px 12px #0003);
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% /
+    12px 100%;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 12px 100%;
+}
+.w-exp .rc-head {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #7a7468;
+  text-align: center;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed #2a272240;
+}
+.w-exp .rc-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 0;
+}
+.w-exp .rc-line {
+  display: flex;
+  gap: 8px;
+  font-size: 11.5px;
+}
+.w-exp .rc-line .t {
+  flex: 1;
+  min-width: 0;
+}
+.w-exp .rc-line.muted {
+  color: #7a7468;
+}
+.w-exp .rc-total {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-top: 6px;
+  border-top: 1px dashed #2a272240;
+  font-size: 12px;
+}
+.w-exp .rc-total b {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.w-exp .rc-foot {
+  font-size: 10.5px;
+  color: #7a7468;
+  text-align: right;
+}
+
+/* 费用 · 圆环 / 极简 */
+.w-exp.v-ring {
+  background: linear-gradient(160deg, #fff7ec, #fde9d2);
+  color: #3a2a17;
+}
+.w-exp.v-minimal {
+  background: linear-gradient(
+    160deg,
+    var(--accent, #2f6b57),
+    color-mix(in srgb, var(--accent, #2f6b57) 60%, #000)
+  );
+  color: #fff;
+}
+.w-exp .exp-ring,
+.w-exp .exp-mini {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+}
+.w-exp .exp-ring .ring-svg {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  width: 140px;
+  height: 140px;
+}
+.w-exp .exp-ring .track {
+  stroke: #3a2a1720;
+}
+.w-exp .exp-ring .bar {
+  stroke: #e08a2e;
+}
+.w-exp .exp-center {
+  position: relative;
+  width: 140px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.w-exp .exp-mini .exp-center {
+  align-items: flex-start;
+  text-align: left;
+}
+.w-exp .exp-center b {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.w-exp .exp-mini .exp-center b {
+  font-size: 34px;
+}
+.w-exp .exp-center b i {
+  font-style: normal;
+  font-size: 0.55em;
+  margin-right: 1px;
+}
+.w-exp .exp-center small {
+  font-size: 10.5px;
+  opacity: 0.7;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.w-exp .exp-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.w-exp .exp-side em {
+  display: block;
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 600;
+  opacity: 0.65;
+}

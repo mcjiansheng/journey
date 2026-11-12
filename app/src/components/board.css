@@ -109,7 +109,8 @@
   position: absolute;
   left: 0;
   top: 0;
-  transform-origin: 0 0;
+  /* Rotation turns the item around its center; translation is unaffected. */
+  transform-origin: 50% 50%;
   touch-action: none;
   pointer-events: auto;
 }
@@ -207,25 +208,26 @@
   position: absolute;
   left: 0;
   top: 0;
-  /* Lay the text out at its natural width, not the (initially narrow) frame:
-     otherwise the first characters stack one per line until the frame is
-     committed and grows. The inner span still caps at 480px, and the extra
-     layout width must not swallow clicks meant for the canvas. */
-  width: 480px;
-  pointer-events: none;
+  /* Auto width: as wide as the longest line (Enter starts a new one). Fixed
+     width (after dragging a side handle): wraps and grows downwards. Either
+     way the item's box is the laid-out size, so the selection matches. */
+  width: max-content;
   transform-origin: 0 0;
   color: var(--text);
   line-height: 1.35;
 }
 .text-sticker .text-inner {
-  display: inline-block;
+  display: block;
   min-width: 2ch;
-  max-width: 480px;
   padding: 4px;
-  white-space: pre-wrap;
-  word-break: break-word;
   outline: none;
-  pointer-events: auto;
+}
+.text-sticker.auto .text-inner {
+  white-space: pre;
+}
+.text-sticker.fixed .text-inner {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .board-item.editing .text-inner {
   cursor: text;
@@ -1653,9 +1655,6 @@
 }
 
 /* Tilt ("歪一点") turns the content, never the positioned item. */
-.board-item.tilted > :first-child {
-  rotate: var(--tilt, 0deg);
-}
 
 /* ---------- Rich note text ---------- */
 .note-card.fs-s {
@@ -2752,4 +2751,533 @@
 }
 .ghost-card.todo {
   background: var(--note-yellow);
+}
+
+/* ==========================================================================
+   Third pass: selection, rotation, box select, sections, menus (2026-11-12)
+   ========================================================================== */
+#stage[data-tool='marquee'],
+#stage[data-tool='marquee'] .board-item {
+  cursor: crosshair;
+}
+#stage[data-tool='marquee'] .board-item :is(.handle, .gallery-nav, .todo-check) {
+  pointer-events: none;
+}
+
+/* Selected among several: a light outline; the group box carries the handles. */
+.box.outline {
+  border-style: solid;
+  border-width: calc(1px * var(--ik));
+  opacity: 0.8;
+}
+.handle.h-n {
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%) scale(var(--ik));
+  cursor: ns-resize;
+}
+.handle.h-n::after {
+  width: 22px;
+  height: 6px;
+}
+/* Plain side handles: a slim white capsule, so they read as "stretch". */
+.handle.side::after {
+  background: var(--surface);
+  border-color: var(--accent);
+  border-width: 1.5px;
+}
+.handle.rotate {
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%) translateY(calc(-30px * var(--ik))) scale(var(--ik));
+  cursor: grab;
+}
+.handle.rotate:active {
+  cursor: grabbing;
+}
+.handle.rotate::after {
+  width: 15px;
+  height: 15px;
+  background: var(--accent)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M12.5 8A4.5 4.5 0 1 1 8 3.5h2.5M9 1.8l1.7 1.7L9 5.2' fill='none' stroke='white' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / 11px no-repeat;
+  border-color: var(--surface);
+}
+.handle.rotate::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 30px;
+  width: 1.5px;
+  height: 22px;
+  translate: -50% 0;
+  background: var(--accent);
+  opacity: 0.6;
+}
+.box .dim {
+  z-index: 2;
+}
+
+/* Several selected: one box around all of them. */
+.group-box {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: calc(1.5px * var(--ik)) dashed var(--accent);
+  border-radius: calc(8px * var(--ik));
+  pointer-events: none;
+  z-index: 99997;
+}
+.group-box .count {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  transform: translateY(calc(8px * var(--ik))) scale(var(--ik));
+  transform-origin: 0 0;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 11px;
+  font-weight: 650;
+  padding: 4px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.marquee {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: calc(1px * var(--ik)) solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-radius: calc(4px * var(--ik));
+  pointer-events: none;
+  z-index: 99998;
+}
+.guide {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 99998;
+  background: var(--guide, #e5487d);
+}
+.guide.x {
+  width: calc(1px * var(--ik));
+}
+.guide.y {
+  height: calc(1px * var(--ik));
+}
+
+/* Object being dragged out of the panel: on the board, lifted. */
+.board-item.is-preview {
+  pointer-events: none;
+  opacity: 0.94;
+  filter: drop-shadow(0 calc(16px * var(--ik)) calc(18px * var(--ik)) #0003);
+}
+.board-item.is-preview * {
+  pointer-events: none !important;
+}
+
+/* ---------- Sections (分区) ---------- */
+.board-item.item-section {
+  pointer-events: none;
+}
+.section-box {
+  position: absolute;
+  inset: 0;
+  border-radius: calc(18px * min(1, var(--ik)));
+  --sc: var(--note-blue);
+  background: color-mix(in srgb, var(--sc) 30%, transparent);
+  border: calc(1.5px * var(--ik)) solid color-mix(in srgb, var(--sc) 70%, var(--text) 18%);
+}
+.section-box.yellow {
+  --sc: var(--note-yellow);
+}
+.section-box.green {
+  --sc: var(--note-green);
+}
+.section-box.blue {
+  --sc: var(--note-blue);
+}
+.section-box.pink {
+  --sc: var(--note-pink);
+}
+.section-box.purple {
+  --sc: var(--note-purple);
+}
+.section-box.gray {
+  --sc: var(--note-gray);
+}
+.section-box.v-dashed {
+  background: color-mix(in srgb, var(--sc) 10%, transparent);
+  border-style: dashed;
+  border-width: calc(2px * var(--ik));
+}
+.section-box.v-solid {
+  background: color-mix(in srgb, var(--sc) 18%, transparent);
+}
+/* The border is grabbable: a band along each edge takes the pointer. */
+.section-edge {
+  position: absolute;
+  pointer-events: auto;
+  cursor: move;
+  --band: calc(12px * var(--ik));
+}
+.section-edge.t,
+.section-edge.b {
+  left: 0;
+  right: 0;
+  height: var(--band);
+}
+.section-edge.t {
+  top: calc(var(--band) / -2);
+}
+.section-edge.b {
+  bottom: calc(var(--band) / -2);
+}
+.section-edge.l,
+.section-edge.r {
+  top: 0;
+  bottom: 0;
+  width: var(--band);
+}
+.section-edge.l {
+  left: calc(var(--band) / -2);
+}
+.section-edge.r {
+  right: calc(var(--band) / -2);
+}
+.section-title {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  transform-origin: 0 100%;
+  transform: scale(max(1, calc(var(--ik) * 0.75)));
+  margin-bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  max-width: max(240px, 60%);
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--sc) 85%, var(--surface));
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: move;
+  box-shadow: 0 1px 2px #0001;
+}
+.section-box.v-solid .section-title {
+  background: color-mix(in srgb, var(--sc) 55%, var(--text) 45%);
+  color: var(--surface);
+}
+.section-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.section-title input {
+  width: 200px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+/* ---------- Action bar (top) and arrange rail (side) ---------- */
+.act-ic {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+.act-ic .fill {
+  fill: color-mix(in srgb, currentColor 22%, var(--surface));
+}
+.act-ic circle {
+  fill: currentColor;
+  stroke: none;
+}
+#actions {
+  gap: 2px;
+  padding: 4px;
+}
+#actions .ib,
+#arrange .ib,
+.style-pop .ib {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+#actions .ib:hover,
+#arrange .ib:hover,
+.style-pop .ib:hover {
+  background: var(--selected);
+}
+#actions .ib[aria-pressed='true'],
+#actions .ib[aria-expanded='true'],
+#arrange .ib[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+#actions .ib.danger,
+#arrange .ib.danger {
+  color: var(--danger);
+}
+#actions .ib:disabled,
+.style-pop .ib:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+#actions .primary.text {
+  height: 38px;
+  padding: 0 14px;
+  font-weight: 650;
+}
+#actions .sep,
+#arrange .sep {
+  flex: none;
+  background: var(--line);
+}
+#actions .sep {
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+}
+#actions .sel-count {
+  padding: 0 10px 0 8px;
+  font-size: var(--fs-caption);
+  font-weight: 650;
+  color: var(--muted);
+  white-space: nowrap;
+}
+#actions .color-btn .dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 1px #0002,
+    0 0 0 2px var(--surface),
+    0 0 0 3px var(--line);
+}
+#arrange {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 14px;
+  animation: board-fade-in 0.15s ease-out both;
+  transition: opacity 0.15s ease-out 0.15s;
+}
+#arrange.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transition-delay: 0s;
+  transition-duration: 0.1s;
+}
+#arrange .sep {
+  height: 1px;
+  width: 22px;
+  margin: 3px auto;
+}
+.style-pop .sw {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 0;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px #0002;
+}
+.style-pop .sw[aria-pressed='true'] {
+  box-shadow:
+    inset 0 0 0 1px #0002,
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--accent);
+}
+
+/* ---------- Right-click menu ---------- */
+.context-menu {
+  min-width: 212px;
+  padding: 6px;
+  border-radius: 14px;
+  z-index: 130;
+  animation: board-fade-in 0.1s ease-out both;
+}
+.cm-row {
+  position: relative;
+}
+.cm-item {
+  width: 100%;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--text);
+  font-size: var(--fs-meta);
+  text-align: left;
+  cursor: pointer;
+}
+.cm-item:hover,
+.cm-item:focus-visible,
+.cm-item[aria-expanded='true'] {
+  background: var(--selected);
+  outline: none;
+}
+.cm-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.cm-item.danger {
+  color: var(--danger);
+}
+.cm-icon {
+  width: 19px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--muted);
+}
+.cm-item.danger .cm-icon {
+  color: inherit;
+}
+.cm-label {
+  flex: 1;
+  white-space: nowrap;
+}
+.cm-item kbd {
+  font-family: inherit;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.cm-more {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  color: var(--muted);
+}
+.cm-sep {
+  height: 1px;
+  margin: 5px 8px;
+  background: var(--line);
+}
+.cm-sub {
+  position: absolute;
+  left: calc(100% + 4px);
+  top: -6px;
+  min-width: 160px;
+  padding: 6px;
+  border-radius: 14px;
+}
+
+/* ---------- Panel: drag out / back, sections, 未分类 ---------- */
+#panel {
+  transition: opacity 0.15s ease-out;
+}
+#panel.dragging-out {
+  opacity: 0.55;
+}
+#panel.drop-back {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 6px 24px var(--optical-shadow);
+}
+.drag-back-hint {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  translate: -50% 0;
+  z-index: 3;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--fs-caption);
+  font-weight: 650;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.create-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.section-art {
+  display: block;
+  border-radius: 8px;
+  border: 1.5px solid color-mix(in srgb, var(--note-blue) 70%, var(--text) 20%);
+  background: color-mix(in srgb, var(--note-blue) 35%, transparent);
+}
+.section-art b {
+  position: absolute;
+  left: 4px;
+  top: -9px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  background: var(--note-blue);
+  color: var(--text);
+}
+.section-art i {
+  position: absolute;
+  width: 20px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--note-yellow);
+  box-shadow: 0 1px 2px #0002;
+}
+.section-art i:nth-of-type(1) {
+  left: 10px;
+  top: 18px;
+}
+.section-art i:nth-of-type(2) {
+  left: 38px;
+  top: 24px;
+  background: var(--note-pink);
+}
+.mark-chip.unsorted {
+  border-style: dashed;
+}
+.unsorted-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--muted);
+  box-sizing: border-box;
+  flex: none;
+}
+.unsorted-hint {
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+}
+
+/* Checklists keep their height when shorter content fits; longer lists scroll. */
+.todo-sticker .todo-view {
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }

@@ -663,6 +663,8 @@ test('board: rich notes, gallery, todo, place groups, sticker styles and the per
   );
   assert.equal(r.status, 200, JSON.stringify(r.data));
   r = await create({ type: 'gallery', images: [] }, { ratio: '2:1' });
+  assert.equal(r.status, 200, 'edge snapping reaches 1:2 and 2:1');
+  r = await create({ type: 'gallery', images: [] }, { ratio: '5:4' });
   assert.equal(r.status, 422);
   r = await create({ type: 'todo', title: '出发前', items: [{ id: randomUUID(), text: '换外币', done: true }] }, { color: 'green', variant: 'paper' });
   assert.equal(r.status, 200, JSON.stringify(r.data));
@@ -703,4 +705,63 @@ test('board: rich notes, gallery, todo, place groups, sticker styles and the per
   assert.equal((r.data.user || r.data).preferences.stickers.length, 0);
   r = await f.req(`/api/me/stickers/${randomUUID()}`, { actor: a, method: 'PUT', body: Buffer.from('nope'), headers: { 'content-type': 'image/png' } });
   assert.equal(r.status, 415);
+});
+
+test('board: sections, rotation, widget looks, auto-width text and saving a board picture as a sticker', async t => {
+  const f = await fixture(t);
+  const a = await f.account('erin');
+  const s = await f.trip(a);
+  const tid = s.trip.id;
+  const boardId = randomUUID();
+  await f.op(a, tid, { objectId: boardId, kind: 'create', objectType: 'board', patch: { title: '分区板', order: 0 } });
+  const create = (content, style = {}, frame = { x: 0, y: 0, w: 200, h: 200, rotation: 0, scale: 1 }) =>
+    f.op(a, tid, { objectId: randomUUID(), kind: 'create', objectType: 'boardItem', patch: { boardId, frame, z: 1, content, style } });
+
+  let r = await create({ type: 'section', title: '第1天' }, { color: 'blue', variant: 'dashed' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await create({ type: 'section', title: 'x' }, {});
+  assert.equal(r.status, 422, 'a section needs a color');
+  r = await create({ type: 'section', title: 'x' }, { color: 'blue', variant: 'kraft' });
+  assert.equal(r.status, 422);
+  // Real rotation lives on the frame
+  r = await create({ type: 'note', text: '' }, { color: 'pink' }, { x: 0, y: 0, w: 200, h: 200, rotation: -37.5, scale: 1 });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  // Widget looks are checked per kind
+  r = await create({ type: 'widget', kind: 'countdown' }, { size: 'S', variant: 'flip' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await create({ type: 'widget', kind: 'clock' }, { size: 'M', variant: 'sky' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await create({ type: 'widget', kind: 'expense' }, { size: 'S', variant: 'receipt' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await create({ type: 'widget', kind: 'clock' }, { size: 'S', variant: 'receipt' });
+  assert.equal(r.status, 422);
+  // Text: auto width only for text
+  r = await create({ type: 'text', text: '你好' }, { size: 'body', autoWidth: true });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await create({ type: 'note', text: '' }, { color: 'pink', autoWidth: false });
+  assert.equal(r.status, 422);
+
+  // A picture on the board goes into my sticker library (once).
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cfc0f01f0005000201b4a3c6d50000000049454e44ae426082', 'hex');
+  const assetId = randomUUID();
+  r = await f.req(`/api/trips/${tid}/assets/${assetId}?variant=full`, { actor: a, method: 'PUT', body: png, headers: { 'content-type': 'image/png' } });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await f.req(`/api/trips/${tid}/assets/${assetId}/to-stickers?w=1&h=1`, { actor: a, method: 'POST' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.mime, 'image/png');
+  const saved = r.data.id;
+  r = await f.req(`/api/trips/${tid}/assets/${assetId}/to-stickers?w=1&h=1`, { actor: a, method: 'POST' });
+  assert.equal(r.data.duplicate, true);
+  assert.equal(r.data.id, saved);
+  r = await f.req(`/api/me/stickers/${saved}`, { actor: a });
+  assert.equal(r.status, 200);
+  // Uploading the same file again is not a second copy either.
+  r = await f.req(`/api/me/stickers/${randomUUID()}?w=1&h=1`, { actor: a, method: 'PUT', body: png, headers: { 'content-type': 'image/png' } });
+  assert.equal(r.data.duplicate, true);
+  // Someone outside the trip cannot copy its pictures.
+  const b = await f.account('frank');
+  r = await f.req(`/api/trips/${tid}/assets/${assetId}/to-stickers`, { actor: b, method: 'POST' });
+  assert.ok([403, 404].includes(r.status), String(r.status));
+  r = await f.req(`/api/trips/${tid}/assets/${randomUUID()}/to-stickers`, { actor: a, method: 'POST' });
+  assert.equal(r.status, 404);
 });

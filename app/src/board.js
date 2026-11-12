@@ -205,6 +205,12 @@ export function scaled(item, frame0, bbox0, sx, sy, anchor = 'se') {
   if (type === 'note') {
     w = clamp(bbox0.w * sx, 100, 900);
     h = clamp(bbox0.h * sy, 80, 900);
+  } else if (type === 'todo') {
+    w = clamp(bbox0.w * sx, 160, 900);
+    h = clamp(bbox0.h * sy, 100, 1200);
+  } else if (type === 'section') {
+    w = clamp(bbox0.w * sx, 160, 8000);
+    h = clamp(bbox0.h * sy, 100, 8000);
   } else if (type === 'widget') {
     const size = widgetSize(item);
     const base = WIDGET_SIZES[size] || [168, 168];
@@ -457,7 +463,36 @@ export const STYLE_VARIANTS = {
     ['paper', '便签纸'],
     ['glass', '玻璃'],
   ],
+  section: [
+    ['plain', '浅底'],
+    ['dashed', '虚线框'],
+    ['solid', '实色标题'],
+  ],
+  // Widgets are keyed by their kind.
+  countdown: [
+    ['plain', '渐变'],
+    ['flip', '翻页'],
+    ['calendar', '日历'],
+    ['ring', '圆环'],
+  ],
+  clock: [
+    ['plain', '表盘'],
+    ['digital', '数字'],
+    ['minimal', '极简'],
+    ['sky', '天色'],
+  ],
+  expense: [
+    ['plain', '卡片'],
+    ['receipt', '小票'],
+    ['ring', '圆环'],
+    ['minimal', '极简'],
+  ],
 };
+/** Variant list for an item: widgets by kind, everything else by type. */
+export function variantsFor(item) {
+  const type = item?.content?.type;
+  return STYLE_VARIANTS[type === 'widget' ? item.content.kind : type] || null;
+}
 export const IMAGE_FRAMES = [
   ['none', '无边框'],
   ['polaroid', '拍立得'],
@@ -467,7 +502,7 @@ export const IMAGE_FRAMES = [
   ['card', '卡片'],
   ['sticker', '透明贴纸'],
 ];
-export const GALLERY_RATIOS = ['1:1', '3:4', '4:3', '16:9', '9:16'];
+export const GALLERY_RATIOS = ['1:1', '3:4', '4:3', '16:9', '9:16', '1:2', '2:1'];
 // Style fields the board may patch. Keep in sync with the style schema in
 // server/model.mjs; the sync layer drops everything else before saving.
 export const BOARD_STYLE_KEYS = [
@@ -478,6 +513,7 @@ export const BOARD_STYLE_KEYS = [
   'fontSize',
   'tilt',
   'ratio',
+  'autoWidth',
   'locked',
 ];
 /** Drop style fields the board does not know before they reach the server. */
@@ -507,11 +543,13 @@ export function galleryFrameSize(w, ratio, frameStyle = 'none') {
   const inner = Math.max(40, w - pl - pr);
   return { w: Math.round(w), h: Math.round(inner / ratioValue(ratio) + pt + pb) };
 }
-// A few gentle angles people can cycle through ("歪一点").
-export const TILTS = [0, -4, 3, -2, 5];
-export function nextTilt(tilt = 0) {
-  const i = TILTS.indexOf(tilt);
-  return TILTS[(i + 1) % TILTS.length];
+/**
+ * Angle an item is drawn at. Older stickers kept a decorative `style.tilt`;
+ * rotation replaced it, so a tilt still shows until the item is rotated.
+ */
+export function itemRotation(item) {
+  const r = item?.frame?.rotation || 0;
+  return r || item?.style?.tilt || 0;
 }
 
 export function assetUrl(tripId, assetId, variant = 'full') {

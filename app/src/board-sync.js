@@ -117,19 +117,52 @@ export async function writeBoardCache(tripId, boardId, data) {
   }
 }
 
-export async function processImageFile(file, { keepAlpha = false } = {}) {
-  const isGif = file.type === 'image/gif' || file.name?.toLowerCase().endsWith('.gif');
-  if (isGif) {
-    if (file.size > 5 * 1024 * 1024) {
-      throw new Error('GIF 图片不能超过 5MB');
-    }
-  } else {
-    if (file.size > 20 * 1024 * 1024) {
-      throw new Error('图片文件过大');
+// Server limits (server/index.mjs): stills ≤ 1.5MB, GIFs ≤ 5MB, thumbnails ≤ 300KB.
+// Stay a little under them so a re-encode that lands right on the edge passes.
+const FULL_LIMIT = Math.round(1.4 * 1024 * 1024);
+const GIF_LIMIT = 5 * 1024 * 1024;
+const THUMB_LIMIT = 280 * 1024;
+
+function canvasBlob(canvas, type, quality) {
+  return new Promise((r) => canvas.toBlob(r, type, quality));
+}
+function drawScaled(img, w, h) {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(w));
+  canvas.height = Math.max(1, Math.round(h));
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+/**
+ * Re-encode until the file fits: lower quality first, then smaller sizes.
+ * `types` are tried in order; a browser that cannot encode one (Safari has no
+ * WebP encoder and returns PNG) falls through to the next.
+ */
+async function encodeUnder(img, { maxSide, types, limit }) {
+  const w0 = img.naturalWidth || img.width || 400;
+  const h0 = img.naturalHeight || img.height || 300;
+  let last = null;
+  for (const side of [maxSide, maxSide * 0.75, maxSide * 0.5, maxSide * 0.35, maxSide * 0.25]) {
+    const k = Math.min(1, side / Math.max(w0, h0));
+    const canvas = drawScaled(img, w0 * k, h0 * k);
+    for (const type of types) {
+      const lossy = type !== 'image/png';
+      for (const q of lossy ? [0.88, 0.76, 0.62, 0.5] : [undefined]) {
+        const blob = await canvasBlob(canvas, type, q);
+        if (!blob || blob.type !== type) break;
+        last = blob;
+        if (blob.size <= limit) return blob;
+      }
     }
   }
+  return last;
+}
 
-  // In browser, create image element and extract dimensions & thumbnails
+export async function processImageFile(file, { keepAlpha = false } = {}) {
+  const isGif = file.type === 'image/gif' || file.name?.toLowerCase().endsWith('.gif');
+  if (file.size > 40 * 1024 * 1024) throw new Error('图片文件过大（超过 40MB）');
+
+  // Outside the browser (tests): pass the file through.
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return {
       fullBlob: file,
@@ -146,28 +179,25 @@ export async function processImageFile(file, { keepAlpha = false } = {}) {
     const img = await new Promise((resolve, reject) => {
       const el = new Image();
       el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error('图片解析失败'));
+      el.onerror = () => reject(new Error('这张图片无法读取，换一张试试'));
       el.src = url;
     });
-
     const origW = img.naturalWidth || img.width || 400;
     const origH = img.naturalHeight || img.height || 300;
 
-    // Thumbnail: max 400px
-    const thumbScale = Math.min(1, 400 / Math.max(origW, origH));
-    const thumbW = Math.max(1, Math.round(origW * thumbScale));
-    const thumbH = Math.max(1, Math.round(origH * thumbScale));
-    const canvasThumb = document.createElement('canvas');
-    canvasThumb.width = thumbW;
-    canvasThumb.height = thumbH;
-    const ctxThumb = canvasThumb.getContext('2d');
-    ctxThumb.drawImage(img, 0, 0, thumbW, thumbH);
-    const thumbBlob = await new Promise((r) => canvasThumb.toBlob(r, 'image/webp', 0.8));
+    // Thumbnail: a still (first frame for GIFs), always under the server limit.
+    const thumbBlob = await encodeUnder(img, {
+      maxSide: 400,
+      types: ['image/webp', 'image/jpeg'],
+      limit: THUMB_LIMIT,
+    });
 
-    if (isGif) {
+    // GIFs keep their animation when they fit; a larger one becomes a still
+    // picture instead of failing.
+    if (isGif && file.size <= GIF_LIMIT) {
       return {
         fullBlob: file,
-        thumbBlob: thumbBlob || file,
+        thumbBlob,
         width: origW,
         height: origH,
         isGif: true,
@@ -175,68 +205,34 @@ export async function processImageFile(file, { keepAlpha = false } = {}) {
       };
     }
 
-    // Stickers keep their transparency: a PNG/WebP stays a PNG instead of being
-    // flattened into an opaque JPEG (which showed a black background).
-    if (keepAlpha && (file.type === 'image/png' || file.type === 'image/webp')) {
-      if (file.size <= 5 * 1024 * 1024 && Math.max(origW, origH) <= 1024) {
-        return {
-          fullBlob: file,
-          thumbBlob: file,
-          width: origW,
-          height: origH,
-          isGif: false,
-          mime: file.type,
-        };
-      }
-      const scale = Math.min(1, 1024 / Math.max(origW, origH));
-      const w = Math.max(1, Math.round(origW * scale));
-      const h = Math.max(1, Math.round(origH * scale));
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+    const alpha = keepAlpha && /image\/(png|webp|gif)/.test(file.type);
+    // Small enough already: keep the original bytes (no quality loss).
+    if (
+      !isGif &&
+      file.size <= FULL_LIMIT &&
+      Math.max(origW, origH) <= 2048 &&
+      /image\/(png|jpeg|webp)/.test(file.type)
+    ) {
       return {
-        fullBlob: blob || file,
-        thumbBlob: blob || file,
+        fullBlob: file,
+        thumbBlob,
         width: origW,
         height: origH,
         isGif: false,
-        mime: 'image/png',
+        mime: file.type,
       };
     }
-
-    // Static image: clamp to max 2048px
-    const fullScale = Math.min(1, 2048 / Math.max(origW, origH));
-    const fullW = Math.max(1, Math.round(origW * fullScale));
-    const fullH = Math.max(1, Math.round(origH * fullScale));
-    const canvasFull = document.createElement('canvas');
-    canvasFull.width = fullW;
-    canvasFull.height = fullH;
-    const ctxFull = canvasFull.getContext('2d');
-    ctxFull.drawImage(img, 0, 0, fullW, fullH);
-    const fullBlob = await new Promise((r) => canvasFull.toBlob(r, 'image/jpeg', 0.88));
-
-    if (fullBlob && fullBlob.size > 1.5 * 1024 * 1024) {
-      // Re-compress if over 1.5MB
-      const compressed = await new Promise((r) => canvasFull.toBlob(r, 'image/jpeg', 0.7));
-      return {
-        fullBlob: compressed || fullBlob,
-        thumbBlob: thumbBlob || file,
-        width: origW,
-        height: origH,
-        isGif: false,
-        mime: 'image/jpeg',
-      };
-    }
-
+    const types = alpha ? ['image/webp', 'image/png'] : ['image/jpeg'];
+    const fullBlob = await encodeUnder(img, { maxSide: 2048, types, limit: FULL_LIMIT });
+    if (!fullBlob || fullBlob.size > FULL_LIMIT) throw new Error('图片压缩后仍然太大，换一张试试');
     return {
-      fullBlob: fullBlob || file,
-      thumbBlob: thumbBlob || file,
+      fullBlob,
+      thumbBlob,
       width: origW,
       height: origH,
       isGif: false,
-      mime: 'image/jpeg',
+      mime: fullBlob.type,
+      converted: isGif,
     };
   } finally {
     URL.revokeObjectURL(url);
@@ -259,7 +255,7 @@ export async function uploadAsset(tripId, file, { keepAlpha = false } = {}) {
   await api(`/api/trips/${tripId}/assets/${assetId}?variant=thumb`, {
     method: 'PUT',
     raw: true,
-    headers: { 'Content-Type': 'image/webp' },
+    headers: { 'Content-Type': processed.thumbBlob?.type || 'image/webp' },
     body: processed.thumbBlob,
   });
 
@@ -269,6 +265,7 @@ export async function uploadAsset(tripId, file, { keepAlpha = false } = {}) {
     height: processed.height,
     isGif: processed.isGif,
     mime: processed.mime,
+    converted: Boolean(processed.converted),
   };
 }
 

@@ -5,8 +5,8 @@ import { placeGroups, markGroupName, widgetModel, widgetDeps } from '../src/boar
 import {
   galleryFrameSize,
   GALLERY_PADDING,
-  nextTilt,
-  TILTS,
+  itemRotation,
+  variantsFor,
   ratioValue,
   STYLE_VARIANTS,
   IMAGE_FRAMES,
@@ -67,17 +67,44 @@ const snapshot = {
   ],
 };
 
-test('places: favourites are grouped by mark, ordered by preset', () => {
+test('places: only presets make a category, everything else is 未分类', () => {
   const groups = placeGroups(snapshot);
   assert.deepEqual(
-    groups.map((g) => [markGroupName(g), g.favorites.map((f) => f.id)]),
+    groups.map((g) => [markGroupName(g), g.preset, g.favorites.map((f) => f.id)]),
     [
-      ['想去', ['f1', 'f3']],
-      ['美食', ['f2']],
-      [markGroupName(groups[2]), ['f4']],
+      ['想去', true, ['f1', 'f3']],
+      ['美食', true, ['f2']],
+      ['未分类', false, ['f4']],
     ],
   );
-  assert.ok(markGroupName(groups[2]).length > 0);
+  // A mark nobody saved as a preset is not a category of its own.
+  const loose = {
+    ...snapshot,
+    objects: [...snapshot.objects, fav('f6', '随便', { icon: 'flag', color: 'blue' })],
+  };
+  const last = placeGroups(loose).at(-1);
+  assert.equal(markGroupName(last), '未分类');
+  assert.deepEqual(
+    last.favorites.map((f) => f.id),
+    ['f4', 'f6'],
+  );
+  // Presets with no places are left out.
+  const empty = {
+    ...snapshot,
+    objects: [
+      ...snapshot.objects,
+      {
+        id: 'p3',
+        kind: 'markPreset',
+        state: 'active',
+        payload: { name: '空', icon: 'flag', color: 'red', order: 2 },
+      },
+    ],
+  };
+  assert.equal(
+    placeGroups(empty).some((g) => g.name === '空'),
+    false,
+  );
 });
 
 test('places widget: one map for a whole group, follows its favourites', () => {
@@ -117,10 +144,15 @@ test('gallery frame keeps the photo ratio inside each border', () => {
   assert.equal(ratioValue('bad'), 1);
 });
 
-test('tilt cycles back to straight', () => {
-  let t = 0;
-  for (let i = 0; i < TILTS.length; i++) t = nextTilt(t);
-  assert.equal(t, 0);
+test('rotation replaces the old tilt; widgets get looks by kind', () => {
+  assert.equal(itemRotation({ frame: { rotation: 0 }, style: { tilt: -4 } }), -4);
+  assert.equal(itemRotation({ frame: { rotation: 30 }, style: { tilt: -4 } }), 30);
+  assert.equal(itemRotation({ frame: {}, style: {} }), 0);
+  assert.deepEqual(
+    variantsFor({ content: { type: 'widget', kind: 'clock' } }).map(([id]) => id),
+    ['plain', 'digital', 'minimal', 'sky'],
+  );
+  assert.equal(variantsFor({ content: { type: 'widget', kind: 'route' } }), null);
 });
 
 test('board patches keep every style the UI can set', () => {
@@ -155,6 +187,8 @@ test('client style choices are accepted by the server schema', () => {
     for (const [id] of list) assert.ok(BOARD_VARIANTS[type]?.includes(id), `${type}.${id}`);
   for (const [id] of IMAGE_FRAMES) assert.ok(SERVER_FRAMES.includes(id), id);
   assert.ok(GALLERY_RATIOS.includes('16:9') && GALLERY_RATIOS.includes('9:16'));
+  for (const r of ['1:2', '9:16', '3:4', '1:1', '4:3', '16:9', '2:1'])
+    assert.ok(GALLERY_RATIOS.includes(r), r);
 });
 
 test('emoji library: categories, unique entries and Chinese keywords', () => {

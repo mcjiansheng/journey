@@ -75,8 +75,7 @@ export function BoardStickerPanel({
   onDockChange,
   narrow = false,
   onAdd,
-  onDropOnCanvas,
-  onUploadImage,
+  onDragSpec,
   stickers = [],
   onUploadSticker,
   onRemoveSticker,
@@ -87,11 +86,10 @@ export function BoardStickerPanel({
   const [dockDrag, setDockDrag] = useState(null); // { x, y, target }
   const [dockMenu, setDockMenu] = useState(false);
   const [announce, setAnnounce] = useState('');
-  const [itemDrag, setItemDrag] = useState(null); // { spec, x, y }
+  const [itemDrag, setItemDrag] = useState(null); // { spec, x, y, over }
   const [dayId, setDayId] = useState(null);
   const [placeKey, setPlaceKey] = useState(null);
   const [recentEmoji, setRecentEmoji] = useState(loadRecent);
-  const fileInputRef = useRef(null);
   const panelRef = useRef(null);
   const dockGestureRef = useRef(null);
   const itemGestureRef = useRef(null);
@@ -231,6 +229,13 @@ export function BoardStickerPanel({
       return next;
     });
   };
+  const isOverPanel = (x, y) => {
+    const r = panelRef.current?.getBoundingClientRect();
+    return Boolean(r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom);
+  };
+  // Dragging an item: outside the panel the board shows the real object under
+  // the pointer (Board does that through onDragSpec); back over the panel a
+  // small ghost follows and letting go puts it back.
   const itemHandlers = (spec) => ({
     onPointerDown: (e) => {
       if (e.button !== 0) return;
@@ -244,29 +249,34 @@ export function BoardStickerPanel({
       if (!g) return;
       if (!g.started && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < DRAG_THRESHOLD) return;
       g.started = true;
-      setItemDrag({ spec, x: e.clientX, y: e.clientY });
+      const over = isOverPanel(e.clientX, e.clientY);
+      g.next = { x: e.clientX, y: e.clientY, over };
+      if (g.raf) return;
+      g.raf = requestAnimationFrame(() => {
+        g.raf = 0;
+        if (itemGestureRef.current !== g) return;
+        const { x, y, over: o } = g.next;
+        setItemDrag({ spec, x, y, over: o });
+        onDragSpec?.({ phase: 'move', spec, clientX: x, clientY: y, overPanel: o });
+      });
     },
     onPointerUp: (e) => {
       const g = itemGestureRef.current;
       itemGestureRef.current = null;
       if (!g?.started) return;
+      cancelAnimationFrame(g.raf);
       lastDragEndRef.current = Date.now();
       setItemDrag(null);
-      const panelRect = panelRef.current?.getBoundingClientRect();
-      const overPanel =
-        panelRect &&
-        e.clientX >= panelRect.left &&
-        e.clientX <= panelRect.right &&
-        e.clientY >= panelRect.top &&
-        e.clientY <= panelRect.bottom;
-      if (!overPanel) {
-        used(spec);
-        onDropOnCanvas?.(spec, e.clientX, e.clientY);
-      }
+      const over = isOverPanel(e.clientX, e.clientY);
+      if (!over) used(spec);
+      onDragSpec?.({ phase: 'end', spec, clientX: e.clientX, clientY: e.clientY, overPanel: over });
     },
     onPointerCancel: () => {
+      const g = itemGestureRef.current;
       itemGestureRef.current = null;
+      if (g) cancelAnimationFrame(g.raf);
       setItemDrag(null);
+      onDragSpec?.({ phase: 'cancel', spec });
     },
     onClick: () => {
       // A drag ends with a click event too; only a plain click adds at center.
@@ -276,12 +286,6 @@ export function BoardStickerPanel({
     },
   });
   const widgetSpec = (content, size, extra = {}) => ({ type: 'widget', content, size, ...extra });
-
-  const handleFileChange = (e) => {
-    const files = Array.from(e.target.files || []);
-    for (const f of files) onUploadImage(f);
-    e.target.value = '';
-  };
 
   const overviews = [
     { label: '倒计时', content: { kind: 'countdown' }, size: 'S' },
@@ -300,8 +304,10 @@ export function BoardStickerPanel({
   const visibleFavorites = favorites.filter((f) =>
     matches(f.payload.name, f.payload.address, f.payload.category),
   );
-  // Places are organised by the mark preset they carry, one group at a time.
+  // Places are organised by mark preset, one group at a time; the rest are 未分类.
   const currentGroup = groups.find((g) => g.key === placeKey) || groups[0];
+  const groupColor = (g) => (g?.mark ? markColors[g.mark.color] || '#b7791f' : 'var(--muted)');
+  const groupIcon = (g) => (g?.mark ? markPaths[g.mark.icon] || markPaths.star : null);
   const groupOf = (f) => groups.find((g) => g.favorites.includes(f));
   const shownPlaces = q ? visibleFavorites : currentGroup?.favorites || [];
   // One day at a time: a row of day chips instead of a list that grows with
@@ -339,7 +345,7 @@ export function BoardStickerPanel({
       <div
         id="panel"
         ref={panelRef}
-        className={`ui sheet glass on ${layout} ${expanded ? 'expanded' : ''} ${dockDrag ? 'dragging' : ''}`}
+        className={`ui sheet glass on ${layout} ${expanded ? 'expanded' : ''} ${dockDrag ? 'dragging' : ''} ${itemDrag ? (itemDrag.over ? 'drop-back' : 'dragging-out') : ''}`}
         style={floatingStyle}
         role="dialog"
         aria-label="贴纸与小组件"
@@ -404,6 +410,11 @@ export function BoardStickerPanel({
         <span className="sr-only" aria-live="polite">
           {announce}
         </span>
+        {itemDrag && (
+          <div className="drag-back-hint" aria-hidden="true">
+            {itemDrag.over ? '松手取消放置' : '拖回这里取消'}
+          </div>
+        )}
 
         <div className="panel-main">
           <div className="tabs" role="tablist" aria-label="贴纸类型">
@@ -411,7 +422,6 @@ export function BoardStickerPanel({
               ['widget', '小组件'],
               ['note', '便签'],
               ['emoji', '表情'],
-              ['image', '图片'],
             ].map(([id, label]) => (
               <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>
                 {label}
@@ -484,6 +494,19 @@ export function BoardStickerPanel({
                           </span>
                           <span>待办</span>
                         </button>
+                        <button
+                          className="tile create-tile"
+                          aria-label="添加分区"
+                          title="圈出一块区域，例如「第1天」「美食候选」；移动分区时里面的东西一起走"
+                          {...itemHandlers({ type: 'section' })}
+                        >
+                          <span className="create-art section-art" aria-hidden="true">
+                            <b>第1天</b>
+                            <i />
+                            <i />
+                          </span>
+                          <span>分区</span>
+                        </button>
                       </div>
                     </section>
                   )}
@@ -502,20 +525,29 @@ export function BoardStickerPanel({
                               key={g.key}
                               role="tab"
                               aria-selected={g === currentGroup}
-                              className="mark-chip"
-                              style={{ '--mc': markColors[g.mark.color] || '#b7791f' }}
+                              className={`mark-chip ${g.preset ? '' : 'unsorted'}`}
+                              style={{ '--mc': groupColor(g) }}
                               onClick={() => setPlaceKey(g.key)}
                             >
-                              <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d={markPaths[g.mark.icon] || markPaths.star} />
-                              </svg>
+                              {g.preset ? (
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                  <path d={groupIcon(g)} />
+                                </svg>
+                              ) : (
+                                <i className="unsorted-dot" aria-hidden="true" />
+                              )}
                               {markGroupName(g)}
                               <small>{g.favorites.length}</small>
                             </button>
                           ))}
                         </div>
                       )}
-                      {!q && currentGroup && (
+                      {!q && currentGroup && !currentGroup.preset && (
+                        <p className="unsorted-hint">
+                          这些地点还没有归类。在地图页给标记存为预设，同一预设的地点就能整类加入白板。
+                        </p>
+                      )}
+                      {!q && currentGroup?.preset && (
                         <button
                           className="tile wide-tile"
                           aria-label={`整类加入：${markGroupName(currentGroup)}`}
@@ -538,15 +570,18 @@ export function BoardStickerPanel({
                       <ul className="place-list">
                         {shownPlaces.map((f) => {
                           const g = groupOf(f);
+                          const own = f.payload.mark;
                           return (
                             <li key={f.id} className="place-row">
                               <span
                                 className="place-dot"
-                                style={{ '--mc': markColors[g?.mark.color] || '#b7791f' }}
+                                style={{
+                                  '--mc': own ? markColors[own.color] || '#b7791f' : groupColor(g),
+                                }}
                                 aria-hidden="true"
                               >
                                 <svg viewBox="0 0 24 24">
-                                  <path d={markPaths[g?.mark.icon] || markPaths.star} />
+                                  <path d={(own && markPaths[own.icon]) || markPaths.star} />
                                 </svg>
                               </span>
                               <span className="act-title">
@@ -709,30 +744,11 @@ export function BoardStickerPanel({
                 onRemoveSticker={onRemoveSticker}
               />
             )}
-
-            {tab === 'image' && (
-              <div className="image-tab">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  multiple
-                  hidden
-                  onChange={handleFileChange}
-                />
-                <button className="upload" onClick={() => fileInputRef.current?.click()}>
-                  + 上传图片或 GIF
-                </button>
-                <div className="hint">
-                  支持 JPG、PNG、WebP（自动压缩至 2048px，≤1.5MB）与动画 GIF（原样保留，≤5MB）。
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
 
-      {itemDrag && (
+      {itemDrag?.over && (
         <div
           className="panel-drag-ghost"
           aria-hidden="true"
@@ -748,9 +764,9 @@ export function BoardStickerPanel({
             <div className="ghost-note" style={{ background: NOTE[itemDrag.spec.color] }} />
           ) : itemDrag.spec.type === 'sticker' ? (
             <img className="ghost-sticker" src={stickerUrl(itemDrag.spec.sticker.id)} alt="" />
-          ) : itemDrag.spec.type === 'todo' || itemDrag.spec.type === 'gallery' ? (
+          ) : ['todo', 'gallery', 'section'].includes(itemDrag.spec.type) ? (
             <div className={`ghost-card ${itemDrag.spec.type}`}>
-              {itemDrag.spec.type === 'todo' ? '待办' : '图库'}
+              {{ todo: '待办', gallery: '图库', section: '分区' }[itemDrag.spec.type]}
             </div>
           ) : (
             <div className="ghost-emoji">{itemDrag.spec.char}</div>

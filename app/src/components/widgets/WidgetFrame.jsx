@@ -9,6 +9,7 @@ export function WidgetFrame({ item, model, children, className = '', style = {},
   const wk = fw / baseW;
 
   const isGone = Boolean(model?.gone);
+  const variant = `v-${item.style?.variant || 'plain'}`;
 
   return (
     <div
@@ -24,7 +25,7 @@ export function WidgetFrame({ item, model, children, className = '', style = {},
     >
       <div
         key={size}
-        className={`w ${className}`}
+        className={`w ${className} ${variant}`}
         style={{
           width: baseW,
           height: baseH,

@@ -11,6 +11,18 @@ const TOOLS = [
     icon: <path d="m5 3 14 8-6 2-2 6z" />,
   },
   {
+    id: 'marquee',
+    label: '框选',
+    key: 'M',
+    hint: '拖出方框选中多个对象',
+    icon: (
+      <>
+        <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
+        <path d="M11 4h2M11 20h2M4 11v2M20 11v2" />
+      </>
+    ),
+  },
+  {
     id: 'text',
     label: '文字',
     key: 'T',
@@ -63,6 +75,7 @@ export function BoardToolbar({
   onChangeHlColor,
   panelOpen,
   onTogglePanel,
+  onPickImages,
   canUndo,
   canRedo,
   onUndo,
@@ -202,6 +215,19 @@ export function BoardToolbar({
           <svg viewBox="0 0 24 24">
             <path d="M4 4h16v10l-6 6H4z" />
             <path d="M20 14h-6v6" />
+          </svg>
+        </button>
+        <button
+          className="tool"
+          data-tool="image"
+          onClick={onPickImages}
+          title="上传图片 (I)，也可以直接拖入或粘贴"
+          aria-label="上传图片"
+        >
+          <svg viewBox="0 0 24 24">
+            <rect x="3" y="4" width="18" height="16" rx="3" />
+            <circle cx="9" cy="10" r="2" />
+            <path d="m21 16-5-5-9 9" />
           </svg>
         </button>
       </div>

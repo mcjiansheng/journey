@@ -8,6 +8,7 @@ import { BoardStickerPanel } from './BoardStickerPanel.jsx';
 import { BoardRecentDeletions } from './BoardRecentDeletions.jsx';
 import { BoardSwitcher } from './BoardSwitcher.jsx';
 import { NoteFormatBar } from './NoteFormatBar.jsx';
+import { BoardContextMenu } from './BoardContextMenu.jsx';
 import { api } from '../sync.js';
 import { processImageFile } from '../board-sync.js';
 import { MapDetailContext } from './widgets/map-context.js';
@@ -23,9 +24,29 @@ import {
   scaled,
   strokeLook,
   galleryFrameSize,
+  GALLERY_PADDING,
   stickerUrl,
+  itemRotation,
 } from '../board.js';
 import { WIDGET_SIZES, widgetSize, widgetScale, pickWidgetSize } from '../board-widgets.js';
+import {
+  frameBounds,
+  frameCenter,
+  groupBounds,
+  intersects,
+  contains,
+  rectFrom,
+  toLocal,
+  keepAnchor,
+  handleAngle,
+  snapAngle,
+  rotateFrames,
+  snapRatio,
+  ratioNumber,
+  finalizeStroke,
+  snapToGuides,
+  alignFrames,
+} from '../board-geometry.js';
 
 const DRAG_THRESHOLD = 3;
 const ZOOM_MIN = 0.15;
@@ -61,6 +82,61 @@ function useOnline() {
 }
 
 const sameSet = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
+const GROUP = '__group';
+const PREVIEW_ID = '__preview';
+const MIN_SIDE = { text: 40, note: 100, todo: 160, section: 160, gallery: 60 };
+const MIN_SIDE_H = { note: 80, todo: 100, section: 100, gallery: 60 };
+
+/** Content, style and size of a new object made from a panel spec. */
+export function specTemplate(spec) {
+  switch (spec?.type) {
+    case 'widget': {
+      const [w, h] = WIDGET_SIZES[spec.size] || [352, 168];
+      return { content: { type: 'widget', ...spec.content }, style: { size: spec.size }, w, h };
+    }
+    case 'note':
+      return { content: { type: 'note', text: '' }, style: { color: spec.color }, w: 200, h: 200 };
+    case 'emoji':
+      return { content: { type: 'emoji', char: spec.char }, style: {}, w: 80, h: 80 };
+    case 'todo':
+      return {
+        content: { type: 'todo', title: '待办', items: [] },
+        style: { color: 'gray', variant: 'plain' },
+        w: 260,
+        h: 180,
+      };
+    case 'section':
+      return {
+        content: { type: 'section', title: '' },
+        style: { color: spec.color || 'blue', variant: 'plain' },
+        w: 640,
+        h: 420,
+      };
+    case 'gallery':
+      return { content: { type: 'gallery', images: [] }, style: { ratio: '4:3' }, w: 320, h: 240 };
+    case 'sticker': {
+      const st = spec.sticker || {};
+      const side = 140;
+      const ratio = (st.height || 1) / (st.width || 1);
+      return {
+        content: {
+          type: 'image',
+          src: stickerUrl(st.id),
+          mime: st.mime || 'image/png',
+          width: st.width || side,
+          height: st.height || side,
+          animated: Boolean(st.animated),
+          caption: '',
+        },
+        style: { frameStyle: 'sticker' },
+        w: ratio > 1 ? Math.round(side / ratio) : side,
+        h: ratio > 1 ? side : Math.round(side * ratio),
+      };
+    }
+    default:
+      return null;
+  }
+}
 
 const NO_STICKERS = [];
 
@@ -175,13 +251,31 @@ export function Board({
   // ---------- Selection & editing ----------
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [editingId, setEditingId] = useState(null);
+  // The first click only selects (move, scale, rotate); clicking the selection
+  // again or right-clicking brings up the menus.
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, kind, at }
   const selectedIdsRef = useRef(selectedIds);
   selectedIdsRef.current = selectedIds;
   const select = useCallback((ids) => {
     const next = ids instanceof Set ? ids : new Set(ids);
+    if (!sameSet(selectedIdsRef.current, next)) {
+      setActionsOpen(false);
+      selectedIdsRef.current = next;
+    }
     setSelectedIds((prev) => (sameSet(prev, next) ? prev : next));
     return next;
   }, []);
+  const menuTimer = useRef(0);
+  const toggleMenuSoon = () => {
+    clearTimeout(menuTimer.current);
+    // Wait out a double click, which edits instead.
+    menuTimer.current = setTimeout(() => setActionsOpen((o) => !o), 230);
+  };
+  useEffect(() => () => clearTimeout(menuTimer.current), []);
+  // Laid-out size of text items, reported by BoardItem (no re-render here).
+  const measuredRef = useRef(new Map());
+  const onMeasure = useCallback((id, size) => measuredRef.current.set(id, size), []);
 
   // ---------- Live frames ----------
   // Local gesture frames and peer frames are kept apart: a peer heartbeat must
@@ -409,49 +503,28 @@ export function Board({
     );
     select([item.id]);
   };
-  const addNote = async (color = 'yellow', at) => {
-    const pt = spawnAt(200, 200, at);
+  // Notes, emoji, checklists and sections share one path, so what was dragged
+  // out of the panel (specTemplate) is exactly what lands.
+  const addFromSpec = async (spec, at) => {
+    const t = specTemplate(spec);
+    if (!t) return null;
+    const pt = spawnAt(t.w, t.h, at);
     const item = await addItem(
       {
-        content: { type: 'note', text: '' },
-        style: { color },
-        frame: { x: pt.x, y: pt.y, w: 200, h: 200, scale: 1 },
-        z: topZ(activeItemsRef.current),
+        content: t.content,
+        style: t.style,
+        frame: { x: pt.x, y: pt.y, w: t.w, h: t.h, scale: 1 },
+        z: spec.type === 'section' ? bottomZ(activeItemsRef.current) : topZ(activeItemsRef.current),
       },
       { pop: true },
     );
     select([item.id]);
-    setEditingId(item.id);
-  };
-  const addEmoji = async (char, at) => {
-    const pt = spawnAt(80, 80, at);
-    const item = await addItem(
-      {
-        content: { type: 'emoji', char },
-        style: {},
-        frame: { x: pt.x, y: pt.y, w: 80, h: 80, scale: 1 },
-        z: topZ(activeItemsRef.current),
-      },
-      { pop: true },
-    );
-    select([item.id]);
-  };
-  const addTodo = async (at) => {
-    const pt = spawnAt(260, 160, at);
-    const item = await addItem(
-      {
-        content: { type: 'todo', title: '待办', items: [] },
-        style: { color: 'gray', variant: 'plain' },
-        frame: { x: pt.x, y: pt.y, w: 260, h: 160, scale: 1 },
-        z: topZ(activeItemsRef.current),
-      },
-      { pop: true },
-    );
-    select([item.id]);
-    setEditingId(item.id);
+    if (['note', 'todo', 'section'].includes(spec.type)) setEditingId(item.id);
+    return item;
   };
   // 图库: pick photos first, then the gallery appears with all of them.
   const galleryPicker = useRef(null);
+  const imagePicker = useRef(null);
   const galleryTarget = useRef(null); // { id } to append, or { at } to create
   const openGalleryPicker = (target) => {
     galleryTarget.current = target;
@@ -497,8 +570,8 @@ export function Board({
       return;
     }
     const first = uploaded[0];
-    const ratio = first.width >= first.height ? '4:3' : '3:4';
-    const { w, h } = galleryFrameSize(320, ratio);
+    const ratio = snapRatio(first.width / first.height);
+    const { w, h } = galleryFrameSize(ratioNumber(ratio) >= 1 ? 360 : 260, ratio);
     const item = await addItem(
       {
         content: { type: 'gallery', images: uploaded },
@@ -555,9 +628,7 @@ export function Board({
   // Placing a sticker copies it into this trip so everyone on the board sees it.
   const addSticker = async (sticker, at) => {
     const side = 140;
-    const ratio = (sticker.height || 1) / (sticker.width || 1);
-    const w = ratio > 1 ? Math.round(side / ratio) : side;
-    const h = ratio > 1 ? side : Math.round(side * ratio);
+    const { w, h } = specTemplate({ type: 'sticker', sticker });
     const pt = spawnAt(w, h, at);
     const uid = crypto.randomUUID();
     setUploads((u) => [
@@ -602,19 +673,37 @@ export function Board({
   const addSpec = (spec, at) => {
     setTool('select');
     if (spec.type === 'widget') return addWidget(spec.content, spec.size, at);
-    if (spec.type === 'note') return addNote(spec.color, at);
-    if (spec.type === 'emoji') return addEmoji(spec.char, at);
-    if (spec.type === 'todo') return addTodo(at);
     if (spec.type === 'gallery') return openGalleryPicker({ at });
     if (spec.type === 'places') return addPlaces(spec.mark, at);
     if (spec.type === 'sticker') return addSticker(spec.sticker, at);
-    return null;
+    return addFromSpec(spec, at);
   };
-  const dropSpec = (spec, clientX, clientY) => {
+  const inStage = (clientX, clientY) => {
     const rect = stageRef.current?.getBoundingClientRect();
-    if (!rect || clientX < rect.left || clientX > rect.right || clientY < rect.top) return;
-    if (clientY > rect.bottom) return;
-    addSpec(spec, screenToWorld(clientX, clientY));
+    return (
+      rect &&
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+    );
+  };
+  // Dragging out of the panel: once the pointer leaves the panel the object is
+  // on the board, at full size, under the pointer; dragging it back onto the
+  // panel and letting go puts it back (nothing is created).
+  const [dragPreview, setDragPreview] = useState(null); // { spec, at }
+  const panelDrag = ({ phase, spec, clientX, clientY, overPanel }) => {
+    if (phase === 'move') {
+      setDragPreview(
+        overPanel || !inStage(clientX, clientY)
+          ? null
+          : { spec, at: screenToWorld(clientX, clientY) },
+      );
+      return;
+    }
+    setDragPreview(null);
+    if (phase === 'end' && !overPanel && inStage(clientX, clientY))
+      addSpec(spec, screenToWorld(clientX, clientY));
   };
 
   // Image uploads show a placeholder with progress where the image will land,
@@ -644,6 +733,7 @@ export function Board({
     try {
       // Keep PNG/WebP transparency instead of flattening onto black.
       const res = await uploadAsset(file, { keepAlpha: true });
+      if (res.converted) notify?.({ message: '动图超过 5MB，已转成静态图片' });
       const aspect = (res.height || 300) / (res.width || 400);
       const w = Math.round(Math.min(320, res.width || 320));
       const h = Math.round(w * aspect);
@@ -682,68 +772,137 @@ export function Board({
   };
 
   // ---------- Object operations ----------
-  const primarySelected = activeItems.find((it) => selectedIds.has(it.id));
+  const selectedItems = activeItems.filter((it) => selectedIds.has(it.id));
+  const primarySelected = selectedItems[0];
+  const selectedNow = () =>
+    activeItemsRef.current.filter((it) => selectedIdsRef.current.has(it.id));
+  const unlockedNow = () => selectedNow().filter((it) => !it.style?.locked);
 
   const changeStyle = (patch) => {
-    const it = primarySelected;
-    if (!it) return;
-    const style = { ...(it.style || {}), ...patch };
-    const next = { style };
-    // A gallery keeps its photo ratio when its frame border changes.
-    if (it.content?.type === 'gallery' && 'frameStyle' in patch) {
-      const { w, h } = galleryFrameSize(it.frame.w, style.ratio || '4:3', style.frameStyle);
-      next.frame = { ...it.frame, w, h };
+    const changes = [];
+    for (const it of unlockedNow()) {
+      const style = { ...(it.style || {}), ...patch };
+      const next = { style };
+      // A gallery keeps its photo ratio when its frame border changes.
+      if (it.content?.type === 'gallery' && 'frameStyle' in patch) {
+        const { w, h } = galleryFrameSize(it.frame.w, style.ratio || '4:3', style.frameStyle);
+        next.frame = { ...it.frame, w, h };
+      }
+      changes.push({ id: it.id, patch: next });
     }
-    applyPatches([{ id: it.id, patch: next }]);
+    if (changes.length) applyPatches(changes);
   };
-  const changeGalleryRatio = (ratio) => {
-    const it = primarySelected;
-    if (it?.content?.type !== 'gallery') return;
-    const f = it.frame;
-    const { w, h } = galleryFrameSize(f.w, ratio, it.style?.frameStyle);
-    applyPatches([
-      { id: it.id, patch: { style: { ...(it.style || {}), ratio }, frame: { ...f, w, h } } },
-    ]);
-  };
-  const changeNoteColor = (color) => {
-    if (primarySelected?.content?.type !== 'note') return;
-    applyPatches([
-      { id: primarySelected.id, patch: { style: { ...(primarySelected.style || {}), color } } },
-    ]);
-  };
-  const bringToFront = () =>
-    primarySelected && applyPatches([{ id: primarySelected.id, patch: { z: topZ(activeItems) } }]);
-  const sendToBack = () =>
-    primarySelected &&
-    applyPatches([{ id: primarySelected.id, patch: { z: bottomZ(activeItems) } }]);
-  const duplicate = async () => {
-    if (!primarySelected) return;
-    const f = primarySelected.frame || { x: 0, y: 0, w: 100, h: 100, scale: 1 };
-    const item = await addItem(
-      {
-        content: { ...primarySelected.content },
-        style: { ...(primarySelected.style || {}) },
-        frame: { ...f, x: f.x + 20, y: f.y + 20 },
-        z: topZ(activeItems),
-      },
-      { pop: true },
+  const COLORABLE = ['note', 'todo', 'section'];
+  const changeColor = (color) =>
+    applyPatches(
+      unlockedNow()
+        .filter((it) => COLORABLE.includes(it.content?.type))
+        .map((it) => ({ id: it.id, patch: { style: { ...(it.style || {}), color } } })),
     );
-    select([item.id]);
+  const bringToFront = () => {
+    let z = topZ(activeItemsRef.current);
+    const list = selectedNow().sort((a, b) => (a.z || 0) - (b.z || 0));
+    applyPatches(list.map((it) => ({ id: it.id, patch: { z: z++ } })));
+  };
+  const sendToBack = () => {
+    const list = selectedNow().sort((a, b) => (b.z || 0) - (a.z || 0));
+    let z = bottomZ(activeItemsRef.current);
+    applyPatches(list.map((it) => ({ id: it.id, patch: { z: z-- } })));
+  };
+  const duplicate = async () => {
+    const list = selectedNow();
+    if (!list.length) return;
+    let z = topZ(activeItemsRef.current);
+    const ids = [];
+    for (const it of list.sort((a, b) => (a.z || 0) - (b.z || 0))) {
+      const f = it.frame || { x: 0, y: 0, w: 100, h: 100, scale: 1 };
+      const copy = await addItem({
+        content: { ...it.content },
+        style: { ...(it.style || {}), locked: false },
+        frame: { ...f, x: f.x + 24, y: f.y + 24 },
+        z: it.content?.type === 'section' ? it.z : z++,
+      });
+      ids.push(copy.id);
+    }
+    if (ids.length === 1) flash(ids[0]);
+    select(ids);
   };
   const toggleLock = () => {
-    if (!primarySelected) return;
-    const locked = Boolean(primarySelected.style?.locked ?? primarySelected.locked);
-    applyPatches([
-      {
-        id: primarySelected.id,
-        patch: { style: { ...(primarySelected.style || {}), locked: !locked } },
-      },
-    ]);
+    const list = selectedNow();
+    if (!list.length) return;
+    const lock = !list.every((it) => it.style?.locked ?? it.locked);
+    applyPatches(
+      list.map((it) => ({ id: it.id, patch: { style: { ...(it.style || {}), locked: lock } } })),
+    );
   };
   const deleteSelected = () => {
     removeItems(selectedIdsRef.current);
     select([]);
     sendPresence({ selected: [] });
+  };
+  const alignSelected = (mode) => {
+    const list = unlockedNow();
+    const out = alignFrames(Object.fromEntries(list.map((it) => [it.id, it.frame])), mode);
+    applyPatches(Object.entries(out).map(([id, frame]) => ({ id, patch: { frame } })));
+  };
+  // 框进分区: a section around the selection, sent behind it.
+  const wrapInSection = async () => {
+    const list = selectedNow().filter((it) => it.content?.type !== 'section');
+    const b = groupBounds(list.map((it) => it.frame));
+    if (!b) return;
+    const pad = 40;
+    const item = await addItem(
+      {
+        content: { type: 'section', title: '' },
+        style: { color: 'blue', variant: 'plain' },
+        frame: {
+          x: Math.round(b.x - pad),
+          y: Math.round(b.y - pad - 24),
+          w: Math.round(b.w + pad * 2),
+          h: Math.round(b.h + pad * 2 + 24),
+          scale: 1,
+        },
+        z: bottomZ(activeItemsRef.current),
+      },
+      { pop: true },
+    );
+    select([item.id]);
+    setEditingId(item.id);
+  };
+  const selectAll = () => {
+    const ids = activeItemsRef.current.map((it) => it.id);
+    select(ids);
+    sendPresence({ selected: ids });
+  };
+  const nudge = (dx, dy) => {
+    const list = unlockedNow();
+    if (!list.length) return;
+    applyPatches(
+      list.map((it) => ({
+        id: it.id,
+        patch: { frame: { ...it.frame, x: it.frame.x + dx, y: it.frame.y + dy } },
+      })),
+    );
+  };
+  // Any picture on the board (also one someone else added) can go into my
+  // own sticker library; the server copies the file.
+  const saveToStickers = async (item) => {
+    if (item?.content?.type !== 'image' || !item.content.assetId) return;
+    try {
+      const c = item.content;
+      const sticker = await api(
+        `/api/trips/${item.tripId || tripId}/assets/${c.assetId}/to-stickers?w=${c.width || 200}&h=${c.height || 200}`,
+        { method: 'POST' },
+      );
+      if (sticker?.duplicate) {
+        notify?.({ message: '已经在我的表情里了' });
+        return;
+      }
+      updateStickers([sticker, ...stickersRef.current.filter((x) => x.id !== sticker.id)]);
+      notify?.({ message: '已收藏到我的表情，所有旅程都能用' });
+    } catch (err) {
+      notify?.({ message: err?.message || '收藏失败，请稍后重试' });
+    }
   };
 
   const schedulePlace = async (item) => {
@@ -889,7 +1048,9 @@ export function Board({
   const [gestureActive, setGestureActive] = useState(false);
   const [drawing, setDrawing] = useState(null); // { tool, color, size }
   const [resizingId, setResizingId] = useState(null);
+  const [marquee, setMarquee] = useState(null); // world rect while box-selecting
   const draftPathRef = useRef(null);
+  const visibleRef = useRef([]);
 
   // Objects and handles capture on themselves (so click/dblclick still reach
   // them); blank-canvas gestures and the eraser capture on the stage. Either
@@ -921,9 +1082,23 @@ export function Board({
     });
   };
 
+  const startMarquee = (e, additive) => {
+    capture(e.pointerId);
+    gestureRef.current = {
+      type: 'marquee',
+      pointerId: e.pointerId,
+      mask: 1,
+      start: screenToWorld(e.clientX, e.clientY),
+      base: additive ? new Set(selectedIdsRef.current) : new Set(),
+      moved: false,
+    };
+    setEditingId(null);
+  };
+
   const handleStagePointerDown = (e) => {
     if (e.target.closest('.ui')) return;
-    if (e.button !== 0 && e.button !== 1) return; // N-13: right click does nothing
+    setContextMenu(null);
+    if (e.button !== 0 && e.button !== 1) return; // N-13: right click opens the menu instead
     document.activeElement?.blur?.();
     const panByButton = e.button === 1;
 
@@ -959,8 +1134,8 @@ export function Board({
       const pt = screenToWorld(e.clientX, e.clientY);
       addItem({
         content: { type: 'text', text: '' },
-        style: { size: 'body' },
-        frame: { x: Math.round(pt.x), y: Math.round(pt.y - 16), w: 120, h: 32, scale: 1 },
+        style: { size: 'body', autoWidth: true },
+        frame: { x: Math.round(pt.x), y: Math.round(pt.y - 16), w: 40, h: 32, scale: 1 },
         z: topZ(activeItemsRef.current),
       }).then((item) => {
         select([item.id]);
@@ -968,6 +1143,12 @@ export function Board({
         sendPresence({ selected: [item.id], editing: item.id });
         setTool('select');
       });
+      return;
+    }
+
+    // 框选: the marquee tool, or Shift-drag on empty canvas with the select tool.
+    if (!panByButton && (tool === 'marquee' || e.shiftKey)) {
+      startMarquee(e, e.shiftKey);
       return;
     }
 
@@ -988,9 +1169,29 @@ export function Board({
     }
   };
 
+  // Objects that move with a section: everything lying fully inside it.
+  const withSectionContents = (ids) => {
+    const out = new Set(ids);
+    for (const id of ids) {
+      const it = itemsByIdRef.current.get(id);
+      if (it?.content?.type !== 'section') continue;
+      const area = frameBounds(it.frame);
+      for (const other of activeItemsRef.current)
+        if (
+          !out.has(other.id) &&
+          !other.style?.locked &&
+          other.state !== 'deleted' &&
+          contains(area, frameBounds(other.frame || {}))
+        )
+          out.add(other.id);
+    }
+    return [...out];
+  };
+
   const itemPointerDown = (e, id) => {
     const item = itemsByIdRef.current.get(id);
     if (!item) return;
+    setContextMenu(null);
     if (tool === 'eraser') {
       if (e.button !== 0) return;
       e.stopPropagation();
@@ -999,29 +1200,40 @@ export function Board({
       eraseAt(e.clientX, e.clientY, gestureRef.current);
       return;
     }
+    // The marquee tool selects from wherever it starts, objects included.
+    if (tool === 'marquee') return;
     if (e.button !== 0) return;
     e.stopPropagation();
     document.activeElement?.blur?.();
 
+    const wasSelected = selectedIdsRef.current.has(id);
     let next;
-    if (e.shiftKey) {
+    if (e.shiftKey || e.metaKey || e.ctrlKey) {
       next = new Set(selectedIdsRef.current);
       if (next.has(id)) next.delete(id);
       else next.add(id);
     } else {
-      next = selectedIdsRef.current.has(id) ? selectedIdsRef.current : new Set([id]);
+      next = wasSelected ? selectedIdsRef.current : new Set([id]);
     }
     select(next);
     sendPresence({ selected: [...next] });
-    if (item.style?.locked) return;
+    const reclick = wasSelected && !e.shiftKey && !e.metaKey && !e.ctrlKey;
+    if (item.style?.locked) {
+      if (reclick) toggleMenuSoon();
+      return;
+    }
 
-    const ids = [...next].filter((x) => !itemsByIdRef.current.get(x)?.style?.locked);
+    const ids = withSectionContents(
+      [...next].filter((x) => !itemsByIdRef.current.get(x)?.style?.locked),
+    );
+    const moving = new Set(ids);
     capture(e.pointerId, e.currentTarget);
     gestureRef.current = {
       type: 'drag',
       pointerId: e.pointerId,
       mask: 1,
       started: false,
+      reclick,
       startClient: [e.clientX, e.clientY],
       startWorld: screenToWorld(e.clientX, e.clientY),
       frames0: new Map(
@@ -1030,46 +1242,138 @@ export function Board({
           { ...(itemsByIdRef.current.get(x)?.frame || { x: 0, y: 0, w: 100, h: 100 }) },
         ]),
       ),
+      // Alignment targets: what is on screen and not moving.
+      others: visibleRef.current
+        .filter((it) => !moving.has(it.id) && it.content?.type !== 'stroke')
+        .map((it) => frameBounds(it.frame || { x: 0, y: 0, w: 0, h: 0 })),
       raf: 0,
     };
   };
 
   const handlePointerDown = (e, id, anchor) => {
-    const item = itemsByIdRef.current.get(id);
     e.stopPropagation();
-    if (e.button !== 0 || !item || item.style?.locked) return;
-    capture(e.pointerId, e.currentTarget);
-    const f0 = { ...(item.frame || { x: 0, y: 0, w: 100, h: 100, scale: 1 }) };
-    setGestureActive(true);
+    if (e.button !== 0) return;
+    setContextMenu(null);
+    const world = screenToWorld(e.clientX, e.clientY);
+    const target = e.currentTarget;
+    const begin = () => {
+      capture(e.pointerId, target);
+      setGestureActive(true);
+    };
+
+    if (id === GROUP) {
+      const list = unlockedNow();
+      if (!list.length) return;
+      begin();
+      const frames0 = Object.fromEntries(list.map((it) => [it.id, { ...it.frame }]));
+      const box0 = groupBounds(Object.values(frames0));
+      const center = { x: box0.x + box0.w / 2, y: box0.y + box0.h / 2 };
+      gestureRef.current =
+        anchor === 'rotate'
+          ? {
+              type: 'grotate',
+              pointerId: e.pointerId,
+              mask: 1,
+              frames0,
+              center,
+              start: handleAngle(center, world),
+              raf: 0,
+            }
+          : {
+              type: 'gresize',
+              pointerId: e.pointerId,
+              mask: 1,
+              frames0,
+              items: Object.fromEntries(list.map((it) => [it.id, it])),
+              box0,
+              fixed: {
+                x: anchor.includes('w') ? box0.x + box0.w : box0.x,
+                y: anchor.includes('n') ? box0.y + box0.h : box0.y,
+              },
+              raf: 0,
+            };
+      return;
+    }
+
+    const item = itemsByIdRef.current.get(id);
+    if (!item || item.style?.locked) return;
+    begin();
+    const f0 = { rotation: 0, scale: 1, ...(item.frame || { x: 0, y: 0, w: 100, h: 100 }) };
+    // A legacy tilt becomes a real rotation the first time the item is changed.
+    if (!f0.rotation && item.style?.tilt) f0.rotation = item.style.tilt;
+    if (item.content?.type === 'text') {
+      const m = measuredRef.current.get(id);
+      if (m) {
+        f0.h = m.h;
+        if (item.style?.autoWidth !== false) f0.w = m.w;
+      }
+    }
     setResizingId(id);
-    if (anchor.startsWith('edge-')) {
+    const base = { pointerId: e.pointerId, mask: 1, id, item, frame0: f0, raf: 0 };
+
+    if (anchor === 'rotate') {
+      const center = frameCenter(f0);
+      gestureRef.current = {
+        ...base,
+        type: 'rotate',
+        center,
+        start: handleAngle(center, world),
+        base: f0.rotation || 0,
+      };
+    } else if (anchor.startsWith('edge-')) {
       const edge = anchor.slice(5);
       gestureRef.current = {
+        ...base,
         type: 'reshape',
-        pointerId: e.pointerId,
-        mask: 1,
-        id,
         edge,
         axis: edge === 's' ? 'y' : 'x',
         kind: item.content?.kind,
         size: widgetSize(item),
         wk: widgetScale(item),
-        frame0: f0,
-        raf: 0,
       };
+    } else if (anchor.startsWith('side-')) {
+      gestureRef.current = { ...base, type: 'side', side: anchor.slice(5) };
     } else {
-      gestureRef.current = {
-        type: 'resize',
-        pointerId: e.pointerId,
-        mask: 1,
-        id,
-        item,
-        anchor,
-        frame0: f0,
-        bbox0: { w: f0.w, h: f0.h },
-        raf: 0,
-      };
+      gestureRef.current = { ...base, type: 'resize', anchor, bbox0: { w: f0.w, h: f0.h } };
     }
+  };
+
+  const sideFrame = (g, cur) => {
+    const { frame0: f0, side, item } = g;
+    const type = item.content?.type;
+    const minW = MIN_SIDE[type] || 40;
+    const minH = MIN_SIDE_H[type] || 40;
+    let w = f0.w;
+    let h = f0.h;
+    if (side === 'e') w = Math.max(minW, cur.x - f0.x);
+    if (side === 'w') w = Math.max(minW, f0.x + f0.w - cur.x);
+    if (side === 's') h = Math.max(minH, cur.y - f0.y);
+    if (side === 'n') h = Math.max(minH, f0.y + f0.h - cur.y);
+    let ratio = null;
+    const raw = { w, h };
+    if (type === 'gallery') {
+      // The photo window snaps to a common ratio; the other side stays.
+      const [pt, pr, pb, pl] = GALLERY_PADDING[item.style?.frameStyle] || GALLERY_PADDING.none;
+      const innerW = Math.max(1, w - pl - pr);
+      const innerH = Math.max(1, h - pt - pb);
+      ratio = snapRatio(innerW / innerH);
+      if (side === 'e' || side === 'w') w = Math.round(innerH * ratioNumber(ratio) + pl + pr);
+      else h = Math.round(innerW / ratioNumber(ratio) + pt + pb);
+    }
+    const next = {
+      ...f0,
+      w: Math.round(w),
+      h: Math.round(h),
+      x: side === 'w' ? Math.round(f0.x + f0.w - w) : f0.x,
+      y: side === 'n' ? Math.round(f0.y + f0.h - h) : f0.y,
+    };
+    const rawBox = {
+      x: side === 'w' ? f0.x + f0.w - raw.w : f0.x,
+      y: side === 'n' ? f0.y + f0.h - raw.h : f0.y,
+      w: raw.w,
+      h: raw.h,
+    };
+    return { frame: keepAnchor(f0, next, side), ratio, rawBox };
   };
 
   const handlePointerMove = (e) => {
@@ -1100,23 +1404,49 @@ export function Board({
         });
     } else if (g.type === 'erase') {
       eraseAt(e.clientX, e.clientY, g);
+    } else if (g.type === 'marquee') {
+      const cur = screenToWorld(e.clientX, e.clientY);
+      const rect = rectFrom(g.start, cur);
+      if (!g.moved && rect.w * viewRef.current.k < 3 && rect.h * viewRef.current.k < 3) return;
+      g.moved = true;
+      const hits = new Set(g.base);
+      for (const it of activeItemsRef.current) {
+        const b = frameBounds(it.frame || { x: 0, y: 0, w: 0, h: 0 });
+        // Sections only when fully inside, so a big area is not picked up by accident.
+        if (it.content?.type === 'section' ? contains(rect, b) : intersects(rect, b))
+          hits.add(it.id);
+      }
+      g.hits = hits;
+      setMarquee(rect);
+      select(hits);
     } else if (g.type === 'drag') {
       if (!g.started) {
         const dx = e.clientX - g.startClient[0];
         const dy = e.clientY - g.startClient[1];
         if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
         g.started = true;
+        clearTimeout(menuTimer.current);
         setGestureActive(true);
       }
       const cur = screenToWorld(e.clientX, e.clientY);
-      const dx = cur.x - g.startWorld.x;
-      const dy = cur.y - g.startWorld.y;
+      let dx = cur.x - g.startWorld.x;
+      let dy = cur.y - g.startWorld.y;
+      let guides = null;
+      // Alignment guides; hold Alt (⌥) to move freely.
+      if (!e.altKey && g.others.length) {
+        g.box0 ||= groupBounds([...g.frames0.values()]);
+        const moved = { ...g.box0, x: g.box0.x + dx, y: g.box0.y + dy };
+        const snap = snapToGuides(moved, g.others, 6 / viewRef.current.k);
+        dx += snap.dx;
+        dy += snap.dy;
+        guides = snap.guides.length ? snap.guides : null;
+      }
       const frames = {};
       for (const [id, f0] of g.frames0)
         frames[id] = { ...f0, x: Math.round(f0.x + dx), y: Math.round(f0.y + dy) };
-      scheduleLive(g, { frames });
+      scheduleLive(g, { frames, guides });
     } else if (g.type === 'resize') {
-      const cur = screenToWorld(e.clientX, e.clientY);
+      const cur = toLocal(screenToWorld(e.clientX, e.clientY), g.frame0);
       const { frame0: f0, bbox0, anchor } = g;
       let sx = 1;
       let sy = 1;
@@ -1124,9 +1454,57 @@ export function Board({
       if (anchor.includes('w')) sx = Math.max(0.1, (f0.x + bbox0.w - cur.x) / (bbox0.w || 1));
       if (anchor.includes('s')) sy = Math.max(0.1, (cur.y - f0.y) / (bbox0.h || 1));
       if (anchor.includes('n')) sy = Math.max(0.1, (f0.y + bbox0.h - cur.y) / (bbox0.h || 1));
-      scheduleLive(g, { frames: { [g.id]: scaled(g.item, f0, bbox0, sx, sy, anchor) } });
-    } else if (g.type === 'reshape') {
+      const f = keepAnchor(f0, scaled(g.item, f0, bbox0, sx, sy, anchor), anchor);
+      scheduleLive(g, { frames: { [g.id]: f } });
+    } else if (g.type === 'side') {
+      const cur = toLocal(screenToWorld(e.clientX, e.clientY), g.frame0);
+      const { frame, ratio, rawBox } = sideFrame(g, cur);
+      g.ratio = ratio;
+      scheduleLive(g, {
+        frames: { [g.id]: frame },
+        labels: ratio ? { [g.id]: ratio } : null,
+        boxes: ratio ? { [g.id]: rawBox } : null,
+      });
+    } else if (g.type === 'rotate') {
       const cur = screenToWorld(e.clientX, e.clientY);
+      const angle = snapAngle(g.base + handleAngle(g.center, cur) - g.start, e.shiftKey);
+      scheduleLive(g, {
+        frames: { [g.id]: { ...g.frame0, rotation: angle } },
+        angles: { [g.id]: `${Math.round(angle)}°` },
+      });
+    } else if (g.type === 'grotate') {
+      const cur = screenToWorld(e.clientX, e.clientY);
+      const delta = snapAngle(handleAngle(g.center, cur) - g.start, e.shiftKey);
+      g.delta = delta;
+      scheduleLive(g, { frames: rotateFrames(g.frames0, g.center, delta), groupAngle: delta });
+    } else if (g.type === 'gresize') {
+      const cur = screenToWorld(e.clientX, e.clientY);
+      const { box0, fixed } = g;
+      const s = Math.min(
+        10,
+        Math.max(
+          0.1,
+          Math.max(
+            Math.abs(cur.x - fixed.x) / (box0.w || 1),
+            Math.abs(cur.y - fixed.y) / (box0.h || 1),
+          ),
+        ),
+      );
+      const frames = {};
+      for (const [id, f0] of Object.entries(g.frames0)) {
+        const c0 = frameCenter(f0);
+        const c1 = { x: fixed.x + (c0.x - fixed.x) * s, y: fixed.y + (c0.y - fixed.y) * s };
+        const sz = scaled(g.items[id], f0, { w: f0.w, h: f0.h }, s, s, 'se');
+        frames[id] = {
+          ...sz,
+          x: Math.round(c1.x - sz.w / 2),
+          y: Math.round(c1.y - sz.h / 2),
+          rotation: f0.rotation || 0,
+        };
+      }
+      scheduleLive(g, { frames });
+    } else if (g.type === 'reshape') {
+      const cur = toLocal(screenToWorld(e.clientX, e.clientY), g.frame0);
       const f0 = g.frame0;
       let box;
       if (g.edge === 'e') box = { x: f0.x, y: f0.y, w: Math.max(40, cur.x - f0.x), h: f0.h };
@@ -1138,7 +1516,11 @@ export function Board({
       const [bw, bh] = WIDGET_SIZES[g.size] || [168, 168];
       const w = Math.round(bw * g.wk);
       const h = Math.round(bh * g.wk);
-      const frame = { ...f0, w, h, x: g.edge === 'w' ? f0.x + f0.w - w : f0.x };
+      const frame = keepAnchor(
+        f0,
+        { ...f0, w, h, x: g.edge === 'w' ? f0.x + f0.w - w : f0.x },
+        g.edge,
+      );
       scheduleLive(g, {
         frames: { [g.id]: frame },
         sizes: { [g.id]: g.size },
@@ -1157,34 +1539,16 @@ export function Board({
     setResizingId(null);
 
     if (g.type === 'draw') {
-      const pts = simplify(g.points, 1.5);
-      if (pts.length >= 2) {
-        const xs = pts.map((p) => p[0]);
-        const ys = pts.map((p) => p[1]);
-        const minX = Math.min(...xs);
-        const minY = Math.min(...ys);
-        const w = Math.max(20, Math.max(...xs) - minX);
-        const h = Math.max(20, Math.max(...ys) - minY);
+      if (g.points.length >= 2) {
+        // Same origin and (nearly) the same points as the draft: no jump on release.
+        const { frame, points } = finalizeStroke(g.points, simplify);
         const isHl = g.look.tool === 'highlighter';
         // addItem updates local items synchronously before awaiting the
         // server, so the saved stroke replaces the draft in the same frame.
         addItem({
-          content: {
-            type: 'stroke',
-            tool: g.look.tool,
-            points: pts.map(([x, y]) => [
-              Math.round((x - minX) * 10) / 10,
-              Math.round((y - minY) * 10) / 10,
-            ]),
-          },
+          content: { type: 'stroke', tool: g.look.tool, points },
           style: { color: g.look.color, size: isHl ? 16 : g.look.size },
-          frame: {
-            x: Math.round(minX),
-            y: Math.round(minY),
-            w: Math.round(w),
-            h: Math.round(h),
-            scale: 1,
-          },
+          frame,
           z: topZ(activeItemsRef.current),
         }).catch(() => {});
       }
@@ -1195,13 +1559,37 @@ export function Board({
       if (g.erased.size) pushHistory({ type: 'delete', ids: [...g.erased] });
       return;
     }
-    if ((g.type === 'drag' || g.type === 'resize' || g.type === 'reshape') && g.pending) {
+    if (g.type === 'marquee') {
+      setMarquee(null);
+      if (!g.moved) {
+        select(g.base);
+        return;
+      }
+      sendPresence({ selected: [...(g.hits || [])] });
+      // One marquee, then back to selecting so the picked objects can be moved.
+      if (tool === 'marquee' && g.hits?.size) setTool('select');
+      return;
+    }
+    if (g.type === 'drag' && !g.started) {
+      if (g.reclick) toggleMenuSoon();
+      return;
+    }
+    const transforms = ['drag', 'resize', 'reshape', 'side', 'rotate', 'grotate', 'gresize'];
+    if (transforms.includes(g.type) && g.pending) {
       const changes = Object.entries(g.pending.frames).map(([id, frame]) => {
+        const it = itemsByIdRef.current.get(id);
         const patch = { frame };
-        if (g.type === 'reshape') {
-          const it = itemsByIdRef.current.get(id);
-          patch.style = { ...(it?.style || {}), size: g.pending.sizes[id] };
+        let style = null;
+        if (g.type === 'reshape') style = { ...(it?.style || {}), size: g.pending.sizes[id] };
+        if (g.type === 'side' && it?.content?.type === 'text') {
+          style = { ...(it.style || {}), autoWidth: false };
+          patch.frame = { ...frame, h: measuredRef.current.get(id)?.h ?? frame.h };
         }
+        if (g.type === 'side' && g.ratio) style = { ...(it?.style || {}), ratio: g.ratio };
+        // Rotation replaces the old decorative tilt.
+        if (it?.style?.tilt && (frame.rotation || 0) !== (it.frame?.rotation || 0))
+          style = { ...(style || it.style), tilt: 0 };
+        if (style) patch.style = style;
         return { id, patch };
       });
       applyPatches(changes);
@@ -1209,9 +1597,7 @@ export function Board({
       sendPresence({ live: null, selected: [...selectedIdsRef.current] }, { immediate: true });
       return;
     }
-    if (g.type === 'drag' || g.type === 'resize' || g.type === 'reshape') {
-      setLocalLive(null);
-    }
+    if (transforms.includes(g.type)) setLocalLive(null);
   };
 
   // Start the draft path at the first point as soon as it mounts.
@@ -1220,6 +1606,28 @@ export function Board({
     const g = gestureRef.current;
     if (el && g?.type === 'draw') el.setAttribute('d', pathD(g.points));
   }, []);
+
+  const onStageContextMenu = (e) => {
+    if (e.target.closest('.ui')) return;
+    e.preventDefault();
+    if (gestureRef.current) return;
+    if (tool !== 'select' && tool !== 'marquee') setTool('select');
+    const id = e.target.closest?.('.board-item[data-item-id]')?.dataset?.itemId;
+    const container = stageRef.current?.parentElement?.getBoundingClientRect();
+    const pos = { x: e.clientX - (container?.left || 0), y: e.clientY - (container?.top || 0) };
+    clearTimeout(menuTimer.current);
+    setActionsOpen(false);
+    if (id && itemsByIdRef.current.get(id)) {
+      if (!selectedIdsRef.current.has(id)) {
+        select([id]);
+        sendPresence({ selected: [id] });
+      }
+      setContextMenu({ ...pos, kind: 'item' });
+    } else {
+      select([]);
+      setContextMenu({ ...pos, kind: 'canvas', at: screenToWorld(e.clientX, e.clientY) });
+    }
+  };
 
   // ---------- Text ----------
   const commitText = (id, text, size, html) => {
@@ -1248,10 +1656,12 @@ export function Board({
     sendPresence({ editing: null, selected: [...selectedIdsRef.current] });
   };
   const itemDoubleClick = (id) => {
+    clearTimeout(menuTimer.current);
+    setActionsOpen(false);
     const item = itemsByIdRef.current.get(id);
     if (!item || item.style?.locked) return;
     const type = item.content?.type;
-    if (type === 'note' || type === 'text' || type === 'todo' || type === 'gallery') {
+    if (['note', 'text', 'todo', 'gallery', 'section'].includes(type)) {
       select([id]);
       setEditingId(id);
       sendPresence({ editing: id, selected: [id] });
@@ -1272,7 +1682,8 @@ export function Board({
   const autoHeight = (id, h) => {
     const item = itemsByIdRef.current.get(id);
     const f = item?.frame;
-    if (!f || Math.abs(f.h - h) < 3 || gestureRef.current) return;
+    // Only grows: a list that was made taller by hand keeps its height.
+    if (!f || h <= f.h + 2 || gestureRef.current) return;
     patchBoardItem(id, { frame: { ...f, h: Math.max(80, Math.min(1200, h)) } }).catch(() => {});
   };
   handlers.current = {
@@ -1296,6 +1707,7 @@ export function Board({
       onGalleryAddImages: (id) => handlers.current.galleryAdd(id),
       onEndEditing: (id) => handlers.current.endEditing(id),
       onItemDoubleClick: (id) => handlers.current.itemDoubleClick(id),
+      onMeasure,
     }),
     [],
   );
@@ -1304,7 +1716,17 @@ export function Board({
   const modalOpenRef = useRef(modalOpen);
   modalOpenRef.current = modalOpen;
   const keyHandlers = useRef({});
-  keyHandlers.current = { undo, redo, deleteSelected };
+  keyHandlers.current = {
+    undo,
+    redo,
+    deleteSelected,
+    duplicate,
+    selectAll,
+    bringToFront,
+    sendToBack,
+    nudge,
+    pickImages: () => imagePicker.current?.click(),
+  };
   useEffect(() => {
     const onKey = (e) => {
       if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
@@ -1333,6 +1755,28 @@ export function Board({
         keyHandlers.current.redo();
         return;
       }
+      if (mod && !e.altKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        keyHandlers.current.selectAll();
+        return;
+      }
+      if (mod && !e.altKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        if (selectedIdsRef.current.size) keyHandlers.current.duplicate();
+        return;
+      }
+      const arrows = {
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1],
+      };
+      if (arrows[e.key] && selectedIdsRef.current.size && !mod) {
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1;
+        keyHandlers.current.nudge(arrows[e.key][0] * step, arrows[e.key][1] * step);
+        return;
+      }
       if (mod || e.altKey) return;
       const k = e.key.toLowerCase();
       if (e.key === 'Backspace' || e.key === 'Delete') {
@@ -1340,7 +1784,11 @@ export function Board({
           e.preventDefault();
           keyHandlers.current.deleteSelected();
         }
-      } else if (k === 'v') setTool('select');
+      } else if (e.key === ']') keyHandlers.current.bringToFront();
+      else if (e.key === '[') keyHandlers.current.sendToBack();
+      else if (k === 'm') setTool('marquee');
+      else if (k === 'i') keyHandlers.current.pickImages();
+      else if (k === 'v') setTool('select');
       else if (k === 's') setPanelOpen((p) => !p);
       else if (k === 't') setTool('text');
       else if (k === 'p') setTool('pen');
@@ -1348,6 +1796,8 @@ export function Board({
       else if (k === 'e') setTool('eraser');
       else if (e.key === 'Escape') {
         setEditingId(null);
+        setContextMenu(null);
+        setActionsOpen(false);
         select([]);
         setPanelOpen(false);
         setDeletionsOpen(false);
@@ -1372,6 +1822,7 @@ export function Board({
       return f.x + (f.w || 0) >= minX && f.x <= maxX && f.y + (f.h || 0) >= minY && f.y <= maxY;
     });
   }, [activeItems, view, stageSize]);
+  visibleRef.current = visibleItems;
 
   // Display items keep their identity unless their frame/size is live, so
   // memoized BoardItems skip re-rendering.
@@ -1392,28 +1843,148 @@ export function Board({
     return out;
   };
 
+  // Selection on screen: the box around everything selected (rotation included).
+  const selectedFrames = selectedItems.map((it) => {
+    const f = frameOf(it) || { x: 0, y: 0, w: 100, h: 100 };
+    const m = it.content?.type === 'text' ? measuredRef.current.get(it.id) : null;
+    const shown = m ? { ...f, h: m.h, w: it.style?.autoWidth !== false ? m.w : f.w } : f;
+    return { ...shown, rotation: itemRotation({ ...it, frame: shown }) };
+  });
+  const selectionBox = selectedFrames.length ? groupBounds(selectedFrames) : null;
+  const multi = selectedItems.length > 1;
+  const groupLocked = multi && selectedItems.every((it) => it.style?.locked);
+
   // The bar stays mounted while a gesture runs and only fades, so starting or
   // ending a drag/scale no longer pops it in and out.
   const actionsHidden = gestureActive || Boolean(editingId) || Boolean(drawing);
   let actionsRect = null;
-  if (primarySelected) {
-    const f = frameOf(primarySelected) || { x: 0, y: 0, w: 100, h: 100 };
-    const p = toScreen({ x: f.x, y: f.y }, view);
-    actionsRect = { x: p.x, y: p.y, w: f.w * view.k, h: f.h * view.k };
+  if (selectionBox) {
+    const p = toScreen({ x: selectionBox.x, y: selectionBox.y }, view);
+    actionsRect = { x: p.x, y: p.y, w: selectionBox.w * view.k, h: selectionBox.h * view.k };
   }
 
   const editingItem = editingId ? itemsById.get(editingId) : null;
   let formatRect = null;
   if (editingItem?.content?.type === 'note') {
     const f = frameOf(editingItem);
-    const p = toScreen({ x: f.x, y: f.y }, view);
-    formatRect = { x: p.x, y: p.y, w: f.w * view.k, h: f.h * view.k };
+    const b = frameBounds(f);
+    const p = toScreen({ x: b.x, y: b.y }, view);
+    formatRect = { x: p.x, y: p.y, w: b.w * view.k, h: b.h * view.k };
   }
+
+  const preview = (() => {
+    if (!dragPreview) return null;
+    const t = specTemplate(
+      dragPreview.spec.type === 'places'
+        ? { type: 'widget', content: { kind: 'places', mark: dragPreview.spec.mark }, size: 'M' }
+        : dragPreview.spec,
+    );
+    if (!t) return null;
+    return {
+      id: PREVIEW_ID,
+      tripId,
+      content: t.content,
+      style: t.style,
+      frame: {
+        x: dragPreview.at.x - t.w / 2,
+        y: dragPreview.at.y - t.h / 2,
+        w: t.w,
+        h: t.h,
+        scale: 1,
+      },
+      z: 99998,
+    };
+  })();
+
+  const contextItems = (() => {
+    if (!contextMenu) return [];
+    if (contextMenu.kind === 'canvas') {
+      const at = contextMenu.at;
+      return [
+        {
+          label: '在这里贴便签',
+          icon: 'note',
+          onClick: () => addSpec({ type: 'note', color: 'yellow' }, at),
+        },
+        { label: '在这里加待办', icon: 'todo', onClick: () => addSpec({ type: 'todo' }, at) },
+        { label: '在这里画分区', icon: 'section', onClick: () => addSpec({ type: 'section' }, at) },
+        {
+          label: '上传图片…',
+          icon: 'image',
+          shortcut: 'I',
+          onClick: () => imagePicker.current?.click(),
+        },
+        { divider: true },
+        { label: '全选', shortcut: '⌘A', onClick: selectAll, disabled: !activeItems.length },
+        { label: '适应全板', onClick: fitContent, disabled: !activeItems.length },
+      ];
+    }
+    const list = selectedItems;
+    const one = list.length === 1 ? list[0] : null;
+    const type = one?.content?.type;
+    const locked = list.length > 0 && list.every((it) => it.style?.locked);
+    const out = [];
+    if (one && ['note', 'text', 'todo', 'gallery', 'section'].includes(type) && !locked)
+      out.push({
+        label: type === 'gallery' ? '调整显示' : '编辑',
+        icon: 'edit',
+        shortcut: '双击',
+        onClick: () => itemDoubleClick(one.id),
+      });
+    if (
+      one &&
+      type === 'widget' &&
+      one.content.kind !== 'clock' &&
+      one.content.kind !== 'countdown'
+    )
+      out.push({ label: '打开', icon: 'open', onClick: () => openTarget(one) });
+    if (!locked)
+      out.push({ label: '外观与样式…', icon: 'style', onClick: () => setActionsOpen(true) });
+    if (one && type === 'image' && one.content.assetId)
+      out.push({ label: '收藏到我的表情', icon: 'heart', onClick: () => saveToStickers(one) });
+    out.push({ divider: true });
+    out.push({ label: '复制一份', icon: 'copy', shortcut: '⌘D', onClick: duplicate });
+    out.push({ label: '置于顶层', icon: 'front', shortcut: ']', onClick: bringToFront });
+    out.push({ label: '置于底层', icon: 'back', shortcut: '[', onClick: sendToBack });
+    if (list.length > 1 && !locked)
+      out.push({
+        label: '对齐',
+        icon: 'align',
+        children: [
+          { label: '左对齐', onClick: () => alignSelected('left') },
+          { label: '水平居中', onClick: () => alignSelected('hcenter') },
+          { label: '右对齐', onClick: () => alignSelected('right') },
+          { label: '顶端对齐', onClick: () => alignSelected('top') },
+          { label: '垂直居中', onClick: () => alignSelected('vcenter') },
+          { label: '底端对齐', onClick: () => alignSelected('bottom') },
+          { divider: true },
+          { label: '水平等距', onClick: () => alignSelected('hspace'), disabled: list.length < 3 },
+          { label: '垂直等距', onClick: () => alignSelected('vspace'), disabled: list.length < 3 },
+        ],
+      });
+    if (!list.some((it) => it.content?.type === 'section'))
+      out.push({ label: '框进分区', icon: 'section', onClick: wrapInSection });
+    out.push({
+      label: locked ? '解锁' : '锁定',
+      icon: locked ? 'unlock' : 'lock',
+      onClick: toggleLock,
+    });
+    out.push({ divider: true });
+    out.push({
+      label: '删除',
+      icon: 'delete',
+      shortcut: '⌫',
+      danger: true,
+      onClick: deleteSelected,
+    });
+    return out;
+  })();
 
   const mapDetail = view.k >= 0.4;
   const gridSize = (view.k < 0.4 ? 48 : 24) * view.k;
   const empty = !loading && activeItems.length === 0 && uploads.length === 0;
   const topSafe = narrow ? 84 : 76;
+  const guides = localLive?.guides || null;
 
   return (
     <div
@@ -1478,6 +2049,7 @@ export function Board({
         onPointerUp={endGesture}
         onPointerCancel={endGesture}
         onLostPointerCapture={endGesture}
+        onContextMenu={onStageContextMenu}
       >
         <MapDetailContext.Provider value={mapDetail}>
           <div
@@ -1492,24 +2064,43 @@ export function Board({
                 const peer = peerSelections.get(item.id);
                 const shown = displayItem(item);
                 const size = localLive?.sizes?.[item.id];
+                const selected = selectedIds.has(item.id);
                 return (
                   <BoardItem
                     key={item.id}
                     item={shown}
                     snapshot={snapshot}
-                    selected={selectedIds.has(item.id)}
+                    selected={selected}
+                    handles={selected && !multi}
                     isEditing={editingId === item.id}
                     flash={flashId === item.id}
                     peerName={peer?.name || null}
                     peerColor={peer?.color || null}
                     peerEditing={Boolean(peer?.editing)}
                     resizing={resizingId === item.id}
-                    reshape={size ? { size, box: localLive.boxes[item.id] } : null}
+                    reshape={
+                      size
+                        ? { size, box: localLive.boxes[item.id] }
+                        : localLive?.labels?.[item.id]
+                          ? { box: localLive.boxes[item.id] }
+                          : null
+                    }
+                    ratioLabel={localLive?.labels?.[item.id] ?? null}
+                    angleLabel={localLive?.angles?.[item.id] ?? null}
                     tripId={tripId}
                     {...itemCallbacks}
                   />
                 );
               })}
+              {preview && (
+                <BoardItem
+                  key={PREVIEW_ID}
+                  item={preview}
+                  snapshot={snapshot}
+                  preview
+                  tripId={tripId}
+                />
+              )}
               {uploads.map((u) => (
                 <div
                   key={u.id}
@@ -1525,7 +2116,7 @@ export function Board({
                   {u.status === 'uploading' ? (
                     <>
                       <span className="ring" aria-hidden="true" />
-                      <span>正在上传…</span>
+                      <span>{u.message || '正在上传…'}</span>
                     </>
                   ) : (
                     <>
@@ -1544,9 +2135,66 @@ export function Board({
               ))}
             </div>
 
+            {multi && selectionBox && (
+              <div
+                className={`group-box ${gestureActive ? 'is-moving' : ''}`}
+                style={{
+                  transform: `translate(${selectionBox.x}px, ${selectionBox.y}px)`,
+                  width: selectionBox.w,
+                  height: selectionBox.h,
+                }}
+              >
+                <span className="count">
+                  {localLive?.groupAngle != null
+                    ? `${Math.round(localLive.groupAngle)}°`
+                    : `已选 ${selectedItems.length} 项`}
+                </span>
+                {!groupLocked && (
+                  <>
+                    <div
+                      className="handle rotate h-rot"
+                      role="presentation"
+                      title="拖动旋转，按住 Shift 每次 15°"
+                      onPointerDown={(e) => handlePointerDown(e, GROUP, 'rotate')}
+                    />
+                    {['nw', 'ne', 'se', 'sw'].map((a) => (
+                      <div
+                        key={a}
+                        className={`handle corner h-${a}`}
+                        onPointerDown={(e) => handlePointerDown(e, GROUP, a)}
+                      />
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+
+            {marquee && (
+              <div
+                className="marquee"
+                style={{
+                  transform: `translate(${marquee.x}px, ${marquee.y}px)`,
+                  width: marquee.w,
+                  height: marquee.h,
+                }}
+              />
+            )}
+
+            {guides?.map((gd, i) => (
+              <div
+                key={i}
+                className={`guide ${gd.axis}`}
+                style={
+                  gd.axis === 'x'
+                    ? { transform: `translate(${gd.pos}px, ${gd.from}px)`, height: gd.to - gd.from }
+                    : { transform: `translate(${gd.from}px, ${gd.pos}px)`, width: gd.to - gd.from }
+                }
+              />
+            ))}
+
             {drawing &&
               (() => {
-                const s = strokeLook(drawing.tool, drawing.color, drawing.size);
+                const st = strokeLook(drawing.tool, drawing.color, drawing.size);
                 return (
                   <svg
                     id="draft"
@@ -1555,9 +2203,9 @@ export function Board({
                   >
                     <path
                       ref={setDraftPath}
-                      stroke={s.stroke}
-                      strokeWidth={s.width}
-                      strokeOpacity={s.opacity}
+                      stroke={st.stroke}
+                      strokeWidth={st.width}
+                      strokeOpacity={st.opacity}
                       fill="none"
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -1576,26 +2224,37 @@ export function Board({
         </p>
       )}
 
-      {primarySelected && actionsRect && (
+      {selectedItems.length > 0 && actionsRect && actionsOpen && (
         <BoardActions
-          key={primarySelected.id}
-          item={primarySelected}
+          items={selectedItems}
           rect={actionsRect}
           stage={stageSize}
           topSafe={topSafe}
           hidden={actionsHidden}
-          onChangeNoteColor={changeNoteColor}
-          onChangeStyle={changeStyle}
-          onGalleryRatio={changeGalleryRatio}
+          onClose={() => setActionsOpen(false)}
+          onColor={changeColor}
+          onStyle={changeStyle}
           onGalleryAdd={() => openGalleryPicker({ id: primarySelected.id })}
           onEdit={() => itemDoubleClick(primarySelected.id)}
-          onBringToFront={bringToFront}
-          onSendToBack={sendToBack}
+          onFront={bringToFront}
+          onBack={sendToBack}
           onDuplicate={duplicate}
           onToggleLock={toggleLock}
           onDelete={deleteSelected}
+          onAlign={alignSelected}
+          onWrapSection={wrapInSection}
+          onSaveSticker={saveToStickers}
           onSchedulePlace={schedulePlace}
           onOpenTarget={openTarget}
+        />
+      )}
+
+      {contextMenu && (
+        <BoardContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextItems}
+          onClose={() => setContextMenu(null)}
         />
       )}
 
@@ -1629,7 +2288,7 @@ export function Board({
         activeTool={tool}
         onSelectTool={(t) => {
           setTool(t);
-          if (t !== 'select') select([]);
+          if (t !== 'select' && t !== 'marquee') select([]);
         }}
         penColor={penColor}
         penSize={penSize}
@@ -1642,6 +2301,7 @@ export function Board({
           setDeletionsOpen(false);
           setPanelOpen((p) => !p);
         }}
+        onPickImages={() => imagePicker.current?.click()}
         canUndo={undoStack.length > 0}
         canRedo={redoStack.length > 0}
         onUndo={undo}
@@ -1657,8 +2317,7 @@ export function Board({
         onDockChange={onDockChange}
         narrow={narrow}
         onAdd={(spec) => addSpec(spec)}
-        onDropOnCanvas={dropSpec}
-        onUploadImage={(file) => startUpload(file)}
+        onDragSpec={panelDrag}
         stickers={stickers}
         onUploadSticker={uploadSticker}
         onRemoveSticker={removeSticker}
@@ -1686,6 +2345,23 @@ export function Board({
         onChange={(e) => {
           onGalleryFiles(e.target.files || []);
           e.target.value = '';
+        }}
+      />
+      <input
+        ref={imagePicker}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        multiple
+        hidden
+        aria-label="上传图片"
+        onChange={(e) => {
+          const files = [...(e.target.files || [])].slice(0, 12);
+          e.target.value = '';
+          const a = visibleArea(stageSize, insetsRef.current);
+          const mid = toWorld({ x: a.x + a.w / 2, y: a.y + a.h / 2 }, viewRef.current);
+          files.forEach((file, i) =>
+            startUpload(file, null, { x: mid.x + i * 28, y: mid.y + i * 28 }),
+          );
         }}
       />
       {dropping && <div className="drop-hint">松手把图片放到这里</div>}

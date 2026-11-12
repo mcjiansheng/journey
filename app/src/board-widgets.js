@@ -28,32 +28,43 @@ export const WIDGET_KINDS = {
 };
 
 const sameMark = (a, b) => Boolean(a && b && a.icon === b.icon && a.color === b.color);
-/** Favorites grouped by their mark; named by the matching mark preset when there is one. */
+export const UNSORTED_KEY = 'unsorted';
+/**
+ * Favorites grouped by mark preset. Only a mark the user saved as a preset
+ * makes a category; every other place is 「未分类」 (last, `preset: false`).
+ * Presets without places are left out.
+ */
 export function placeGroups(snapshot) {
   const objects = snapshot?.objects || [];
   const presets = objects
     .filter((o) => o.kind === 'markPreset' && o.state === 'active')
     .sort((a, b) => (a.payload.order ?? 0) - (b.payload.order ?? 0));
   const favorites = objects.filter((o) => o.kind === 'favorite' && o.state === 'active');
-  const groups = new Map();
+  const groups = presets.map((p) => ({
+    key: `${p.payload.icon}:${p.payload.color}`,
+    mark: { icon: p.payload.icon, color: p.payload.color },
+    name: p.payload.name || '',
+    preset: true,
+    favorites: [],
+  }));
+  const unsorted = {
+    key: UNSORTED_KEY,
+    mark: null,
+    name: '未分类',
+    preset: false,
+    favorites: [],
+  };
   for (const f of favorites) {
     const mark = f.payload.mark || defaultMark();
-    const key = `${mark.icon}:${mark.color}`;
-    if (!groups.has(key)) {
-      const preset = presets.find((p) => sameMark(p.payload, mark));
-      groups.set(key, {
-        key,
-        mark,
-        name: preset?.payload.name || '',
-        order: preset ? presets.indexOf(preset) : presets.length + groups.size,
-        favorites: [],
-      });
-    }
-    groups.get(key).favorites.push(f);
+    const g = groups.find((x) => sameMark(x.mark, mark));
+    (g || unsorted).favorites.push(f);
   }
-  return [...groups.values()].sort((a, b) => a.order - b.order);
+  const out = groups.filter((g) => g.favorites.length);
+  if (unsorted.favorites.length) out.push(unsorted);
+  return out;
 }
 export function markGroupName(group) {
+  if (group && group.preset === false) return '未分类';
   return (
     group?.name ||
     `${colorNames[group?.mark?.color] || ''}${iconNames[group?.mark?.icon] || '标记'}`
@@ -337,7 +348,7 @@ export function widgetModel(snapshot, item, { now = Date.now(), deviceTimeZone }
 
   if (kind === 'places') {
     const mark = content.mark || defaultMark();
-    const group = placeGroups(snapshot).find((g) => sameMark(g.mark, mark));
+    const group = placeGroups(snapshot).find((g) => g.preset && sameMark(g.mark, mark));
     const favorites = group?.favorites || [];
     const stops = favorites.map((f, i) => ({
       id: f.id,
