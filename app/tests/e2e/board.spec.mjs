@@ -1503,3 +1503,170 @@ test('board: countdown, clock and expense widgets have looks', async ({ page }) 
   }
   await page.screenshot({ path: evidence('3-widget-looks.png') });
 });
+
+// ---------- 第三轮追修 ----------
+
+test('board: panel drags never get stuck (back and forth, Escape, release on the panel)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  const panel = page.locator('#panel');
+  const tile = panel.locator('.gallery button:has-text("当地时间")');
+  const tb = await tile.boundingBox();
+  const home = { x: tb.x + tb.width / 2, y: tb.y + tb.height / 2 };
+  const preview = page.locator('.board-item.is-preview');
+  const settled = async () => {
+    await expect(preview).toHaveCount(0);
+    await expect(panel).not.toHaveClass(/dragging-out|drop-back/);
+    await expect(panel.locator('.drag-back-hint')).toHaveCount(0);
+  };
+
+  // Out, back, out, back, out — then let go on the board: exactly one clock.
+  await page.mouse.move(home.x, home.y);
+  await page.mouse.down();
+  for (let i = 0; i < 2; i++) {
+    await page.mouse.move(900, 420, { steps: 10 });
+    await expect(preview).toBeVisible();
+    await page.mouse.move(home.x, home.y + 40, { steps: 10 });
+    await expect(preview).toHaveCount(0);
+  }
+  await page.mouse.move(900, 420, { steps: 10 });
+  await page.mouse.up();
+  await settled();
+  await expect(page.locator('.board-item.item-widget')).toHaveCount(1);
+
+  // Back onto the panel and let go: nothing is added, nothing stays behind.
+  await page.mouse.move(home.x, home.y);
+  await page.mouse.down();
+  await page.mouse.move(900, 300, { steps: 10 });
+  await page.mouse.move(home.x, home.y + 40, { steps: 10 });
+  await page.mouse.up();
+  await settled();
+  await expect(page.locator('.board-item.item-widget')).toHaveCount(1);
+
+  // Escape cancels a drag in progress.
+  await page.mouse.move(home.x, home.y);
+  await page.mouse.down();
+  await page.mouse.move(800, 500, { steps: 10 });
+  await expect(preview).toBeVisible();
+  await page.keyboard.press('Escape');
+  await settled();
+  await page.mouse.up();
+  await expect(page.locator('.board-item.item-widget')).toHaveCount(1);
+});
+
+test('board: menus never cover each other; rail buttons are named on hover', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  await page.locator('#panel .gallery button:has-text("倒计时")').click();
+  await page.locator('#panel button[aria-label="关闭"]').click();
+  // Move it close to the top-left corner, where the bar has to go below it.
+  const w = page.locator('.board-item.item-widget');
+  const wb = await w.boundingBox();
+  await page.mouse.move(wb.x + wb.width / 2, wb.y + wb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(260, 170, { steps: 10 });
+  await page.mouse.up();
+  await openActions(page, w);
+  await page.locator('#actions').getByRole('button', { name: '样式' }).click();
+  await expect(page.locator('.style-pop')).toBeVisible();
+  const boxes = await page.evaluate(() =>
+    ['#actions', '.style-pop', '#arrange']
+      .map((sel) => document.querySelector(sel))
+      .filter((el) => el && getComputedStyle(el).opacity !== '0')
+      .map((el) => el.getBoundingClientRect().toJSON()),
+  );
+  const overlap = (a, b) =>
+    a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) expect(overlap(boxes[i], boxes[j])).toBe(false);
+  await page.screenshot({ path: evidence('3b-menus-no-overlap.png') });
+
+  // The rail's icons are distinct and named on hover.
+  await page.locator('.style-pop').getByRole('button', { name: '翻页', exact: true }).click();
+  await page.locator('#arrange button[aria-label="置于顶层"]').hover();
+  await expect(page.locator('.act-tip')).toContainText('置于顶层');
+  await page.locator('#arrange button[aria-label="复制一份"]').hover();
+  await expect(page.locator('.act-tip')).toContainText('复制一份');
+  await expect(page.locator('.act-tip')).toContainText('⌘D');
+  await page.screenshot({ path: evidence('3b-rail-tip.png') });
+});
+
+test('board: snapping can be switched off and is remembered', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  const toggle = page.locator('#zoom .snap-toggle');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await page.reload();
+  await page.getByRole('button', { name: /继续旅程/ }).click();
+  await openBoard(page);
+  await expect(page.locator('#zoom .snap-toggle')).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('board: my stickers can be removed from the emoji page with a right-click', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  const panel = page.locator('#panel');
+  await panel.locator('.tabs button:has-text("表情")').click();
+  const chooser = page.waitForEvent('filechooser');
+  await panel.getByRole('button', { name: '上传自己的表情' }).click();
+  await (
+    await chooser
+  ).setFiles({ name: 'me.png', mimeType: 'image/png', buffer: png(40, 40, [90, 160, 250]) });
+  const mine = panel.locator('.my-sticker');
+  await expect(mine).toHaveCount(1);
+  await mine.click({ button: 'right' });
+  const menu = page.getByRole('menu', { name: '我的表情' });
+  await expect(menu).toBeVisible();
+  await menu.getByRole('menuitem', { name: '取消收藏' }).click();
+  await expect(mine).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const s = await page.evaluate(() => fetch('/api/session').then((r) => r.json()));
+      return (s.user || s).preferences.stickers?.length || 0;
+    })
+    .toBe(0);
+});
+
+test('board: gallery adjusting controls stay readable when zoomed out', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.locator('#panel').getByRole('button', { name: '添加图库' }).click();
+  await (
+    await chooser
+  ).setFiles([{ name: 'a.png', mimeType: 'image/png', buffer: png(80, 60, [30, 120, 200]) }]);
+  await page.locator('#panel button[aria-label="关闭"]').click();
+  for (let i = 0; i < 3; i++) await page.locator('#zoom button[aria-label="缩小"]').click();
+  const gallery = page.locator('.board-item.item-gallery');
+  await gallery.dblclick();
+  const done = gallery.locator('.gallery-tools button', { hasText: '完成' });
+  await expect(done).toBeVisible();
+  const b = await done.boundingBox();
+  expect(b.height).toBeGreaterThanOrEqual(34);
+  const fs = await done.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return parseFloat(getComputedStyle(el).fontSize) * (r.height / el.offsetHeight);
+  });
+  expect(fs).toBeGreaterThanOrEqual(13);
+  await page.screenshot({ path: evidence('3b-gallery-tools-zoomed-out.png') });
+});

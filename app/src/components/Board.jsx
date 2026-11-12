@@ -1091,6 +1091,23 @@ export function Board({
   const [marquee, setMarquee] = useState(null); // world rect while box-selecting
   const draftPathRef = useRef(null);
   const visibleRef = useRef([]);
+  // 对齐吸附: on by default, remembered on this device.
+  const [snapOn, setSnapOn] = useState(() => {
+    try {
+      return localStorage.getItem('journey.boardSnap') !== 'off';
+    } catch {
+      return true;
+    }
+  });
+  const snapRef = useRef(snapOn);
+  snapRef.current = snapOn;
+  const toggleSnap = () =>
+    setSnapOn((on) => {
+      try {
+        localStorage.setItem('journey.boardSnap', on ? 'off' : 'on');
+      } catch {}
+      return !on;
+    });
 
   // Objects and handles capture on themselves (so click/dblclick still reach
   // them); blank-canvas gestures and the eraser capture on the stage. Either
@@ -1472,11 +1489,13 @@ export function Board({
       let dx = cur.x - g.startWorld.x;
       let dy = cur.y - g.startWorld.y;
       let guides = null;
-      // Alignment guides; hold Alt (⌥) to move freely.
-      if (!e.altKey && g.others.length) {
+      // Alignment guides (toggle beside the zoom); hold Alt (⌥) to flip it
+      // for this drag. Only objects close to the moving one take part.
+      if (snapRef.current !== e.altKey && g.others.length) {
         g.box0 ||= groupBounds([...g.frames0.values()]);
         const moved = { ...g.box0, x: g.box0.x + dx, y: g.box0.y + dy };
-        const snap = snapToGuides(moved, g.others, 6 / viewRef.current.k);
+        const k = viewRef.current.k;
+        const snap = snapToGuides(moved, g.others, 6 / k, 240 / k);
         dx += snap.dx;
         dy += snap.dy;
         guides = snap.guides.length ? snap.guides : null;
@@ -2315,6 +2334,20 @@ export function Board({
         <button className="iconbtn" onClick={() => zoomBy(1.2)} aria-label="放大">
           <svg viewBox="0 0 24 24">
             <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+        <button
+          className={`iconbtn snap-toggle ${snapOn ? 'on' : ''}`}
+          onClick={toggleSnap}
+          aria-pressed={snapOn}
+          aria-label={snapOn ? '对齐吸附：开（点按关闭）' : '对齐吸附：关（点按开启）'}
+          title={
+            snapOn ? '对齐吸附：开 · 拖动时按住 ⌥ 临时关闭' : '对齐吸附：关 · 拖动时按住 ⌥ 临时开启'
+          }
+        >
+          <svg viewBox="0 0 24 24">
+            <path d="M6 4v7a6 6 0 0 0 12 0V4h-4v7a2 2 0 0 1-4 0V4z" />
+            <path d="M6 8h4M14 8h4" />
           </svg>
         </button>
         <button className="iconbtn" onClick={fitContent} title="适应全板" aria-label="适应全板">

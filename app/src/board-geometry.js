@@ -197,40 +197,50 @@ export function finalizeStroke(points, simplifyFn, limit = 1000) {
 const edgesX = (b) => [b.x, b.x + b.w / 2, b.x + b.w];
 const edgesY = (b) => [b.y, b.y + b.h / 2, b.y + b.h];
 
+// Gap between two boxes along one axis (0 when they overlap on it).
+const gapY = (a, b) => Math.max(0, b.y - (a.y + a.h), a.y - (b.y + b.h));
+const gapX = (a, b) => Math.max(0, b.x - (a.x + a.w), a.x - (b.x + b.w));
+
 /**
- * Snap a moving box to the edges and centers of `others`. Returns the
- * correction to add and the guide lines to draw (world coordinates).
+ * Snap a moving box to the edges and centers of nearby boxes. Only boxes
+ * within `near` of the moving one count (a vertical guide needs the other box
+ * close above or below, a horizontal one close to the side), and the closest
+ * one wins ties, so the guide connects the box you are actually lining up
+ * with. Returns the correction to add and the guides (world coordinates).
  */
-export function snapToGuides(moving, others, threshold) {
+export function snapToGuides(moving, others, threshold, near = Infinity) {
   let bestX = null;
   let bestY = null;
+  const better = (cur, d, gap) =>
+    !cur ||
+    Math.abs(d) < Math.abs(cur.d) - 0.01 ||
+    (Math.abs(d) - Math.abs(cur.d) < 0.01 && gap < cur.gap);
   for (const o of others) {
-    for (const mx of edgesX(moving))
-      for (const ox of edgesX(o)) {
-        const d = ox - mx;
-        if (Math.abs(d) <= threshold && (!bestX || Math.abs(d) < Math.abs(bestX.d)))
-          bestX = { d, pos: ox };
-      }
-    for (const my of edgesY(moving))
-      for (const oy of edgesY(o)) {
-        const d = oy - my;
-        if (Math.abs(d) <= threshold && (!bestY || Math.abs(d) < Math.abs(bestY.d)))
-          bestY = { d, pos: oy };
-      }
+    const gy = gapY(moving, o);
+    if (gy <= near)
+      for (const mx of edgesX(moving))
+        for (const ox of edgesX(o)) {
+          const d = ox - mx;
+          if (Math.abs(d) <= threshold && better(bestX, d, gy)) bestX = { d, pos: ox, o, gap: gy };
+        }
+    const gx = gapX(moving, o);
+    if (gx <= near)
+      for (const my of edgesY(moving))
+        for (const oy of edgesY(o)) {
+          const d = oy - my;
+          if (Math.abs(d) <= threshold && better(bestY, d, gx)) bestY = { d, pos: oy, o, gap: gx };
+        }
   }
   const dx = bestX ? bestX.d : 0;
   const dy = bestY ? bestY.d : 0;
   const snapped = { ...moving, x: moving.x + dx, y: moving.y + dy };
   const guides = [];
-  const near = (a, b) => Math.abs(a - b) < 0.5;
   if (bestX) {
-    const hits = others.filter((o) => edgesX(o).some((v) => near(v, bestX.pos)));
-    const ys = [snapped.y, snapped.y + snapped.h, ...hits.flatMap((o) => [o.y, o.y + o.h])];
+    const ys = [snapped.y, snapped.y + snapped.h, bestX.o.y, bestX.o.y + bestX.o.h];
     guides.push({ axis: 'x', pos: bestX.pos, from: Math.min(...ys), to: Math.max(...ys) });
   }
   if (bestY) {
-    const hits = others.filter((o) => edgesY(o).some((v) => near(v, bestY.pos)));
-    const xs = [snapped.x, snapped.x + snapped.w, ...hits.flatMap((o) => [o.x, o.x + o.w])];
+    const xs = [snapped.x, snapped.x + snapped.w, bestY.o.x, bestY.o.x + bestY.o.w];
     guides.push({ axis: 'y', pos: bestY.pos, from: Math.min(...xs), to: Math.max(...xs) });
   }
   return { dx, dy, guides };

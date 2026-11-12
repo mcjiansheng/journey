@@ -5,6 +5,7 @@ import { WIDGET_SIZES, placeGroups, markGroupName } from '../board-widgets.js';
 import { NOTE, NOTE_NAMES, nearestDock, stickerUrl } from '../board.js';
 import { markColors, markPaths } from '../marks.js';
 import { orderedActivities, visibleDays, dayLabel, timeLabel } from '../domain.js';
+import { BoardContextMenu } from './BoardContextMenu.jsx';
 
 const RECENT_KEY = 'journey.recentEmoji';
 const RECENT_MAX = 24;
@@ -93,6 +94,7 @@ export function BoardStickerPanel({
   const panelRef = useRef(null);
   const dockGestureRef = useRef(null);
   const itemGestureRef = useRef(null);
+  useEffect(() => () => itemGestureRef.current?.finish?.(null, true), []);
   const flipRef = useRef(null);
   const lastDragEndRef = useRef(0);
 
@@ -236,47 +238,79 @@ export function BoardStickerPanel({
   // Dragging an item: outside the panel the board shows the real object under
   // the pointer (Board does that through onDragSpec); back over the panel a
   // small ghost follows and letting go puts it back.
+  // The drag is followed on window, not through pointer capture on the tile:
+  // a lost capture used to leave the drag (and the object on the board) stuck.
   const itemHandlers = (spec) => ({
     onPointerDown: (e) => {
       if (e.button !== 0) return;
-      itemGestureRef.current = { spec, sx: e.clientX, sy: e.clientY, started: false };
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {}
-    },
-    onPointerMove: (e) => {
-      const g = itemGestureRef.current;
-      if (!g) return;
-      if (!g.started && Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < DRAG_THRESHOLD) return;
-      g.started = true;
-      const over = isOverPanel(e.clientX, e.clientY);
-      g.next = { x: e.clientX, y: e.clientY, over };
-      if (g.raf) return;
-      g.raf = requestAnimationFrame(() => {
-        g.raf = 0;
-        if (itemGestureRef.current !== g) return;
-        const { x, y, over: o } = g.next;
-        setItemDrag({ spec, x, y, over: o });
-        onDragSpec?.({ phase: 'move', spec, clientX: x, clientY: y, overPanel: o });
-      });
-    },
-    onPointerUp: (e) => {
-      const g = itemGestureRef.current;
-      itemGestureRef.current = null;
-      if (!g?.started) return;
-      cancelAnimationFrame(g.raf);
-      lastDragEndRef.current = Date.now();
-      setItemDrag(null);
-      const over = isOverPanel(e.clientX, e.clientY);
-      if (!over) used(spec);
-      onDragSpec?.({ phase: 'end', spec, clientX: e.clientX, clientY: e.clientY, overPanel: over });
-    },
-    onPointerCancel: () => {
-      const g = itemGestureRef.current;
-      itemGestureRef.current = null;
-      if (g) cancelAnimationFrame(g.raf);
-      setItemDrag(null);
-      onDragSpec?.({ phase: 'cancel', spec });
+      e.preventDefault(); // no text selection while dragging across the panel
+      itemGestureRef.current?.finish?.(null, true);
+      const g = {
+        spec,
+        pointerId: e.pointerId,
+        sx: e.clientX,
+        sy: e.clientY,
+        started: false,
+        raf: 0,
+      };
+      const move = (ev) => {
+        if (ev.pointerId !== g.pointerId) return;
+        // A release outside the window never reached us.
+        if (ev.pointerType === 'mouse' && (ev.buttons & 1) === 0) {
+          g.finish(ev, false);
+          return;
+        }
+        if (!g.started && Math.hypot(ev.clientX - g.sx, ev.clientY - g.sy) < DRAG_THRESHOLD) return;
+        g.started = true;
+        g.next = { x: ev.clientX, y: ev.clientY, over: isOverPanel(ev.clientX, ev.clientY) };
+        if (g.raf) return;
+        g.raf = requestAnimationFrame(() => {
+          g.raf = 0;
+          if (itemGestureRef.current !== g) return;
+          const { x, y, over } = g.next;
+          setItemDrag({ spec, x, y, over });
+          onDragSpec?.({ phase: 'move', spec, clientX: x, clientY: y, overPanel: over });
+        });
+      };
+      const up = (ev) => ev.pointerId === g.pointerId && g.finish(ev, false);
+      const cancel = () => g.finish(null, true);
+      const key = (ev) => {
+        if (ev.key !== 'Escape' || !g.started) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        g.finish(null, true);
+      };
+      g.finish = (ev, cancelled) => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', cancel);
+        window.removeEventListener('blur', cancel);
+        window.removeEventListener('keydown', key, true);
+        if (itemGestureRef.current === g) itemGestureRef.current = null;
+        cancelAnimationFrame(g.raf);
+        if (!g.started) return;
+        lastDragEndRef.current = Date.now();
+        setItemDrag(null);
+        if (cancelled || !ev) {
+          onDragSpec?.({ phase: 'cancel', spec });
+          return;
+        }
+        const over = isOverPanel(ev.clientX, ev.clientY);
+        if (!over) used(spec);
+        onDragSpec?.({
+          phase: 'end',
+          spec,
+          clientX: ev.clientX,
+          clientY: ev.clientY,
+          overPanel: over,
+        });
+      };
+      itemGestureRef.current = g;
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', cancel);
+      window.addEventListener('blur', cancel);
+      window.addEventListener('keydown', key, true);
     },
     onClick: () => {
       // A drag ends with a click event too; only a plain click adds at center.
@@ -784,6 +818,7 @@ function EmojiTab({ itemHandlers, recent, stickers, onUploadSticker, onRemoveSti
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(0);
   const [manage, setManage] = useState(false);
+  const [stickerMenu, setStickerMenu] = useState(null); // { x, y, sticker }
   const fileRef = useRef(null);
   const gridRef = useRef(null);
 
@@ -914,7 +949,12 @@ function EmojiTab({ itemHandlers, recent, stickers, onUploadSticker, onRemoveSti
                   key={st.id}
                   className="my-sticker"
                   aria-label={st.animated ? '添加我的动图表情' : '添加我的表情'}
+                  title="点按或拖到白板；右键取消收藏"
                   {...itemHandlers({ type: 'sticker', sticker: st })}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setStickerMenu({ x: e.clientX, y: e.clientY, sticker: st });
+                  }}
                 >
                   <img src={stickerUrl(st.id)} alt="" loading="lazy" draggable="false" />
                 </button>
@@ -922,6 +962,31 @@ function EmojiTab({ itemHandlers, recent, stickers, onUploadSticker, onRemoveSti
             )}
           </div>
         </section>
+      )}
+
+      {stickerMenu && (
+        <BoardContextMenu
+          fixed
+          label="我的表情"
+          x={stickerMenu.x}
+          y={stickerMenu.y}
+          onClose={() => setStickerMenu(null)}
+          items={[
+            {
+              label: '加到白板',
+              icon: 'image',
+              onClick: () =>
+                itemHandlers({ type: 'sticker', sticker: stickerMenu.sticker }).onClick(),
+            },
+            { divider: true },
+            {
+              label: '取消收藏',
+              icon: 'delete',
+              danger: true,
+              onClick: () => onRemoveSticker?.(stickerMenu.sticker.id),
+            },
+          ]}
+        />
       )}
 
       {!q && tabs.length > 0 && (

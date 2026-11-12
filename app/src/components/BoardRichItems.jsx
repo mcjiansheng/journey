@@ -201,14 +201,28 @@ export function GalleryView({ item, tripId, isEditing, selected, onChange, onAdd
       )}
       {isEditing && (
         <div className="gallery-tools" onPointerDown={stop}>
-          <button onClick={() => commitCrop({ ...crop, zoom: crop.zoom / 1.2 })} aria-label="缩小">
+          <button
+            className="sym"
+            onClick={() => commitCrop({ ...crop, zoom: crop.zoom / 1.2 })}
+            aria-label="缩小"
+            title="缩小"
+          >
             −
           </button>
-          <button onClick={() => commitCrop({ ...crop, zoom: crop.zoom * 1.2 })} aria-label="放大">
+          <span className="zoom-pct" aria-live="polite">
+            {Math.round((crop.zoom || 1) * 100)}%
+          </span>
+          <button
+            className="sym"
+            onClick={() => commitCrop({ ...crop, zoom: crop.zoom * 1.2 })}
+            aria-label="放大"
+            title="放大"
+          >
             ＋
           </button>
           <button onClick={() => commitCrop({ x: 0, y: 0, zoom: 1 })}>重置</button>
-          <button onClick={onAddImages}>添加</button>
+          <span className="sep" aria-hidden="true" />
+          <button onClick={onAddImages}>添加图片</button>
           {current && (
             <button className="danger" onClick={removeCurrent}>
               移除这张

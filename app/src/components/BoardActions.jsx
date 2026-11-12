@@ -1,4 +1,11 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { NOTE, NOTE_NAMES, noteColor, IMAGE_FRAMES, variantsFor } from '../board.js';
 
 // Above the selection the bar clears the rotation handle; below it, the size label.
@@ -29,22 +36,24 @@ const ICONS = {
     </>
   ),
   heart: <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />,
+  // 复制一份: a sheet with a plus, not two stacked squares (those read as layers).
   copy: (
     <>
-      <rect x="8" y="8" width="12" height="12" rx="2.5" />
-      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+      <rect x="4" y="7" width="13" height="13" rx="2.5" />
+      <path d="M8 4h9.5A2.5 2.5 0 0 1 20 6.5V16M10.5 10.5v6M7.5 13.5h6" />
     </>
   ),
+  // 置于顶层 / 置于底层: an arrow to a bar, up or down.
   front: (
     <>
-      <rect x="4" y="4" width="11" height="11" rx="2" />
-      <rect x="9" y="9" width="11" height="11" rx="2" className="fill" />
+      <path d="M5 4.5h14" />
+      <path d="M12 20V9M7.5 13 12 8.5l4.5 4.5" />
     </>
   ),
   back: (
     <>
-      <rect x="9" y="9" width="11" height="11" rx="2" />
-      <rect x="4" y="4" width="11" height="11" rx="2" className="fill" />
+      <path d="M5 19.5h14" />
+      <path d="M12 4v11M7.5 11 12 15.5l4.5-4.5" />
     </>
   ),
   lock: (
@@ -127,19 +136,42 @@ export function ActionIcon({ name }) {
   );
 }
 
-const IconButton = ({ icon, label, onClick, pressed, danger, disabled, className = '' }) => (
-  <button
-    type="button"
-    className={`ib ${danger ? 'danger' : ''} ${className}`}
-    aria-label={label}
-    title={label}
-    aria-pressed={pressed}
-    disabled={disabled}
-    onClick={onClick}
-  >
-    <ActionIcon name={icon} />
-  </button>
-);
+// Hover names: shown quickly beside the button, away from the object.
+const TipContext = createContext(null);
+
+const IconButton = ({
+  icon,
+  label,
+  shortcut,
+  onClick,
+  pressed,
+  danger,
+  disabled,
+  className = '',
+  side,
+}) => {
+  const tip = useContext(TipContext);
+  const show = (e) => tip?.show(e.currentTarget, label, side, shortcut);
+  return (
+    <button
+      type="button"
+      className={`ib ${danger ? 'danger' : ''} ${className}`}
+      aria-label={label}
+      aria-pressed={pressed}
+      disabled={disabled}
+      onClick={(e) => {
+        tip?.hide();
+        onClick?.(e);
+      }}
+      onPointerEnter={show}
+      onPointerLeave={() => tip?.hide()}
+      onFocus={(e) => e.currentTarget.matches(':focus-visible') && show(e)}
+      onBlur={() => tip?.hide()}
+    >
+      <ActionIcon name={icon} />
+    </button>
+  );
+};
 
 const ALIGNS = [
   ['left', '左对齐', 'align-left'],
@@ -190,26 +222,112 @@ export function BoardActions({
 }) {
   const barRef = useRef(null);
   const railRef = useRef(null);
+  const popRef = useRef(null);
   const [pos, setPos] = useState(null);
   const [pop, setPop] = useState(null); // 'color' | 'style' | 'align'
+  const [tipState, setTipState] = useState(null); // { label, x, y, side }
+  const tipTimer = useRef(0);
+  const tipApi = useRef(null);
+  tipApi.current ||= {
+    show: (el, label, side = 'bottom', shortcut = '') => {
+      clearTimeout(tipTimer.current);
+      tipTimer.current = setTimeout(() => {
+        const box = el.getBoundingClientRect();
+        const origin = (railRef.current || barRef.current)?.offsetParent?.getBoundingClientRect();
+        if (!origin) return;
+        setTipState({
+          label,
+          shortcut,
+          side,
+          x:
+            (side === 'left' ? box.left : side === 'right' ? box.right : box.left + box.width / 2) -
+            origin.left,
+          y:
+            (side === 'top' ? box.top : side === 'bottom' ? box.bottom : box.top + box.height / 2) -
+            origin.top,
+        });
+      }, 120);
+    },
+    hide: () => {
+      clearTimeout(tipTimer.current);
+      setTipState(null);
+    },
+  };
+  useEffect(() => () => clearTimeout(tipTimer.current), []);
+  useEffect(() => {
+    if (hidden) tipApi.current.hide();
+  }, [hidden]);
 
+  // Place the bar, its pop-up and the rail so none of them cover another or
+  // the object's handles: bar above (or below), pop-up beyond the bar, rail
+  // beside the object, moved along its side (or to the other side) when the
+  // bar or pop-up reaches into its column.
   useLayoutEffect(() => {
     if (!rect) return;
-    const bar = barRef.current;
-    const rail = railRef.current;
-    const bw = bar?.offsetWidth || 0;
-    const bh = bar?.offsetHeight || 0;
+    const bw = barRef.current?.offsetWidth || 0;
+    const bh = barRef.current?.offsetHeight || 0;
     const above = rect.y - GAP_ABOVE - bh;
     const barBelow = above < topSafe;
     const top = barBelow ? Math.min(rect.y + rect.h + GAP_BELOW, stage.h - bh - 96) : above;
     const cx = rect.x + rect.w / 2;
     const left = Math.min(stage.w - 8 - bw, Math.max(8, cx - bw / 2));
-    const rw = rail?.offsetWidth || 0;
-    const rh = rail?.offsetHeight || 0;
-    const right = rect.x + rect.w + RAIL_GAP;
-    const railLeft = right + rw <= stage.w - 8 ? right : Math.max(8, rect.x - RAIL_GAP - rw);
-    const railTop = Math.max(topSafe, Math.min(stage.h - rh - 96, rect.y + rect.h / 2 - rh / 2));
-    const next = { left, top, h: bh, barBelow, railLeft, railTop };
+    const pw = popRef.current?.offsetWidth || 0;
+    const ph = popRef.current?.offsetHeight || 0;
+    const popLeft = Math.min(stage.w - 8 - pw, Math.max(8, left + bw / 2 - pw / 2));
+    const popTop = barBelow ? top + bh + 8 : top - 8 - ph;
+    const blocks = [];
+    if (bw) blocks.push({ x: left, y: top, w: bw, h: bh });
+    if (pw) blocks.push({ x: popLeft, y: popTop, w: pw, h: ph });
+
+    const rw = railRef.current?.offsetWidth || 0;
+    const rh = railRef.current?.offsetHeight || 0;
+    const minTop = topSafe;
+    const maxTop = stage.h - rh - 96;
+    const clampTop = (y) => Math.max(minTop, Math.min(maxTop, y));
+    const hits = (r) =>
+      blocks.some(
+        (b) =>
+          r.x < b.x + b.w + 6 && b.x < r.x + r.w + 6 && r.y < b.y + b.h + 6 && b.y < r.y + r.h + 6,
+      );
+    const sides = [];
+    const rightX = rect.x + rect.w + RAIL_GAP;
+    const leftX = rect.x - RAIL_GAP - rw;
+    if (rightX + rw <= stage.w - 8) sides.push(['right', rightX]);
+    if (leftX >= 8) sides.push(['left', leftX]);
+    if (!sides.length) sides.push(['right', Math.max(8, stage.w - 8 - rw)]);
+    let rail = null;
+    for (const [side, x] of sides) {
+      let y = clampTop(rect.y + rect.h / 2 - rh / 2);
+      const r = { x, y, w: rw, h: rh };
+      if (hits(r)) {
+        // Slide along the side away from the bar.
+        const near = blocks.filter((b) => r.x < b.x + b.w && b.x < r.x + r.w);
+        if (near.length)
+          y = barBelow
+            ? Math.min(...near.map((b) => b.y)) - 10 - rh
+            : Math.max(...near.map((b) => b.y + b.h)) + 10;
+        y = clampTop(y);
+      }
+      const candidate = { side, x, y, ok: !hits({ x, y, w: rw, h: rh }) };
+      if (candidate.ok) {
+        rail = candidate;
+        break;
+      }
+      rail ||= candidate;
+    }
+    const next = {
+      left,
+      top,
+      h: bh,
+      barBelow,
+      popLeft,
+      popTop,
+      railLeft: rail.x,
+      railTop: rail.y,
+      railSide: rail.side,
+      // Nowhere free (a tiny object with the pop-up open): the rail steps aside.
+      railAway: !rail.ok,
+    };
     setPos((p) => (p && Object.keys(next).every((k) => p[k] === next[k]) ? p : next));
   });
 
@@ -233,6 +351,9 @@ export function BoardActions({
       : null;
   const style = one?.style || {};
   const toggle = (name) => setPop((p) => (p === name ? null : name));
+  // Hover names go away from the object: above a bar that sits above it, etc.
+  const barSide = pos?.barBelow ? 'bottom' : 'top';
+  const railSide = pos?.railSide || 'right';
 
   // ---- Bar: what it does, then how it looks ----
   const doing = [];
@@ -250,6 +371,7 @@ export function BoardActions({
   if (one && type === 'widget' && OPEN_LABEL[kind])
     doing.push(
       <IconButton
+        side={barSide}
         key="open"
         icon="open"
         label={OPEN_LABEL[kind]}
@@ -260,6 +382,7 @@ export function BoardActions({
     if (['note', 'text', 'todo', 'section'].includes(type))
       doing.push(
         <IconButton
+          side={barSide}
           key="edit"
           icon="edit"
           label={type === 'todo' ? '编辑清单' : type === 'section' ? '重命名分区' : '编辑文字'}
@@ -267,13 +390,24 @@ export function BoardActions({
         />,
       );
     if (type === 'gallery') {
-      doing.push(<IconButton key="add" icon="imageAdd" label="添加图片" onClick={onGalleryAdd} />);
-      doing.push(<IconButton key="crop" icon="crop" label="调整显示" onClick={onEdit} />);
+      doing.push(
+        <IconButton
+          side={barSide}
+          key="add"
+          icon="imageAdd"
+          label="添加图片"
+          onClick={onGalleryAdd}
+        />,
+      );
+      doing.push(
+        <IconButton side={barSide} key="crop" icon="crop" label="调整显示" onClick={onEdit} />,
+      );
     }
   }
   if (one && type === 'image' && one.content.assetId)
     doing.push(
       <IconButton
+        side={barSide}
         key="fav"
         icon="heart"
         label="收藏到我的表情"
@@ -299,6 +433,7 @@ export function BoardActions({
   if (variants || frames)
     looks.push(
       <IconButton
+        side={barSide}
         key="style"
         icon="style"
         label="样式"
@@ -309,6 +444,7 @@ export function BoardActions({
   if (multi && !locked) {
     looks.push(
       <IconButton
+        side={barSide}
         key="align"
         icon="align"
         label="对齐与分布"
@@ -317,20 +453,25 @@ export function BoardActions({
       />,
     );
     if (!items.some((it) => it.content?.type === 'section'))
-      looks.push(<IconButton key="wrap" icon="section" label="框进分区" onClick={onWrapSection} />);
+      looks.push(
+        <IconButton
+          side={barSide}
+          key="wrap"
+          icon="section"
+          label="框进分区"
+          onClick={onWrapSection}
+        />,
+      );
   }
   const showBar = multi || locked || doing.length > 0 || looks.length > 0;
 
-  const popStyle = pos
-    ? pos.barBelow
-      ? { left: pos.left, top: pos.top + pos.h + 6 }
-      : { left: pos.left, top: pos.top - 6, transform: 'translateY(-100%)' }
-    : { left: -9999, top: -9999 };
-
+  const popStyle =
+    pos?.popLeft != null ? { left: pos.popLeft, top: pos.popTop } : { left: -9999, top: -9999 };
   return (
-    <>
+    <TipContext.Provider value={tipApi.current}>
       {pop && showBar && (
         <div
+          ref={popRef}
           className={`style-pop ui glass ${hidden ? 'is-hidden' : ''}`}
           role="group"
           aria-label={pop === 'color' ? '颜色' : pop === 'align' ? '对齐与分布' : '样式'}
@@ -376,6 +517,7 @@ export function BoardActions({
           {pop === 'align' &&
             ALIGNS.map(([mode, label, icon]) => (
               <IconButton
+                side={barSide}
                 key={mode}
                 icon={icon}
                 label={label}
@@ -407,25 +549,50 @@ export function BoardActions({
       <div
         id="arrange"
         ref={railRef}
-        className={`ui glass ${hidden ? 'is-hidden' : ''}`}
-        aria-hidden={hidden || undefined}
+        className={`ui glass ${hidden || pos?.railAway ? 'is-hidden' : ''}`}
+        aria-hidden={hidden || pos?.railAway || undefined}
         role="toolbar"
         aria-orientation="vertical"
         aria-label="排列"
         style={pos ? { left: pos.railLeft, top: pos.railTop } : { left: -9999, top: -9999 }}
       >
-        <IconButton icon="front" label="置于顶层" onClick={onFront} />
-        <IconButton icon="back" label="置于底层" onClick={onBack} />
-        <IconButton icon="copy" label="复制一份" onClick={onDuplicate} />
+        <IconButton side={railSide} icon="front" label="置于顶层" shortcut="]" onClick={onFront} />
+        <IconButton side={railSide} icon="back" label="置于底层" shortcut="[" onClick={onBack} />
         <IconButton
+          side={railSide}
+          icon="copy"
+          label="复制一份"
+          shortcut="⌘D"
+          onClick={onDuplicate}
+        />
+        <IconButton
+          side={railSide}
           icon={locked ? 'unlock' : 'lock'}
           label={locked ? '解锁' : '锁定'}
           pressed={locked}
           onClick={onToggleLock}
         />
         <span className="sep" aria-hidden="true" />
-        <IconButton icon="delete" label="删除" danger onClick={onDelete} />
+        <IconButton
+          side={railSide}
+          icon="delete"
+          label="删除"
+          shortcut="⌫"
+          danger
+          onClick={onDelete}
+        />
       </div>
-    </>
+
+      {tipState && !hidden && (
+        <div
+          className={`act-tip ${tipState.side}`}
+          role="tooltip"
+          style={{ left: tipState.x, top: tipState.y }}
+        >
+          {tipState.label}
+          {tipState.shortcut && <kbd>{tipState.shortcut}</kbd>}
+        </div>
+      )}
+    </TipContext.Provider>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ActionIcon } from './BoardActions.jsx';
 
 /**
@@ -6,17 +7,18 @@ import { ActionIcon } from './BoardActions.jsx';
  * shown on the right. Items: { label, icon, shortcut, onClick, danger,
  * disabled, divider, children }.
  */
-export function BoardContextMenu({ x, y, items, onClose }) {
+export function BoardContextMenu({ x, y, items, onClose, fixed = false, label = '对象菜单' }) {
   const ref = useRef(null);
   const [pos, setPos] = useState({ left: x, top: y });
   const [sub, setSub] = useState(null); // index of the open submenu
 
   useLayoutEffect(() => {
     const el = ref.current;
-    const parent = el?.offsetParent;
-    if (!el || !parent) return;
-    const pw = parent.clientWidth;
-    const ph = parent.clientHeight;
+    const parent = fixed ? null : el?.offsetParent;
+    if (!el || (!fixed && !parent)) return;
+    // `fixed`: x/y are viewport coordinates (menus opened from panels).
+    const pw = fixed ? window.innerWidth : parent.clientWidth;
+    const ph = fixed ? window.innerHeight : parent.clientHeight;
     setPos({
       left: Math.max(8, Math.min(x, pw - el.offsetWidth - 8)),
       top: Math.max(8, Math.min(y, ph - el.offsetHeight - 8)),
@@ -105,16 +107,18 @@ export function BoardContextMenu({ x, y, items, onClose }) {
       ),
     );
 
-  return (
+  const menu = (
     <div
       ref={ref}
-      className="context-menu ui glass"
+      className={`context-menu ui glass ${fixed ? 'is-fixed' : ''}`}
       role="menu"
-      aria-label="对象菜单"
+      aria-label={label}
       style={{ left: pos.left, top: pos.top }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {renderItems(items)}
     </div>
   );
+  // Inside a glass panel `position: fixed` would be relative to the panel.
+  return fixed && typeof document !== 'undefined' ? createPortal(menu, document.body) : menu;
 }

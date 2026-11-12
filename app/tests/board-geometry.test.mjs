@@ -142,3 +142,16 @@ test('marquee hit tests', () => {
   assert.ok(!contains(r, { x: 5, y: 5, w: 100, h: 100 }));
   assert.ok(contains(r, { x: 2, y: 2, w: 3, h: 3 }));
 });
+
+test('alignment only with nearby objects, and the guide joins just that one', () => {
+  const moving = { x: 103, y: 300, w: 40, h: 40 };
+  const far = { x: 100, y: 1000, w: 100, h: 50 }; // same column, far below
+  const close = { x: 104, y: 380, w: 60, h: 40 }; // just below
+  const r = snapToGuides(moving, [far, close], 6, 120);
+  assert.equal(r.dx, 1); // to the close one's left edge (104), not the far one's (100)
+  assert.equal(r.guides.length, 1);
+  assert.deepEqual([r.guides[0].from, r.guides[0].to], [300, 420]);
+  // Nothing close: no snapping at all.
+  const none = snapToGuides(moving, [far], 6, 120);
+  assert.deepEqual([none.dx, none.dy, none.guides.length], [0, 0, 0]);
+});
