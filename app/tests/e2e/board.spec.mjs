@@ -218,7 +218,7 @@ test('board: place widget schedules a real activity with the full place payload'
   await createTrip(page);
   const seeded = await seedPlaceWidget(page);
 
-  await page.locator('nav button[aria-label="白板"]').first().click();
+  await openBoard(page);
   await expect(page.locator('.board-container')).toBeVisible();
   const widget = page.locator('.board-item.item-widget').first();
   await expect(widget).toBeVisible();
@@ -277,7 +277,7 @@ test('board: widget integration with itinerary (activity pin, rename, gone state
   await page.getByRole('dialog').getByRole('button', { name: '完成', exact: true }).click();
 
   // 4. Switch to Whiteboard, check title updated
-  await page.locator('nav button[aria-label="白板"]').first().click();
+  await openBoard(page);
   await expect(actWidget.locator('.title')).toContainText('苏堤春晓漫步');
 
   // 5. Switch to itinerary, delete the activity
@@ -287,7 +287,7 @@ test('board: widget integration with itinerary (activity pin, rename, gone state
   await card2.locator('button:has-text("删除")').click();
 
   // 6. Switch to Whiteboard -> widget has gone state (gone-pill, is-gone)
-  await page.locator('nav button[aria-label="白板"]').first().click();
+  await openBoard(page);
   await expect(page.locator('.board-item.item-widget .widget-frame.is-gone')).toBeVisible();
   await expect(actWidget.locator('.gone-pill')).toContainText('已移除');
 
@@ -298,7 +298,7 @@ test('board: widget integration with itinerary (activity pin, rename, gone state
   await page.locator('.modal button[aria-label="关闭"]').click();
 
   // 8. Switch to Whiteboard -> widget is revived!
-  await page.locator('nav button[aria-label="白板"]').first().click();
+  await openBoard(page);
   await expect(page.locator('.board-item.item-widget .widget-frame.is-gone')).toHaveCount(0);
   await expect(actWidget.locator('.title')).toContainText('苏堤春晓漫步');
 });
@@ -308,7 +308,7 @@ test('board: freehand drawing with pen, unified z-order, and eraser', async ({ p
   await register(page);
   await createTrip(page);
 
-  await page.locator('nav button[aria-label="白板"]').first().click();
+  await openBoard(page);
   await expect(page.locator('.board-container')).toBeVisible();
 
   // 1. Select Pen tool
@@ -385,7 +385,7 @@ test('board: responsive screenshots across palettes and viewports', async ({ pag
   await addActivity(page, '雷峰夕照');
 
   // Navigate to whiteboard and add a few sample widgets & notes
-  await page.locator('nav button[aria-label="白板"]').first().click();
+  await openBoard(page);
   await expect(page.locator('.board-container')).toBeVisible();
 
   // Add three stickers without reopening the panel (问题 1 验收)
@@ -429,9 +429,25 @@ test('board: responsive screenshots across palettes and viewports', async ({ pag
   await shoot('board-390-forest-light-sheet');
 });
 
-async function openBoard(page) {
+// The board opens at a comfortable 80%; most tests measure in board units at
+// 100%, so they switch to it with ⇧0 (the design-tool shortcut).
+async function openBoardAtDefault(page) {
   await page.locator('nav button[aria-label="白板"]').first().click();
   await expect(page.locator('.board-container')).toBeVisible();
+}
+async function openBoard(page) {
+  await openBoardAtDefault(page);
+  // The label is there even where the number is hidden (narrow screens).
+  const zoom = page.locator('#zoom .zoom-value');
+  const at100 = async () => /当前缩放 100%/.test((await zoom.getAttribute('aria-label')) || '');
+  await expect
+    .poll(async () => {
+      await page.keyboard.press('Shift+Digit0');
+      return at100();
+    })
+    .toBe(true);
+  await page.waitForTimeout(300);
+  expect(await at100()).toBe(true);
 }
 
 // The first click only selects; clicking the selection again opens its menus.
@@ -1669,4 +1685,142 @@ test('board: gallery adjusting controls stay readable when zoomed out', async ({
   });
   expect(fs).toBeGreaterThanOrEqual(13);
   await page.screenshot({ path: evidence('3b-gallery-tools-zoomed-out.png') });
+});
+
+// ---------- 第三轮追修 2 ----------
+
+test('board: opens at 80%; text keeps its on-screen size when zoomed out; tool names on hover', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoardAtDefault(page);
+  await expect(page.locator('#zoom .zoom-value')).toHaveText('80%');
+
+  // Zoomed out, new text is bigger on the board so it reads the same on screen.
+  for (let i = 0; i < 3; i++) await page.locator('#zoom button[aria-label="缩小"]').click();
+  const k = parseInt(await page.locator('#zoom .zoom-value').innerText(), 10) / 100;
+  await page.locator('#toolbar button[data-tool="text"]').click();
+  await page.mouse.click(640, 400);
+  await expect(page.locator('.board-item.item-text.editing')).toBeVisible();
+  await page.keyboard.type('看得清');
+  await page.keyboard.press('Escape');
+  await expect
+    .poll(async () => {
+      const it = (await boardItems(page)).items.find((i) => i.payload.content.type === 'text');
+      return it && Math.abs(it.payload.frame.scale - 1 / k) < 0.02;
+    })
+    .toBe(true);
+
+  // Toolbar buttons are named on hover, with their key.
+  await page.locator('#toolbar button[data-tool="pen"]').hover();
+  await expect(page.locator('.tool-tip')).toContainText('画笔');
+  await expect(page.locator('.tool-tip kbd')).toHaveText('P');
+  await page.locator('#toolbar button[data-tool="image"]').hover();
+  await expect(page.locator('.tool-tip')).toContainText('上传图片');
+  await page.locator('#zoom .snap-toggle').hover();
+  await page.screenshot({ path: evidence('3c-tips.png') });
+});
+
+test('board: typing on a selected note edits it; right-click menu has one highlight', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await addFromPanel(page, '便签', '.pick-note');
+  const note = page.locator('.board-item.item-note');
+  await page.keyboard.type('第一行');
+  await page.keyboard.press('Escape');
+  await expect(note.locator('.note-text')).toContainText('第一行');
+  await page.locator('#stage').click({ position: { x: 1000, y: 650 } });
+
+  // One click selects; typing goes straight into the note (added at the end).
+  await note.click();
+  await page.waitForTimeout(150);
+  await page.keyboard.type('xyz');
+  await expect(note).toHaveClass(/editing/);
+  await expect(note.locator('.note-text')).toContainText('第一行xyz');
+  await page.keyboard.press('Escape');
+  await expect
+    .poll(async () => {
+      const it = (await boardItems(page)).items.find((i) => i.payload.content.type === 'note');
+      return it?.payload.content.text;
+    })
+    .toContain('第一行xyz');
+  // Enter also opens it; Backspace on a selected (not editing) note still deletes it.
+  await page.locator('#stage').click({ position: { x: 1000, y: 650 } });
+  await note.click();
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Enter');
+  await expect(note).toHaveClass(/editing/);
+  await page.keyboard.press('Escape');
+
+  // Right-click menu: nothing pre-selected; the hovered item is the only highlight.
+  await note.click({ button: 'right' });
+  const menu = page.locator('.context-menu');
+  await expect(menu).toBeVisible();
+  expect(await page.evaluate(() => document.activeElement?.getAttribute('role'))).toBe('menu');
+  const second = menu.getByRole('menuitem').nth(1);
+  await second.hover();
+  await expect(second).toBeFocused();
+  const highlighted = await menu.getByRole('menuitem').evaluateAll(
+    (els) =>
+      els.filter((el) => {
+        const bg = getComputedStyle(el).backgroundColor;
+        return bg && !/rgba\(0, 0, 0, 0\)|transparent/.test(bg);
+      }).length,
+  );
+  expect(highlighted).toBe(1);
+  await page.screenshot({ path: evidence('3c-context-one-highlight.png') });
+  await page.keyboard.press('Escape');
+
+  await note.click();
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Backspace');
+  await expect(note).toHaveCount(0);
+});
+
+test('board: export the board as one PNG with a margin', async ({ page }) => {
+  test.setTimeout(90000);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await addFromPanel(page, '便签', '.pick-note');
+  await page.keyboard.type('导出我');
+  await page.keyboard.press('Escape');
+  await page.locator('#toolbar button[data-tool="sticker"]').click();
+  await page.locator('#panel .gallery button:has-text("当地时间")').click();
+  await page.locator('#panel button[aria-label="关闭"]').click();
+  // Push one object far away: the picture covers everything, not just the view.
+  const w = page.locator('.board-item.item-widget');
+  const wb = await w.boundingBox();
+  await page.mouse.move(wb.x + wb.width / 2, wb.y + wb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(1200, 760, { steps: 10 });
+  await page.mouse.up();
+
+  await page.mouse.click(200, 650, { button: 'right' });
+  const download = page.waitForEvent('download');
+  await page.getByRole('menuitem', { name: '导出为图片' }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/\.png$/);
+  const path = await file.path();
+  const { readFileSync } = await import('node:fs');
+  const buf = readFileSync(path);
+  expect(buf.subarray(1, 4).toString()).toBe('PNG');
+  const width = buf.readUInt32BE(16);
+  const height = buf.readUInt32BE(20);
+  // Both objects plus a 64px margin on each side (×2 for sharpness).
+  const items = (await boardItems(page)).items.map((i) => i.payload.frame);
+  const minX = Math.min(...items.map((f) => f.x));
+  const maxX = Math.max(...items.map((f) => f.x + f.w));
+  expect(width).toBeGreaterThanOrEqual(Math.floor((maxX - minX + 128) * 1.5));
+  expect(height).toBeGreaterThan(200);
+  await expect(page.locator('.export-busy')).toHaveCount(0);
+  const { copyFileSync } = await import('node:fs');
+  copyFileSync(path, evidence('3c-export.png'));
 });

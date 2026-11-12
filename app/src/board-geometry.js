@@ -287,3 +287,17 @@ export function alignFrames(frames, mode) {
   }
   return out;
 }
+
+/**
+ * A box given in the unrotated space of `from` (a resize gesture's start
+ * frame), re-expressed in the unrotated space of `to` (the frame now drawn).
+ * The resize outline of a rotated item is drawn inside the item, so without
+ * this it slides away from the real box whenever the frame shifts.
+ */
+export function rebaseBox(box, from, to) {
+  const r = from.rotation || 0;
+  if (!r || !box) return box;
+  const c0 = frameCenter(from);
+  const d = rotatePoint(c0, frameCenter(to), -r);
+  return { ...box, x: box.x - c0.x + d.x, y: box.y - c0.y + d.y };
+}

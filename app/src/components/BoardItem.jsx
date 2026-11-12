@@ -49,6 +49,7 @@ export const BoardItem = React.memo(function BoardItem({
   onGalleryAddImages,
   onAutoHeight,
   onMeasure,
+  takeTyped,
   ratioLabel = null,
   angleLabel = null,
 }) {
@@ -117,6 +118,15 @@ export const BoardItem = React.memo(function BoardItem({
     if (!(el.innerText || '').trim()) range.collapse(true);
     sel?.removeAllRanges();
     sel?.addRange(range);
+    // Opened by typing on the selected object: add what was typed at the end.
+    const typed = takeTyped?.(item.id);
+    if (typed) {
+      range.selectNodeContents(el);
+      range.collapse(false);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      document.execCommand('insertText', false, typed);
+    }
   }, [isEditing]);
 
   const commit = useCallback(() => {
@@ -338,7 +348,7 @@ export const BoardItem = React.memo(function BoardItem({
 
   return (
     <div
-      className={`board-item item-${type} ${locked ? 'locked' : ''} ${isEditing ? 'editing' : ''} ${reshape ? 'reshaping' : ''} ${flash ? 'just-added' : ''} ${selected ? 'is-selected' : ''} ${preview ? 'is-preview' : ''}`}
+      className={`board-item item-${type} ${locked ? 'locked' : ''} ${isEditing ? 'editing' : ''} ${reshape ? 'reshaping' : ''} ${flash ? 'just-added' : ''} ${selected ? 'is-selected' : ''} ${preview ? 'is-preview' : ''} ${rotation ? 'rotated' : ''}`}
       data-item-id={item.id}
       style={{
         transform: `translate(${f.x}px, ${f.y}px)${rotation ? ` rotate(${rotation}deg)` : ''}`,

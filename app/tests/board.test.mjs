@@ -5,6 +5,7 @@ import {
   toScreen,
   contentBounds,
   center,
+  DEFAULT_ZOOM,
   topZ,
   bottomZ,
   simplify,
@@ -34,7 +35,10 @@ test('board: coordinate transformations', () => {
 
 test('board: contentBounds and center calculation', () => {
   assert.equal(contentBounds([]), null);
-  assert.equal(contentBounds([{ state: 'deleted', frame: { x: 10, y: 10, w: 100, h: 100 } }]), null);
+  assert.equal(
+    contentBounds([{ state: 'deleted', frame: { x: 10, y: 10, w: 100, h: 100 } }]),
+    null,
+  );
 
   const items = [
     { id: '1', state: 'active', frame: { x: 100, y: 200, w: 150, h: 120 } },
@@ -45,10 +49,12 @@ test('board: contentBounds and center calculation', () => {
   assert.deepEqual(bounds, { x: 100, y: 100, w: 400, h: 300 });
 
   const cEmpty = center([], { w: 1200, h: 800 });
-  assert.ok(cEmpty.k === 1);
+  assert.equal(cEmpty.k, DEFAULT_ZOOM, 'an empty board opens at the comfortable 80%');
 
   const c = center(items, { w: 1200, h: 800 });
-  assert.ok(c.k > 0.2 && c.k <= 1.2);
+  assert.ok(c.k > 0.2 && c.k <= 1);
+  // A few small objects are not blown up past the cap.
+  assert.ok(center(items, { w: 1200, h: 800 }, {}, DEFAULT_ZOOM).k <= DEFAULT_ZOOM);
   // Center of bounds (300, 250) should be around the center of viewport
   const screenCenter = toScreen({ x: 300, y: 250 }, c);
   assert.ok(Math.abs(screenCenter.x - 600) < 50);
@@ -70,22 +76,53 @@ test('board: topZ and bottomZ', () => {
 test('board: simplify and pathD', () => {
   assert.deepEqual(simplify(null), []);
   assert.deepEqual(simplify([[10, 10]]), [[10, 10]]);
-  assert.deepEqual(simplify([[10, 10], [20, 20]]), [[10, 10], [20, 20]]);
+  assert.deepEqual(
+    simplify([
+      [10, 10],
+      [20, 20],
+    ]),
+    [
+      [10, 10],
+      [20, 20],
+    ],
+  );
 
   // Collinear points
-  const line = [[0, 0], [10, 10], [20, 20], [30, 30]];
+  const line = [
+    [0, 0],
+    [10, 10],
+    [20, 20],
+    [30, 30],
+  ];
   const simplified = simplify(line, 1);
-  assert.deepEqual(simplified, [[0, 0], [30, 30]]);
+  assert.deepEqual(simplified, [
+    [0, 0],
+    [30, 30],
+  ]);
 
   // Complex path
-  const curve = [[0, 0], [10, 50], [20, 0]];
+  const curve = [
+    [0, 0],
+    [10, 50],
+    [20, 0],
+  ];
   assert.equal(simplify(curve, 1).length, 3);
 
   // pathD tests
   assert.equal(pathD([]), '');
   assert.ok(pathD([[0, 0]]).startsWith('M0 0'));
-  assert.equal(pathD([[0, 0], [10, 10]]), 'M0 0L10 10');
-  const dCurve = pathD([[0, 0], [10, 20], [30, 40]]);
+  assert.equal(
+    pathD([
+      [0, 0],
+      [10, 10],
+    ]),
+    'M0 0L10 10',
+  );
+  const dCurve = pathD([
+    [0, 0],
+    [10, 20],
+    [30, 40],
+  ]);
   assert.ok(dCurve.includes('Q'));
 });
 
@@ -113,15 +150,36 @@ test('board: scaled handles note, widget, text, and other items', () => {
 
   // Widget aspect locked; corners scale within 0.75–1.6× the form's base size
   const widget = { content: { type: 'widget', kind: 'activity' }, style: { size: 'S' } };
-  const sWidget = scaled(widget, { x: 100, y: 100, w: 168, h: 168, scale: 1 }, { w: 168, h: 168 }, 2, 2, 'se');
+  const sWidget = scaled(
+    widget,
+    { x: 100, y: 100, w: 168, h: 168, scale: 1 },
+    { w: 168, h: 168 },
+    2,
+    2,
+    'se',
+  );
   assert.equal(sWidget.w, sWidget.h);
   assert.equal(sWidget.w, Math.round(168 * 1.6));
-  const sSmall = scaled(widget, { x: 100, y: 100, w: 168, h: 168, scale: 1 }, { w: 168, h: 168 }, 0.2, 0.2, 'se');
+  const sSmall = scaled(
+    widget,
+    { x: 100, y: 100, w: 168, h: 168, scale: 1 },
+    { w: 168, h: 168 },
+    0.2,
+    0.2,
+    'se',
+  );
   assert.equal(sSmall.w, 126);
 
   // Text scaling modifies scale
   const textItem = { content: { type: 'text' } };
-  const sText = scaled(textItem, { x: 0, y: 0, w: 150, h: 60, scale: 1 }, { w: 150, h: 60 }, 1.5, 1.5, 'se');
+  const sText = scaled(
+    textItem,
+    { x: 0, y: 0, w: 150, h: 60, scale: 1 },
+    { w: 150, h: 60 },
+    1.5,
+    1.5,
+    'se',
+  );
   assert.equal(sText.scale, 1.5);
   // The frame is the size seen on the board, so selection and culling match (N-2)
   assert.equal(sText.w, 225);
@@ -181,12 +239,25 @@ test('board: center keeps content inside the area not covered by the panel', () 
   const right = toScreen({ x: 400, y: 0 }, v).x;
   assert.ok(left > 376, 'content starts right of the docked panel');
   assert.ok(Math.abs((left + right) / 2 - (376 + (1280 - 376) / 2)) < 1);
-  assert.deepEqual(visibleArea({ w: 1280, h: 800 }, { bottom: 364 }), { x: 0, y: 0, w: 1280, h: 436 });
+  assert.deepEqual(visibleArea({ w: 1280, h: 800 }, { bottom: 364 }), {
+    x: 0,
+    y: 0,
+    w: 1280,
+    h: 436,
+  });
 });
 
 test('board: stroke look shares colors and widths between draft and saved stroke', () => {
-  assert.deepEqual(strokeLook('pen', 'blue', 8), { stroke: 'var(--ink-blue)', width: 8, opacity: 1 });
-  assert.deepEqual(strokeLook('pen', 'unknown'), { stroke: 'var(--ink-default)', width: 4, opacity: 1 });
+  assert.deepEqual(strokeLook('pen', 'blue', 8), {
+    stroke: 'var(--ink-blue)',
+    width: 8,
+    opacity: 1,
+  });
+  assert.deepEqual(strokeLook('pen', 'unknown'), {
+    stroke: 'var(--ink-default)',
+    width: 4,
+    opacity: 1,
+  });
   const hl = strokeLook('highlighter', 'pink', 99);
   assert.equal(hl.stroke, 'var(--hl-pink)');
   assert.equal(hl.width, 16);
@@ -214,7 +285,9 @@ test('board: static map fit puts points inside the requested box', () => {
     assert.ok(y >= box.y - 0.5 && y <= box.y + box.h + 0.5, `y ${y}`);
   }
   // A single place lands exactly on the anchor (under the pin)
-  const one = geoFit([[117.227, 31.82]], { x: 84, y: 67, w: 0, h: 0 }, 168, 168, { singleZoom: 16 });
+  const one = geoFit([[117.227, 31.82]], { x: 84, y: 67, w: 0, h: 0 }, 168, 168, {
+    singleZoom: 16,
+  });
   assert.equal(one.zoom, 16);
   const [[px, py]] = geoProject([[117.227, 31.82]], one, 168, 168);
   assert.ok(Math.abs(px - 84) < 0.01 && Math.abs(py - 67) < 0.01);
@@ -238,7 +311,10 @@ test('board: pending local changes survive an older server copy', async () => {
   // A local item the server has not seen yet is kept.
   const created = new Map([['b', { expect: { state: 'active' }, at: 1000 }]]);
   const out = reconcilePending([], [{ id: 'b', state: 'active' }], created, 1200);
-  assert.deepEqual(out.map((i) => i.id), ['b']);
+  assert.deepEqual(
+    out.map((i) => i.id),
+    ['b'],
+  );
   assert.deepEqual(mergeExpected({ frame: { x: 1 } }, { frame: { y: 2 }, z: 3 }), {
     frame: { x: 1, y: 2 },
     z: 3,

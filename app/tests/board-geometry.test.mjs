@@ -17,7 +17,9 @@ import {
   intersects,
   contains,
   rectFrom,
+  rebaseBox,
 } from '../src/board-geometry.js';
+import { exportFileName } from '../src/board-export.js';
 import { simplify, pathD } from '../src/board.js';
 
 const near = (a, b, eps = 0.01) => assert.ok(Math.abs(a - b) <= eps, `${a} ≈ ${b}`);
@@ -154,4 +156,26 @@ test('alignment only with nearby objects, and the guide joins just that one', ()
   // Nothing close: no snapping at all.
   const none = snapToGuides(moving, [far], 6, 120);
   assert.deepEqual([none.dx, none.dy, none.guides.length], [0, 0, 0]);
+});
+
+test('a rotated item’s resize outline stays on the real box when the frame shifts', () => {
+  const from = { x: 0, y: 0, w: 168, h: 168, rotation: -30 };
+  const to = keepAnchor(from, { ...from, w: 352 }, 'e');
+  const box = { x: 0, y: 0, w: 300, h: 168 }; // in from's unrotated space
+  const moved = rebaseBox(box, from, to);
+  // Its top-left corner is the same point on screen either way.
+  const world = (p, f) => rotatePoint(p, { x: f.x + f.w / 2, y: f.y + f.h / 2 }, f.rotation);
+  const a = world({ x: box.x, y: box.y }, from);
+  const b = world({ x: moved.x, y: moved.y }, to);
+  near(a.x, b.x, 0.01);
+  near(a.y, b.y, 0.01);
+  assert.equal(rebaseBox(box, { ...from, rotation: 0 }, to), box);
+});
+
+test('exported pictures are named after the trip, the board and the day', () => {
+  assert.equal(
+    exportFileName('苏州/周末', '主白板', new Date(2026, 10, 12)),
+    '苏州 周末-主白板-20261112.png',
+  );
+  assert.equal(exportFileName('', '', new Date(2026, 0, 5)), '白板-20260105.png');
 });

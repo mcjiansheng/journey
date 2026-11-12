@@ -27,6 +27,7 @@ import {
   GALLERY_PADDING,
   stickerUrl,
   itemRotation,
+  DEFAULT_ZOOM,
 } from '../board.js';
 import { WIDGET_SIZES, widgetSize, widgetScale, pickWidgetSize } from '../board-widgets.js';
 import {
@@ -46,7 +47,9 @@ import {
   finalizeStroke,
   snapToGuides,
   alignFrames,
+  rebaseBox,
 } from '../board-geometry.js';
+import { renderBoardImage, downloadBlob, exportFileName } from '../board-export.js';
 
 const DRAG_THRESHOLD = 3;
 const ZOOM_MIN = 0.15;
@@ -209,7 +212,7 @@ export function Board({
   const stageRef = useRef(null);
   const savedView = boardContext?.viewports?.[boardId];
   const [view, setView] = useState(() =>
-    savedView && Number.isFinite(savedView.k) ? savedView : { x: 0, y: 0, k: 1 },
+    savedView && Number.isFinite(savedView.k) ? savedView : { x: 0, y: 0, k: DEFAULT_ZOOM },
   );
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -438,7 +441,15 @@ export function Board({
     initializedViewRef.current = true;
     if (activeItems.length === 0 || !stageRef.current) return;
     const rect = stageRef.current.getBoundingClientRect();
-    setView(center(activeItems, { w: rect.width || 1200, h: rect.height || 800 }));
+    // Opening a board: everything in view, never larger than the comfortable zoom.
+    setView(
+      center(
+        activeItems,
+        { w: rect.width || 1200, h: rect.height || 800 },
+        insetsRef.current,
+        DEFAULT_ZOOM,
+      ),
+    );
   }, [loading, activeItems]);
 
   // Remember each board's viewport (旧 P2-11).
@@ -481,8 +492,8 @@ export function Board({
   };
   const zoomBy = (factor) => zoomAround(factor, ...zoomCenter());
   const toggleZoom = () => {
-    if (Math.abs(view.k - 1) < 0.01) fitContent();
-    else zoomAround(1 / view.k, ...zoomCenter());
+    if (Math.abs(view.k - DEFAULT_ZOOM) < 0.01) fitContent();
+    else zoomAround(DEFAULT_ZOOM / view.k, ...zoomCenter());
   };
 
   // Wheel must be a non-passive native listener so preventDefault stops the
@@ -1139,6 +1150,9 @@ export function Board({
     });
   };
 
+  const textScale = () =>
+    Math.min(4, Math.max(0.5, Math.round((1 / viewRef.current.k) * 100) / 100));
+
   const startMarquee = (e, additive) => {
     capture(e.pointerId);
     gestureRef.current = {
@@ -1192,7 +1206,14 @@ export function Board({
       addItem({
         content: { type: 'text', text: '' },
         style: { size: 'body', autoWidth: true },
-        frame: { x: Math.round(pt.x), y: Math.round(pt.y - 16), w: 40, h: 32, scale: 1 },
+        // Same size on screen at any zoom: zoomed out, the text is bigger on the board.
+        frame: {
+          x: Math.round(pt.x),
+          y: Math.round(pt.y - 16 * textScale()),
+          w: Math.round(40 * textScale()),
+          h: Math.round(32 * textScale()),
+          scale: textScale(),
+        },
         z: topZ(activeItemsRef.current),
       }).then((item) => {
         select([item.id]);
@@ -1522,7 +1543,7 @@ export function Board({
       scheduleLive(g, {
         frames: { [g.id]: frame },
         labels: ratio ? { [g.id]: ratio } : null,
-        boxes: ratio ? { [g.id]: rawBox } : null,
+        boxes: ratio ? { [g.id]: rebaseBox(rawBox, g.frame0, frame) } : null,
       });
     } else if (g.type === 'rotate') {
       const cur = screenToWorld(e.clientX, e.clientY);
@@ -1583,7 +1604,7 @@ export function Board({
       scheduleLive(g, {
         frames: { [g.id]: frame },
         sizes: { [g.id]: g.size },
-        boxes: { [g.id]: box },
+        boxes: { [g.id]: rebaseBox(box, f0, frame) },
       });
     }
   };
@@ -1592,6 +1613,7 @@ export function Board({
     const g = gestureRef.current;
     if (!g) return;
     gestureRef.current = null;
+    requestAnimationFrame(() => handlers.current.armTyping?.());
     cancelAnimationFrame(g.raf);
     stageRef.current?.classList.remove('panning');
     setGestureActive(false);
@@ -1767,9 +1789,112 @@ export function Board({
       onEndEditing: (id) => handlers.current.endEditing(id),
       onItemDoubleClick: (id) => handlers.current.itemDoubleClick(id),
       onMeasure,
+      takeTyped: (id) => {
+        const t = typedRef.current;
+        if (t?.id !== id) return '';
+        typedRef.current = null;
+        return t.text;
+      },
     }),
     [],
   );
+
+  // ---------- 导出为图片 ----------
+  const [exporting, setExporting] = useState(false);
+  const exportImage = async () => {
+    if (exporting) return;
+    const list = activeItemsRef.current;
+    if (!list.length) {
+      notify?.({ message: '白板上还没有内容可以导出' });
+      return;
+    }
+    select([]);
+    setEditingId(null);
+    setContextMenu(null);
+    setActionsOpen(false);
+    setExporting(true);
+    try {
+      // Let every object render (no off-screen culling) at board scale.
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const layer = stageRef.current?.querySelector('#items');
+      if (!layer) throw new Error('导出失败');
+      const frames = list.map((it) => {
+        const f = { x: 0, y: 0, w: 100, h: 100, ...(it.frame || {}) };
+        const m = it.content?.type === 'text' ? measuredRef.current.get(it.id) : null;
+        const shown = m ? { ...f, h: m.h, w: it.style?.autoWidth !== false ? m.w : f.w } : f;
+        return { ...shown, rotation: itemRotation({ ...it, frame: shown }) };
+      });
+      const bounds = groupBounds(frames);
+      const bgOf = (el) => (el ? getComputedStyle(el).backgroundColor : '');
+      const solid = (c) => c && !/rgba?\(0, 0, 0, 0\)|transparent/.test(c);
+      const background =
+        [stageRef.current, stageRef.current.parentElement, document.body].map(bgOf).find(solid) ||
+        '#f6f4ee';
+      const { blob } = await renderBoardImage(layer, bounds, { pad: 64, background });
+      downloadBlob(blob, exportFileName(snapshot?.trip?.name, activeBoard?.payload?.title));
+      notify?.({ message: '已导出为图片' });
+    } catch (err) {
+      notify?.({ message: err?.message || '导出失败，请稍后重试' });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // ---------- Type to edit ----------
+  // A selected note or text box takes typing right away. Keys first land in a
+  // hidden field next to it (so an input method can compose Chinese there),
+  // then the object opens for editing with what was typed added at the end.
+  const typeCatcherRef = useRef(null);
+  const typedRef = useRef(null);
+  const editingRef = useRef(editingId);
+  editingRef.current = editingId;
+  const typingTarget = () => {
+    if (editingRef.current || modalOpenRef.current) return null;
+    const ids = [...selectedIdsRef.current];
+    if (ids.length !== 1) return null;
+    const it = itemsByIdRef.current.get(ids[0]);
+    if (!it || it.style?.locked || it.state === 'deleted') return null;
+    return ['note', 'text'].includes(it.content?.type) ? it : null;
+  };
+  const armTyping = () => {
+    const el = typeCatcherRef.current;
+    if (!el || !typingTarget()) return;
+    const a = document.activeElement;
+    if (a && a !== document.body && a !== el && !stageRef.current?.contains(a)) return;
+    if (a !== el) el.focus({ preventScroll: true });
+  };
+  const flushTyped = (force = false) => {
+    const el = typeCatcherRef.current;
+    const text = el?.value || '';
+    if (el) el.value = '';
+    if (!text && !force) return;
+    // Already opening (keys typed faster than the editor appears): keep adding
+    // to what is waiting, or type into the open editor.
+    const open = editingRef.current;
+    if (open) {
+      if (typedRef.current?.id === open) typedRef.current.text += text;
+      else if (text) {
+        const ed = stageRef.current?.querySelector(
+          `[data-item-id="${open}"] [contenteditable="true"]`,
+        );
+        if (ed) {
+          ed.focus();
+          document.execCommand('insertText', false, text);
+        }
+      }
+      return;
+    }
+    const it = typingTarget();
+    if (!it) return;
+    typedRef.current = { id: it.id, text };
+    editingRef.current = it.id;
+    itemDoubleClick(it.id);
+  };
+  handlers.current.armTyping = armTyping;
+  useEffect(() => {
+    const r = requestAnimationFrame(() => handlers.current.armTyping?.());
+    return () => cancelAnimationFrame(r);
+  }, [selectedIds, editingId]);
 
   // ---------- Keyboard (N-3) ----------
   const modalOpenRef = useRef(modalOpen);
@@ -1785,18 +1910,23 @@ export function Board({
     sendToBack,
     nudge,
     pickImages: () => imagePicker.current?.click(),
+    flushTyped,
+    zoomTo: (k) => zoomAround(k / viewRef.current.k, ...zoomCenter()),
+    fit: fitContent,
   };
   useEffect(() => {
     const onKey = (e) => {
       if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
       if (modalOpenRef.current) return;
       const t = e.target;
+      const fromCatcher = t && t === typeCatcherRef.current;
       if (e.key === 'Escape' && t?.closest?.('#panel, #drawer')) {
         setPanelOpen(false);
         setDeletionsOpen(false);
         return;
       }
       if (
+        !fromCatcher &&
         t?.closest?.(
           'input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]',
         )
@@ -1823,6 +1953,22 @@ export function Board({
         e.preventDefault();
         if (selectedIdsRef.current.size) keyHandlers.current.duplicate();
         return;
+      }
+      // ⇧0: 100%, ⇧1: fit everything (as in design tools).
+      if (!mod && !e.altKey && e.shiftKey && (e.code === 'Digit0' || e.code === 'Digit1')) {
+        e.preventDefault();
+        if (e.code === 'Digit0') keyHandlers.current.zoomTo(1);
+        else keyHandlers.current.fit();
+        return;
+      }
+      // A selected note: Enter opens it, characters type into it (via the field).
+      if (fromCatcher && !mod && !e.altKey) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          keyHandlers.current.flushTyped(true);
+          return;
+        }
+        if (e.key.length === 1) return;
       }
       const arrows = {
         ArrowLeft: [-1, 0],
@@ -1870,7 +2016,7 @@ export function Board({
   const frameOf = (it) => localLive?.frames?.[it.id] ?? remoteLive.get(it.id) ?? it.frame;
 
   const visibleItems = useMemo(() => {
-    if (!stageSize.w || !stageSize.h) return activeItems;
+    if (exporting || !stageSize.w || !stageSize.h) return activeItems;
     const margin = 200;
     const minX = -view.x / view.k - margin;
     const minY = -view.y / view.k - margin;
@@ -1880,7 +2026,7 @@ export function Board({
       const f = it.frame || {};
       return f.x + (f.w || 0) >= minX && f.x <= maxX && f.y + (f.h || 0) >= minY && f.y <= maxY;
     });
-  }, [activeItems, view, stageSize]);
+  }, [activeItems, view, stageSize, exporting]);
   visibleRef.current = visibleItems;
 
   // Display items keep their identity unless their frame/size is live, so
@@ -1976,6 +2122,13 @@ export function Board({
         { divider: true },
         { label: '全选', shortcut: '⌘A', onClick: selectAll, disabled: !activeItems.length },
         { label: '适应全板', onClick: fitContent, disabled: !activeItems.length },
+        { divider: true },
+        {
+          label: '导出为图片',
+          icon: 'image',
+          onClick: exportImage,
+          disabled: !activeItems.length,
+        },
       ];
     }
     const list = selectedItems;
@@ -2039,7 +2192,7 @@ export function Board({
     return out;
   })();
 
-  const mapDetail = view.k >= 0.4;
+  const mapDetail = exporting || view.k >= 0.4;
   const gridSize = (view.k < 0.4 ? 48 : 24) * view.k;
   const empty = !loading && activeItems.length === 0 && uploads.length === 0;
   const topSafe = narrow ? 84 : 76;
@@ -2069,6 +2222,7 @@ export function Board({
           setPanelOpen(false);
           setDeletionsOpen(true);
         }}
+        onExport={activeItems.length ? exportImage : null}
       />
 
       <div
@@ -2115,7 +2269,7 @@ export function Board({
             id="world"
             style={{
               transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`,
-              '--ik': 1 / view.k,
+              '--ik': exporting ? 1 : 1 / view.k,
             }}
           >
             <div id="items">
@@ -2308,6 +2462,32 @@ export function Board({
         />
       )}
 
+      <textarea
+        ref={typeCatcherRef}
+        className="type-catcher"
+        aria-label="输入文字以编辑所选便签"
+        tabIndex={-1}
+        rows={1}
+        style={
+          actionsRect
+            ? { left: actionsRect.x + 16, top: actionsRect.y + 16 }
+            : { left: -9999, top: -9999 }
+        }
+        onInput={(e) => {
+          if (!e.nativeEvent.isComposing) flushTyped();
+        }}
+        onCompositionEnd={() => flushTyped()}
+        onBlur={(e) => {
+          e.target.value = '';
+        }}
+      />
+      {exporting && (
+        <div className="export-busy ui glass" role="status">
+          <span className="ring" aria-hidden="true" />
+          正在导出图片…
+        </div>
+      )}
+
       {contextMenu && (
         <BoardContextMenu
           x={contextMenu.x}
@@ -2318,7 +2498,12 @@ export function Board({
       )}
 
       <div id="zoom" className="ui glass" role="group" aria-label="缩放">
-        <button className="iconbtn" onClick={() => zoomBy(1 / 1.2)} aria-label="缩小">
+        <button
+          className="iconbtn"
+          onClick={() => zoomBy(1 / 1.2)}
+          aria-label="缩小"
+          data-tip="缩小"
+        >
           <svg viewBox="0 0 24 24">
             <path d="M5 12h14" />
           </svg>
@@ -2326,12 +2511,12 @@ export function Board({
         <button
           className="zoom-value"
           onClick={toggleZoom}
-          title="在 100% 与适应全板之间切换"
-          aria-label={`当前缩放 ${Math.round(view.k * 100)}%，点按切换 100% 或适应全板`}
+          data-tip="在 80% 与适应全板之间切换 · ⇧0 为 100%"
+          aria-label={`当前缩放 ${Math.round(view.k * 100)}%，点按切换 80% 或适应全板`}
         >
           {Math.round(view.k * 100)}%
         </button>
-        <button className="iconbtn" onClick={() => zoomBy(1.2)} aria-label="放大">
+        <button className="iconbtn" onClick={() => zoomBy(1.2)} aria-label="放大" data-tip="放大">
           <svg viewBox="0 0 24 24">
             <path d="M12 5v14M5 12h14" />
           </svg>
@@ -2341,16 +2526,16 @@ export function Board({
           onClick={toggleSnap}
           aria-pressed={snapOn}
           aria-label={snapOn ? '对齐吸附：开（点按关闭）' : '对齐吸附：关（点按开启）'}
-          title={
+          data-tip={
             snapOn ? '对齐吸附：开 · 拖动时按住 ⌥ 临时关闭' : '对齐吸附：关 · 拖动时按住 ⌥ 临时开启'
           }
         >
           <svg viewBox="0 0 24 24">
-            <path d="M6 4v7a6 6 0 0 0 12 0V4h-4v7a2 2 0 0 1-4 0V4z" />
-            <path d="M6 8h4M14 8h4" />
+            <path d="M5 5h4v7a3 3 0 0 0 6 0V5h4v7a7 7 0 0 1-14 0z" />
+            <path d="M5 8.5h4M15 8.5h4" />
           </svg>
         </button>
-        <button className="iconbtn" onClick={fitContent} title="适应全板" aria-label="适应全板">
+        <button className="iconbtn" onClick={fitContent} aria-label="适应全板" data-tip="适应全板">
           <svg viewBox="0 0 24 24">
             <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
           </svg>

@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PEN, PEN_NAMES, HL, HL_NAMES } from '../board.js';
 
 const PEN_SIZES = [2, 4, 8];
@@ -87,6 +87,30 @@ export function BoardToolbar({
   const wrapRef = useRef(null);
   const optionsRef = useRef(null);
   const [optionsLeft, setOptionsLeft] = useState(null);
+  // Hover names above the toolbar (the bar scrolls sideways, so they live
+  // outside it): name, then the shortcut key.
+  const [tip, setTip] = useState(null);
+  const tipTimer = useRef(0);
+  const showTip = (btn) => {
+    if (!btn?.dataset?.tip || !wrapRef.current) return;
+    if (tip?.label === btn.dataset.tip) return;
+    clearTimeout(tipTimer.current);
+    tipTimer.current = setTimeout(() => {
+      const w = wrapRef.current?.getBoundingClientRect();
+      const b = btn.getBoundingClientRect();
+      if (!w) return;
+      setTip({
+        label: btn.dataset.tip,
+        keyName: btn.dataset.key,
+        x: b.left + b.width / 2 - w.left,
+      });
+    }, 150);
+  };
+  const hideTip = () => {
+    clearTimeout(tipTimer.current);
+    setTip(null);
+  };
+  useEffect(() => () => clearTimeout(tipTimer.current), []);
 
   // Anchor the color/size bubble above the tool it belongs to, clamped so it
   // stays on screen (问题 6).
@@ -161,12 +185,36 @@ export function BoardToolbar({
         </div>
       )}
 
-      <div id="toolbar" className="glass" role="toolbar" aria-label="白板工具">
+      {tip && (
+        <div
+          className="tool-tip"
+          role="tooltip"
+          style={{
+            left: tip.x,
+            bottom: `calc(100% + ${showOptions ? (optionsRef.current?.offsetHeight || 0) + 22 : 10}px)`,
+          }}
+        >
+          {tip.label}
+          {tip.keyName && <kbd>{tip.keyName}</kbd>}
+        </div>
+      )}
+      <div
+        id="toolbar"
+        className="glass"
+        role="toolbar"
+        aria-label="白板工具"
+        onPointerOver={(e) => showTip(e.target.closest?.('button[data-tip]'))}
+        onPointerLeave={hideTip}
+        onPointerDown={hideTip}
+        onFocus={(e) => e.target.matches?.(':focus-visible') && showTip(e.target)}
+        onBlur={hideTip}
+      >
         <button
           className="tool"
           onClick={onUndo}
           disabled={!canUndo}
-          title="撤销 (⌘Z)"
+          data-tip="撤销"
+          data-key="⌘Z"
           aria-label="撤销"
         >
           <svg viewBox="0 0 24 24">
@@ -178,7 +226,8 @@ export function BoardToolbar({
           className="tool"
           onClick={onRedo}
           disabled={!canRedo}
-          title="重做 (⇧⌘Z)"
+          data-tip="重做"
+          data-key="⇧⌘Z"
           aria-label="重做"
         >
           <svg viewBox="0 0 24 24">
@@ -195,7 +244,8 @@ export function BoardToolbar({
             data-tool={t.id}
             aria-pressed={activeTool === t.id}
             onClick={() => onSelectTool(t.id)}
-            title={`${t.label} (${t.key})${t.hint ? `，${t.hint}` : ''}`}
+            data-tip={t.hint ? `${t.label} · ${t.hint}` : t.label}
+            data-key={t.key}
             aria-label={t.label}
           >
             <svg viewBox="0 0 24 24">{t.icon}</svg>
@@ -209,7 +259,8 @@ export function BoardToolbar({
           aria-expanded={panelOpen}
           aria-controls="panel"
           onClick={onTogglePanel}
-          title="贴纸与小组件 (S)"
+          data-tip="贴纸与小组件"
+          data-key="S"
           aria-label="贴纸与小组件"
         >
           <svg viewBox="0 0 24 24">
@@ -221,7 +272,8 @@ export function BoardToolbar({
           className="tool"
           data-tool="image"
           onClick={onPickImages}
-          title="上传图片 (I)，也可以直接拖入或粘贴"
+          data-tip="上传图片 · 也可以拖入或粘贴"
+          data-key="I"
           aria-label="上传图片"
         >
           <svg viewBox="0 0 24 24">

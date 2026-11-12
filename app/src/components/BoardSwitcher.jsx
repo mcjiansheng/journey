@@ -16,6 +16,7 @@ export function BoardSwitcher({
   onDelete,
   canDelete = true,
   onOpenDeletions,
+  onExport,
   onOpenChange,
 }) {
   const current = boards.find((b) => b.id === currentId) || boards[0];
@@ -189,6 +190,17 @@ export function BoardSwitcher({
                 }}
               >
                 🗂 最近删除…
+              </button>
+              <button
+                role="menuitem"
+                disabled={!onExport}
+                title={onExport ? '把白板上的内容导出成一张 PNG 图片' : '白板上还没有内容'}
+                onClick={() => {
+                  setOpen(false);
+                  onExport?.();
+                }}
+              >
+                🖼 导出为图片
               </button>
               <button
                 role="menuitem"

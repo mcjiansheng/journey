@@ -90,20 +90,24 @@ export function contentBounds(items = []) {
  * screen space covered by floating UI (the docked sticker panel), so "fit" and
  * "spawn at center" both refer to the canvas the user can actually see.
  */
-export function center(items = [], viewport = { w: 1200, h: 800 }, insets = {}) {
+// Comfortable zoom for a new or nearly empty board: at 100% stickers and
+// widgets feel oversized on a laptop screen.
+export const DEFAULT_ZOOM = 0.8;
+
+export function center(items = [], viewport = { w: 1200, h: 800 }, insets = {}, maxK = 1) {
   const { left = 0, right = 0, top = 0, bottom = 0 } = insets;
   const vw = Math.max(100, viewport.w - left - right);
   const vh = Math.max(100, viewport.h - top - bottom);
   const bounds = contentBounds(items);
   if (!bounds || bounds.w === 0 || bounds.h === 0) {
-    return { x: left + vw / 2 - 200, y: top + vh / 2 - 150, k: 1 };
+    return { x: left + vw / 2 - 200, y: top + vh / 2 - 150, k: DEFAULT_ZOOM };
   }
   const pad = vw < 640 ? 32 : 90;
   const topPad = 70,
     bottomPad = 140;
   const availW = Math.max(100, vw - pad * 2);
   const availH = Math.max(100, vh - topPad - bottomPad);
-  const k = Math.min(1.2, Math.max(0.2, Math.min(availW / bounds.w, availH / bounds.h)));
+  const k = Math.min(maxK, Math.max(0.2, Math.min(availW / bounds.w, availH / bounds.h)));
   const cx = bounds.x + bounds.w / 2;
   const cy = bounds.y + bounds.h / 2;
   return {

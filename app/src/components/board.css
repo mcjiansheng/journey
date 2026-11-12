@@ -3418,3 +3418,121 @@
     display: none;
   }
 }
+
+/* ---------- 第三轮追修 2 (2026-11-12) ---------- */
+/* Right-click menu: one highlight — hover and focus look the same, and the
+   item under the pointer is the focused one. */
+.context-menu:focus {
+  outline: none;
+}
+.context-menu .cm-item:focus,
+.context-menu .cm-item:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: var(--selected);
+}
+
+/* Type to edit: the hidden field that receives keys for a selected note. */
+.type-catcher {
+  position: absolute;
+  width: 2px;
+  height: 1.4em;
+  padding: 0;
+  border: 0;
+  margin: 0;
+  opacity: 0;
+  resize: none;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  font-size: 16px;
+  caret-color: transparent;
+}
+
+/* Rotated items change form without sliding transitions: with the pivot at
+   the center a moving width made the item swing while it animated. */
+.board-item.reshaping.rotated,
+.board-item.reshaping.rotated > .box,
+.board-item.reshaping.rotated .widget-frame,
+.board-item.reshaping.rotated .w {
+  transition: none !important;
+}
+
+/* Toolbar and zoom: hover names with the shortcut key. */
+.tool-tip {
+  position: absolute;
+  z-index: 2;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--surface);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 14px #0003;
+  animation: board-fade-in 0.1s ease-out both;
+}
+.tool-tip kbd {
+  font-family: inherit;
+  font-size: 11.5px;
+  opacity: 0.65;
+}
+#zoom [data-tip] {
+  position: relative;
+}
+#zoom [data-tip]:hover::after,
+#zoom [data-tip]:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  translate: -50% 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--surface);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 14px #0003;
+  animation: board-fade-in 0.1s ease-out 0.15s both;
+}
+#zoom [data-tip]:last-child:hover::after,
+#zoom [data-tip]:last-child:focus-visible::after {
+  left: auto;
+  right: 0;
+  translate: 0 0;
+}
+/* The tool color dot sits below the icon without moving it. */
+.tool .tool-dot {
+  bottom: 4px;
+}
+
+/* Export in progress */
+.export-busy {
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-radius: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.export-busy .ring {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+}

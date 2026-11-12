@@ -23,7 +23,9 @@ export function BoardContextMenu({ x, y, items, onClose, fixed = false, label = 
       left: Math.max(8, Math.min(x, pw - el.offsetWidth - 8)),
       top: Math.max(8, Math.min(y, ph - el.offsetHeight - 8)),
     });
-    el.querySelector('[role="menuitem"]:not([disabled])')?.focus({ preventScroll: true });
+    // Focus the menu itself, not its first item: opened with the mouse, a ring
+    // on the first item next to the hover highlight read as two selections.
+    el.focus({ preventScroll: true });
   }, [x, y]);
 
   useEffect(() => {
@@ -41,7 +43,10 @@ export function BoardContextMenu({ x, y, items, onClose, fixed = false, label = 
       e.preventDefault();
       const list = [...(ref.current?.querySelectorAll('[role="menuitem"]:not([disabled])') || [])];
       const i = list.indexOf(document.activeElement);
-      const next = list[(i + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length];
+      const next =
+        i < 0
+          ? list[e.key === 'ArrowDown' ? 0 : list.length - 1]
+          : list[(i + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length];
       next?.focus();
     };
     window.addEventListener('pointerdown', close, true);
@@ -70,7 +75,13 @@ export function BoardContextMenu({ x, y, items, onClose, fixed = false, label = 
         <div
           key={item.label}
           className="cm-row"
-          onPointerEnter={() => !nested && setSub(item.children ? i : null)}
+          onPointerEnter={(e) => {
+            if (!nested) setSub(item.children ? i : null);
+            // One highlight: the item under the pointer is also the focused one.
+            e.currentTarget.querySelector('[role="menuitem"]:not([disabled])')?.focus({
+              preventScroll: true,
+            });
+          }}
         >
           <button
             type="button"
@@ -111,6 +122,7 @@ export function BoardContextMenu({ x, y, items, onClose, fixed = false, label = 
     <div
       ref={ref}
       className={`context-menu ui glass ${fixed ? 'is-fixed' : ''}`}
+      tabIndex={-1}
       role="menu"
       aria-label={label}
       style={{ left: pos.left, top: pos.top }}
