@@ -3402,3 +3402,19 @@
 #zoom .snap-toggle.on svg {
   opacity: 1;
 }
+
+@media (max-width: 640px) {
+  .gallery-tools {
+    max-width: calc(100vw - 24px);
+    flex-wrap: wrap;
+    justify-content: center;
+    white-space: normal;
+  }
+  .gallery-tools button {
+    padding: 0 9px;
+    font-size: 13px;
+  }
+  .gallery-tools .sep {
+    display: none;
+  }
+}

@@ -255,9 +255,10 @@ export function BoardStickerPanel({
       };
       const move = (ev) => {
         if (ev.pointerId !== g.pointerId) return;
-        // A release outside the window never reached us.
+        // A release outside the window never reached us: cancel instead of
+        // dropping at the window edge on re-entry.
         if (ev.pointerType === 'mouse' && (ev.buttons & 1) === 0) {
-          g.finish(ev, false);
+          g.finish(null, true);
           return;
         }
         if (!g.started && Math.hypot(ev.clientX - g.sx, ev.clientY - g.sy) < DRAG_THRESHOLD) return;
@@ -274,6 +275,7 @@ export function BoardStickerPanel({
       };
       const up = (ev) => ev.pointerId === g.pointerId && g.finish(ev, false);
       const cancel = () => g.finish(null, true);
+      const vis = () => document.hidden && g.finish(null, true);
       const key = (ev) => {
         if (ev.key !== 'Escape' || !g.started) return;
         ev.preventDefault();
@@ -285,6 +287,7 @@ export function BoardStickerPanel({
         window.removeEventListener('pointerup', up);
         window.removeEventListener('pointercancel', cancel);
         window.removeEventListener('blur', cancel);
+        document.removeEventListener('visibilitychange', vis);
         window.removeEventListener('keydown', key, true);
         if (itemGestureRef.current === g) itemGestureRef.current = null;
         cancelAnimationFrame(g.raf);
@@ -310,6 +313,7 @@ export function BoardStickerPanel({
       window.addEventListener('pointerup', up);
       window.addEventListener('pointercancel', cancel);
       window.addEventListener('blur', cancel);
+      document.addEventListener('visibilitychange', vis);
       window.addEventListener('keydown', key, true);
     },
     onClick: () => {

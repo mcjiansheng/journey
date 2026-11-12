@@ -151,7 +151,7 @@ const IconButton = ({
   side,
 }) => {
   const tip = useContext(TipContext);
-  const show = (e) => tip?.show(e.currentTarget, label, side, shortcut);
+  const show = (e) => side && tip?.show(e.currentTarget, label, side, shortcut);
   return (
     <button
       type="button"
@@ -235,15 +235,18 @@ export function BoardActions({
         const box = el.getBoundingClientRect();
         const origin = (railRef.current || barRef.current)?.offsetParent?.getBoundingClientRect();
         if (!origin) return;
+        let s = side;
+        if (s === 'right' && box.right + 120 > origin.right) s = 'left';
+        else if (s === 'left' && box.left - 120 < origin.left) s = 'right';
         setTipState({
           label,
           shortcut,
-          side,
+          side: s,
           x:
-            (side === 'left' ? box.left : side === 'right' ? box.right : box.left + box.width / 2) -
+            (s === 'left' ? box.left : s === 'right' ? box.right : box.left + box.width / 2) -
             origin.left,
           y:
-            (side === 'top' ? box.top : side === 'bottom' ? box.bottom : box.top + box.height / 2) -
+            (s === 'top' ? box.top : s === 'bottom' ? box.bottom : box.top + box.height / 2) -
             origin.top,
         });
       }, 120);
@@ -264,28 +267,75 @@ export function BoardActions({
   // bar or pop-up reaches into its column.
   useLayoutEffect(() => {
     if (!rect) return;
+    const originEl = (railRef.current || barRef.current)?.offsetParent;
+    const origin = originEl?.getBoundingClientRect();
+    const rel = (sel, root = originEl) => {
+      const el = origin && root?.querySelector(sel);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return r.width && r.height
+        ? { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height }
+        : null;
+    };
+    const tb = rel('#toolbar');
+    const zoomRect = rel('#zoom');
+    const tlRect = rel('#top-left');
+    const hrRect = typeof document !== 'undefined' ? rel('.header-right', document) : null;
+    const bottomLimit = tb ? tb.y - 10 : stage.h - 96;
+
     const bw = barRef.current?.offsetWidth || 0;
     const bh = barRef.current?.offsetHeight || 0;
-    const above = rect.y - GAP_ABOVE - bh;
-    const barBelow = above < topSafe;
-    const top = barBelow ? Math.min(rect.y + rect.h + GAP_BELOW, stage.h - bh - 96) : above;
-    const cx = rect.x + rect.w / 2;
-    const left = Math.min(stage.w - 8 - bw, Math.max(8, cx - bw / 2));
     const pw = popRef.current?.offsetWidth || 0;
     const ph = popRef.current?.offsetHeight || 0;
-    const popLeft = Math.min(stage.w - 8 - pw, Math.max(8, left + bw / 2 - pw / 2));
-    const popTop = barBelow ? top + bh + 8 : top - 8 - ph;
+    const above = rect.y - GAP_ABOVE - bh;
+    const aboveTop = pop && ph ? above - 8 - ph : above;
+    const below = rect.y + rect.h + GAP_BELOW;
+    const belowBottom = below + bh + (pop && ph ? 8 + ph : 0);
+    const barBelow =
+      above < topSafe
+        ? below + bh <= bottomLimit || bottomLimit - (rect.y + rect.h) >= rect.y - topSafe
+        : aboveTop < topSafe && belowBottom <= bottomLimit;
+    const top = barBelow ? Math.min(below, bottomLimit - bh) : Math.max(topSafe, above);
+    const cx = rect.x + rect.w / 2;
+    const left = Math.min(stage.w - 8 - bw, Math.max(8, cx - bw / 2));
+    let popLeft = Math.min(stage.w - 8 - pw, Math.max(8, left + bw / 2 - pw / 2));
+    const popBelow = barBelow
+      ? top + bh + 8 + ph <= stage.h - 8
+      : top - 8 - ph < 8 && top + bh + 8 + ph <= bottomLimit;
+    const popTop = pop && ph ? (popBelow ? top + bh + 8 : Math.max(8, top - 8 - ph)) : 0;
+    if (pw && ph && popTop < topSafe) {
+      if (
+        hrRect &&
+        popTop < hrRect.y + hrRect.h + 6 &&
+        popLeft + pw > hrRect.x - 8 &&
+        popLeft < hrRect.x + hrRect.w + 8
+      ) {
+        const cand = hrRect.x - 8 - pw;
+        if (cand >= 8 && (!tlRect || cand >= tlRect.x + tlRect.w + 8)) popLeft = cand;
+      }
+      if (
+        tlRect &&
+        popTop < tlRect.y + tlRect.h + 6 &&
+        popLeft < tlRect.x + tlRect.w + 8 &&
+        popLeft + pw > tlRect.x - 8
+      ) {
+        const cand = tlRect.x + tlRect.w + 8;
+        if (cand + pw <= stage.w - 8 && (!hrRect || cand + pw <= hrRect.x - 8)) popLeft = cand;
+      }
+    }
     const blocks = [];
     if (bw) blocks.push({ x: left, y: top, w: bw, h: bh });
     if (pw) blocks.push({ x: popLeft, y: popTop, w: pw, h: ph });
 
+    const railBlocks = [...blocks];
+    for (const b of [tb, zoomRect, tlRect, hrRect]) if (b) railBlocks.push(b);
     const rw = railRef.current?.offsetWidth || 0;
     const rh = railRef.current?.offsetHeight || 0;
     const minTop = topSafe;
-    const maxTop = stage.h - rh - 96;
+    const maxTop = Math.max(minTop, bottomLimit - rh);
     const clampTop = (y) => Math.max(minTop, Math.min(maxTop, y));
     const hits = (r) =>
-      blocks.some(
+      railBlocks.some(
         (b) =>
           r.x < b.x + b.w + 6 && b.x < r.x + r.w + 6 && r.y < b.y + b.h + 6 && b.y < r.y + r.h + 6,
       );
@@ -294,26 +344,30 @@ export function BoardActions({
     const leftX = rect.x - RAIL_GAP - rw;
     if (rightX + rw <= stage.w - 8) sides.push(['right', rightX]);
     if (leftX >= 8) sides.push(['left', leftX]);
-    if (!sides.length) sides.push(['right', Math.max(8, stage.w - 8 - rw)]);
+    if (!sides.length) {
+      const insideRight = Math.min(stage.w - 8 - rw, rect.x + rect.w - RAIL_GAP - rw);
+      const insideLeft = Math.max(8, rect.x + RAIL_GAP);
+      sides.push(['right', Math.max(8, insideRight)]);
+      if (insideLeft + rw <= stage.w - 8) sides.push(['left', insideLeft]);
+    }
+    const idealY = rect.y + rect.h / 2 - rh / 2;
     let rail = null;
     for (const [side, x] of sides) {
-      let y = clampTop(rect.y + rect.h / 2 - rh / 2);
-      const r = { x, y, w: rw, h: rh };
-      if (hits(r)) {
-        // Slide along the side away from the bar.
-        const near = blocks.filter((b) => r.x < b.x + b.w && b.x < r.x + r.w);
-        if (near.length)
-          y = barBelow
-            ? Math.min(...near.map((b) => b.y)) - 10 - rh
-            : Math.max(...near.map((b) => b.y + b.h)) + 10;
-        y = clampTop(y);
+      const y0 = clampTop(idealY);
+      const cands = [y0];
+      const col = railBlocks.filter((b) => x - 6 < b.x + b.w && b.x < x + rw + 6);
+      for (const b of col) {
+        cands.push(clampTop(b.y - 10 - rh), clampTop(b.y + b.h + 10));
       }
-      const candidate = { side, x, y, ok: !hits({ x, y, w: rw, h: rh }) };
-      if (candidate.ok) {
+      const valid = cands
+        .filter((y) => !hits({ x, y, w: rw, h: rh }))
+        .sort((a, b) => Math.abs(a - idealY) - Math.abs(b - idealY));
+      const candidate = valid.length
+        ? { side, x, y: valid[0], ok: true, dist: Math.abs(valid[0] - idealY) }
+        : { side, x, y: y0, ok: false, dist: Infinity };
+      if (!rail || (candidate.ok && (!rail.ok || candidate.dist + 10 < rail.dist))) {
         rail = candidate;
-        break;
       }
-      rail ||= candidate;
     }
     const next = {
       left,
@@ -350,10 +404,15 @@ export function BoardActions({
           : null
       : null;
   const style = one?.style || {};
-  const toggle = (name) => setPop((p) => (p === name ? null : name));
+  const toggle = (name) => {
+    tipApi.current.hide();
+    setPop((p) => (p === name ? null : name));
+  };
   // Hover names go away from the object: above a bar that sits above it, etc.
   const barSide = pos?.barBelow ? 'bottom' : 'top';
   const railSide = pos?.railSide || 'right';
+
+  const barTipSide = pop ? null : barSide;
 
   // ---- Bar: what it does, then how it looks ----
   const doing = [];
@@ -371,7 +430,7 @@ export function BoardActions({
   if (one && type === 'widget' && OPEN_LABEL[kind])
     doing.push(
       <IconButton
-        side={barSide}
+        side={barTipSide}
         key="open"
         icon="open"
         label={OPEN_LABEL[kind]}
@@ -382,7 +441,7 @@ export function BoardActions({
     if (['note', 'text', 'todo', 'section'].includes(type))
       doing.push(
         <IconButton
-          side={barSide}
+          side={barTipSide}
           key="edit"
           icon="edit"
           label={type === 'todo' ? '编辑清单' : type === 'section' ? '重命名分区' : '编辑文字'}
@@ -392,7 +451,7 @@ export function BoardActions({
     if (type === 'gallery') {
       doing.push(
         <IconButton
-          side={barSide}
+          side={barTipSide}
           key="add"
           icon="imageAdd"
           label="添加图片"
@@ -400,14 +459,14 @@ export function BoardActions({
         />,
       );
       doing.push(
-        <IconButton side={barSide} key="crop" icon="crop" label="调整显示" onClick={onEdit} />,
+        <IconButton side={barTipSide} key="crop" icon="crop" label="调整显示" onClick={onEdit} />,
       );
     }
   }
   if (one && type === 'image' && one.content.assetId)
     doing.push(
       <IconButton
-        side={barSide}
+        side={barTipSide}
         key="fav"
         icon="heart"
         label="收藏到我的表情"
@@ -433,7 +492,7 @@ export function BoardActions({
   if (variants || frames)
     looks.push(
       <IconButton
-        side={barSide}
+        side={barTipSide}
         key="style"
         icon="style"
         label="样式"
@@ -444,7 +503,7 @@ export function BoardActions({
   if (multi && !locked) {
     looks.push(
       <IconButton
-        side={barSide}
+        side={barTipSide}
         key="align"
         icon="align"
         label="对齐与分布"
@@ -455,7 +514,7 @@ export function BoardActions({
     if (!items.some((it) => it.content?.type === 'section'))
       looks.push(
         <IconButton
-          side={barSide}
+          side={barTipSide}
           key="wrap"
           icon="section"
           label="框进分区"
