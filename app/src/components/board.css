@@ -3536,3 +3536,114 @@
   border-top-color: var(--accent);
   animation: spin 0.9s linear infinite;
 }
+
+/* ---------- 第三轮追修 3 ---------- */
+/* 分区归属：选中分区时框出属于它的对象；选中或拖动对象时标出它所在的分区。 */
+.section-hint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  border-radius: calc(8px * var(--ik));
+}
+.section-hint.member {
+  outline: calc(1.5px * var(--ik)) dashed var(--accent);
+  outline-offset: calc(4px * var(--ik));
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.section-hint.parent {
+  outline: calc(2px * var(--ik)) dashed var(--accent);
+  outline-offset: calc(-2px * var(--ik));
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+/* 橡皮：指针周围画出擦除范围。 */
+#stage[data-tool='eraser'] {
+  cursor: crosshair;
+}
+.eraser-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 20px; /* ERASER_RADIUS × 2 in Board.jsx */
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--text) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 35%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface) 70%, transparent);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 5;
+}
+
+/* 样式弹层里的分组：地图小组件分「卡片」「地图」两行。 */
+.style-pop .pop-label {
+  align-self: center;
+  min-width: 2.6em;
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+.style-pop .pop-break {
+  flex-basis: 100%;
+  height: 0;
+}
+.style-chip.map-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.style-chip.map-chip::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px #0000001f;
+  background: linear-gradient(135deg, #eef1e8 0 55%, #fbe9b7 55% 65%, #b9d9ef 65%);
+}
+.style-chip.m-light::before {
+  background: linear-gradient(135deg, #f3f3f0 0 55%, #ffffff 55% 65%, #d9e3e9 65%);
+}
+.style-chip.m-dark::before {
+  background: linear-gradient(135deg, #232f45 0 55%, #55647f 55% 65%, #1b3f7c 65%);
+}
+.style-chip.m-satellite::before {
+  background: linear-gradient(135deg, #46623f 0 40%, #7b7356 40% 60%, #2f4a5c 60%);
+}
+.style-chip.m-sketch::before {
+  background: repeating-linear-gradient(45deg, #0000 0 4px, #c9b48a 4px 5px), #f6efdf;
+}
+
+/* 导出进度 */
+.export-busy {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 280px;
+}
+.export-busy .export-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.export-busy .export-head .text-button {
+  margin-left: auto;
+}
+.export-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  overflow: hidden;
+}
+.export-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.15s ease-out;
+}
+.export-step {
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  color: var(--muted);
+}

@@ -20,6 +20,9 @@ import {
   nearestDock,
   geoFit,
   geoProject,
+  lookPopFor,
+  variantsFor,
+  cleanBoardStylePatch,
 } from '../src/board.js';
 
 test('board: coordinate transformations', () => {
@@ -341,4 +344,24 @@ test('board: map tiles cover the container and align with projected points', asy
   const ty = Math.floor((0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n);
   const t = tiles.find((t) => t.x === tx && t.y === ty);
   assert.ok(t && t.left <= 84 && t.left + t.size >= 84 && t.top <= 67 && t.top + t.size >= 67);
+});
+
+test('board: 外观与样式 opens styles, colours or nothing', () => {
+  const note = { content: { type: 'note' }, style: { color: 'yellow' } };
+  const image = { content: { type: 'image' }, style: {} };
+  const route = { content: { type: 'widget', kind: 'route' }, style: { size: 'M' } };
+  const stroke = { content: { type: 'stroke' }, style: {} };
+  const day = { content: { type: 'widget', kind: 'day' }, style: { size: 'S' } };
+  assert.equal(lookPopFor([note]), 'style');
+  assert.equal(lookPopFor([image]), 'style');
+  assert.equal(lookPopFor([route]), 'style');
+  assert.equal(lookPopFor([note, { ...note }]), 'color');
+  assert.equal(lookPopFor([stroke]), null);
+  assert.equal(lookPopFor([day]), null);
+  assert.equal(lookPopFor([{ ...note, style: { color: 'yellow', locked: true } }]), null);
+  assert.deepEqual(
+    variantsFor(route).map(([id]) => id),
+    ['plain', 'flat', 'polaroid', 'outline'],
+  );
+  assert.deepEqual(cleanBoardStylePatch({ mapStyle: 'dark', junk: 1 }), { mapStyle: 'dark' });
 });

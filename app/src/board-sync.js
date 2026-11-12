@@ -548,6 +548,9 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
       });
 
       expectLocal(id, { state: 'active' });
+      // Keep the ref in step right away: a poll merging before the next render
+      // (or an eraser/undo acting on the new item) must already see it.
+      itemsRef.current = [...itemsRef.current, newItem];
       setItems((prev) => {
         const next = [...prev, newItem];
         writeBoardCache(tripId, boardId, {
@@ -637,7 +640,12 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
   const deleteBoardItem = useCallback(
     async (itemId) => {
       const target = itemsRef.current.find((it) => it.id === itemId);
-      if (target) expectLocal(itemId, { state: 'deleted' });
+      if (target) {
+        expectLocal(itemId, { state: 'deleted' });
+        itemsRef.current = itemsRef.current.map((it) =>
+          it.id === itemId ? { ...it, state: 'deleted', generation: (it.generation || 0) + 1 } : it,
+        );
+      }
       setItems((prev) => {
         const next = prev.map((it) =>
           it.id === itemId
@@ -672,7 +680,12 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
   const restoreBoardItem = useCallback(
     async (itemId) => {
       const target = itemsRef.current.find((it) => it.id === itemId);
-      if (target) expectLocal(itemId, { state: 'active' });
+      if (target) {
+        expectLocal(itemId, { state: 'active' });
+        itemsRef.current = itemsRef.current.map((it) =>
+          it.id === itemId ? { ...it, state: 'active', generation: (it.generation || 0) + 1 } : it,
+        );
+      }
       setItems((prev) => {
         const next = prev.map((it) =>
           it.id === itemId

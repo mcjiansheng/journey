@@ -10,6 +10,7 @@ export function WidgetFrame({ item, model, children, className = '', style = {},
 
   const isGone = Boolean(model?.gone);
   const variant = `v-${item.style?.variant || 'plain'}`;
+  const mapLook = item.style?.mapStyle ? `map-${item.style.mapStyle}` : '';
 
   return (
     <div
@@ -25,7 +26,7 @@ export function WidgetFrame({ item, model, children, className = '', style = {},
     >
       <div
         key={size}
-        className={`w ${className} ${variant}`}
+        className={`w ${className} ${variant} ${mapLook}`}
         style={{
           width: baseW,
           height: baseH,

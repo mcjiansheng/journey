@@ -18,8 +18,12 @@ import {
   contains,
   rectFrom,
   rebaseBox,
+  overlapShare,
+  inSection,
+  strokeHit,
+  segmentDistance,
 } from '../src/board-geometry.js';
-import { exportFileName } from '../src/board-export.js';
+import { exportFileName, exportScale } from '../src/board-export.js';
 import { simplify, pathD } from '../src/board.js';
 
 const near = (a, b, eps = 0.01) => assert.ok(Math.abs(a - b) <= eps, `${a} ≈ ${b}`);
@@ -178,4 +182,50 @@ test('exported pictures are named after the trip, the board and the day', () => 
     '苏州 周末-主白板-20261112.png',
   );
   assert.equal(exportFileName('', '', new Date(2026, 0, 5)), '白板-20260105.png');
+});
+
+test('section membership: at least half inside; nested sections only when fully inside', () => {
+  const sec = { x: 0, y: 0, w: 400, h: 300 };
+  assert.equal(overlapShare(sec, { x: 10, y: 10, w: 100, h: 100 }), 1);
+  near(overlapShare(sec, { x: 350, y: 10, w: 100, h: 100 }), 0.5);
+  assert.equal(inSection(sec, { x: 340, y: 10, w: 100, h: 100 }), true); // 60% inside
+  assert.equal(inSection(sec, { x: 360, y: 10, w: 100, h: 100 }), false); // 40% inside
+  assert.equal(inSection(sec, { x: 340, y: 10, w: 100, h: 100 }, true), false);
+  assert.equal(inSection(sec, { x: 10, y: 10, w: 100, h: 100 }, true), true);
+  assert.equal(overlapShare(sec, { x: 500, y: 0, w: 10, h: 10 }), 0);
+});
+
+test('eraser: swept circle against stroke segments', () => {
+  near(segmentDistance(0, 0, 10, 0, 5, -5, 5, 5), 0); // crossing
+  near(segmentDistance(0, 0, 10, 0, 0, 3, 10, 3), 3);
+  const stroke = {
+    frame: { x: 100, y: 100, w: 100, h: 20, rotation: 0 },
+    content: {
+      type: 'stroke',
+      points: [
+        [0, 10],
+        [100, 10],
+      ],
+    },
+  };
+  // A point on the line, a near miss inside the radius, a clear miss.
+  assert.equal(strokeHit(stroke, { x: 150, y: 110 }, { x: 150, y: 110 }, 4), true);
+  assert.equal(strokeHit(stroke, { x: 150, y: 115 }, { x: 150, y: 115 }, 6), true);
+  assert.equal(strokeHit(stroke, { x: 150, y: 130 }, { x: 150, y: 130 }, 6), false);
+  // A fast swipe whose two samples sit on both sides of the line still hits.
+  assert.equal(strokeHit(stroke, { x: 150, y: 60 }, { x: 150, y: 160 }, 2), true);
+  // Turned 90° about its centre, the line runs vertically through x = 150.
+  const turned = { ...stroke, frame: { ...stroke.frame, rotation: 90 } };
+  assert.equal(strokeHit(turned, { x: 150, y: 70 }, { x: 150, y: 70 }, 3), true);
+  assert.equal(strokeHit(turned, { x: 120, y: 110 }, { x: 120, y: 110 }, 3), false);
+  // A dot (one point) is hit near it.
+  const dot = { frame: { x: 0, y: 0, w: 20, h: 20 }, content: { points: [[10, 10]] } };
+  assert.equal(strokeHit(dot, { x: 12, y: 10 }, { x: 12, y: 10 }, 3), true);
+});
+
+test('export scale stays sharp but bounded', () => {
+  assert.equal(exportScale(1000, 800), 2);
+  const big = exportScale(8000, 6000);
+  assert.ok(big < 1 && 8000 * 6000 * big * big <= 24e6 + 1);
+  assert.ok(exportScale(40000, 500) * 40000 <= 16000);
 });

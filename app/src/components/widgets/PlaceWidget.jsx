@@ -30,6 +30,7 @@ export function PlaceWidget({ item, model }) {
       ariaLabel={`地点小组件：${model.name}`}
     >
       <MapSketch
+        mapStyle={item.style?.mapStyle}
         seed={model.favoriteId || model.name || 'place'}
         w={168}
         h={168}

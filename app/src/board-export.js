@@ -12,6 +12,7 @@ const SKIP = [
   '.handle',
   '.dim',
   '.reshape-outline',
+  '.section-hint',
   '.upload-placeholder',
   '.is-preview',
   '.gallery-nav',
@@ -20,6 +21,22 @@ const SKIP = [
   '.peer-label',
   '[data-export="skip"]',
 ].join(',');
+
+// Properties that never change how a still picture looks; leaving them out
+// (and reading the rest by name, not by index) makes inlining several times faster.
+const IGNORED =
+  /^(transition|animation|will-change|cursor|pointer-events|user-select|-webkit-user|touch-action|scroll|overscroll|caret|speak|math|content-visibility|contain-intrinsic|view-transition|anchor|position-try|interpolate-size|field-sizing|interactivity|reading-flow|-webkit-tap|-webkit-touch|-webkit-highlight|-webkit-locale|-webkit-rtl|app-region)/;
+let propNames = null;
+function stylePropNames() {
+  if (propNames) return propNames;
+  const cs = getComputedStyle(document.documentElement);
+  propNames = [];
+  for (let i = 0; i < cs.length; i++) {
+    const p = cs[i];
+    if (!p.startsWith('--') && !IGNORED.test(p)) propNames.push(p);
+  }
+  return propNames;
+}
 
 let defaultsFrame = null;
 const defaultsCache = new Map();
@@ -39,7 +56,7 @@ function defaultStyle(tag, ns) {
   doc.body.appendChild(el);
   const cs = defaultsFrame.contentWindow.getComputedStyle(el);
   const out = {};
-  for (let i = 0; i < cs.length; i++) out[cs[i]] = cs.getPropertyValue(cs[i]);
+  for (const p of stylePropNames()) out[p] = cs.getPropertyValue(p);
   el.remove();
   defaultsCache.set(key, out);
   return out;
@@ -47,9 +64,7 @@ function defaultStyle(tag, ns) {
 
 function styleText(cs, defaults, always = []) {
   let text = '';
-  for (let i = 0; i < cs.length; i++) {
-    const p = cs[i];
-    if (p.startsWith('--')) continue;
+  for (const p of stylePropNames()) {
     const v = cs.getPropertyValue(p);
     if (defaults[p] === v && !always.includes(p)) continue;
     text += `${p}:${v};`;
@@ -60,17 +75,38 @@ function styleText(cs, defaults, always = []) {
 const TRANSPARENT =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
-async function imageData(img) {
+function readBlob(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+
+/**
+ * A picture as a data URL, no larger than it will appear in the export
+ * (re-encoding a full-size photo was the slowest step). A GIF gives the frame
+ * on screen now.
+ */
+async function imageData(img, scale) {
   if (!img.src) return TRANSPARENT;
   if (img.src.startsWith('data:')) return img.src;
-  // The frame on screen (also for GIFs) through a canvas …
   try {
     if (img.complete && img.naturalWidth) {
+      const nw = img.naturalWidth;
+      const nh = img.naturalHeight;
+      const ow = img.offsetWidth || nw;
+      const oh = img.offsetHeight || nh;
+      const k = Math.min(1, Math.max((ow * scale) / nw, (oh * scale) / nh));
       const c = document.createElement('canvas');
-      c.width = img.naturalWidth;
-      c.height = img.naturalHeight;
-      c.getContext('2d').drawImage(img, 0, 0);
-      return c.toDataURL('image/png');
+      c.width = Math.max(1, Math.round(nw * k));
+      c.height = Math.max(1, Math.round(nh * k));
+      const g = c.getContext('2d');
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(img, 0, 0, c.width, c.height);
+      const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+      if (blob) return await readBlob(blob);
     }
   } catch {
     // tainted: try reading it directly
@@ -82,22 +118,32 @@ async function imageData(img) {
       credentials: 'same-origin',
     });
     if (!res.ok) throw new Error(String(res.status));
-    const blob = await res.blob();
-    return await new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.onerror = reject;
-      r.readAsDataURL(blob);
-    });
+    return await readBlob(await res.blob());
   } catch {
     return TRANSPARENT;
   }
+}
+
+const cancelled = () => Object.assign(new Error('已取消导出'), { code: 'ABORT' });
+
+// Give the page a frame now and then so the progress bar moves and the tab
+// stays responsive; stop here when the export was cancelled.
+async function breathe(ctx, force = false) {
+  if (ctx.signal?.aborted) throw cancelled();
+  const now = performance.now();
+  if (!force && now - ctx.lastYield < 24) return;
+  ctx.report();
+  await new Promise((r) => setTimeout(r, 0));
+  ctx.lastYield = performance.now();
+  if (ctx.signal?.aborted) throw cancelled();
 }
 
 async function cloneNode(node, ctx) {
   if (node.nodeType === Node.TEXT_NODE) return node.cloneNode(false);
   if (node.nodeType !== Node.ELEMENT_NODE) return null;
   if (node.matches(SKIP)) return null;
+  ctx.done++;
+  await breathe(ctx);
   const cs = getComputedStyle(node);
   if (cs.display === 'none') return null;
 
@@ -118,7 +164,14 @@ async function cloneNode(node, ctx) {
     if (tag === 'img') {
       clone.removeAttribute('srcset');
       clone.removeAttribute('loading');
-      clone.setAttribute('src', await imageData(node));
+      clone.setAttribute('src', TRANSPARENT);
+      // Pictures convert side by side while the rest is cloned.
+      ctx.images.push(
+        imageData(node, ctx.scale).then((src) => {
+          clone.setAttribute('src', src);
+          ctx.imagesDone++;
+        }),
+      );
     }
     if (tag === 'input' || tag === 'textarea') clone.setAttribute('value', node.value);
   }
@@ -143,7 +196,9 @@ async function cloneNode(node, ctx) {
   return clone;
 }
 
-function waitImages(root, timeout = 5000) {
+function waitImages(root, timeout = 4000) {
+  // Off-screen pictures wait for the viewport when lazy; the export needs them now.
+  for (const img of root.querySelectorAll('img[loading="lazy"]')) img.loading = 'eager';
   const pending = [...root.querySelectorAll('img')].filter((img) => !img.complete);
   if (!pending.length) return Promise.resolve();
   return Promise.race([
@@ -160,17 +215,56 @@ function waitImages(root, timeout = 5000) {
   ]);
 }
 
+/** Pixel ratio for a W×H export: sharp on retina, within what one canvas allows. */
+export function exportScale(W, H) {
+  return Math.max(0.25, Math.min(2, Math.sqrt(24e6 / (W * H)), 16000 / Math.max(W, H)));
+}
+
 /**
  * Render the children of `layer` (absolutely placed in world coordinates)
  * inside `bounds` plus `pad` on every side. Resolves to a PNG blob.
+ * `onProgress(fraction, label)` follows the steps; `signal` cancels.
  */
-export async function renderBoardImage(layer, bounds, { pad = 64, background = '#f6f4ee' } = {}) {
-  await waitImages(layer);
-  if (document.fonts?.ready) await document.fonts.ready;
+export async function renderBoardImage(
+  layer,
+  bounds,
+  { pad = 64, background = '#f6f4ee', onProgress, signal } = {},
+) {
   const W = Math.ceil(bounds.w + pad * 2);
   const H = Math.ceil(bounds.h + pad * 2);
-  const ctx = { n: 0, rules: [] };
+  const scale = exportScale(W, H);
+  const total = Math.max(1, layer.querySelectorAll('*').length);
+  const ctx = {
+    n: 0,
+    rules: [],
+    images: [],
+    imagesDone: 0,
+    done: 0,
+    scale,
+    signal,
+    lastYield: performance.now(),
+    report: () => {},
+  };
+  let stage = ['正在载入图片', 0, 0.08];
+  const say = (label, from, to) => {
+    stage = [label, from, to];
+    ctx.report();
+  };
+  ctx.report = () => {
+    const [label, from, to] = stage;
+    let f = 0;
+    if (label === '正在整理内容') f = Math.min(1, ctx.done / total);
+    else if (label === '正在处理图片')
+      f = ctx.images.length ? ctx.imagesDone / ctx.images.length : 1;
+    onProgress?.(from + (to - from) * f, label);
+  };
 
+  say('正在载入图片', 0, 0.08);
+  await waitImages(layer);
+  if (document.fonts?.ready) await document.fonts.ready;
+  await breathe(ctx, true);
+
+  say('正在整理内容', 0.08, 0.7);
   const wrapper = document.createElementNS(XHTML, 'div');
   wrapper.setAttribute(
     'style',
@@ -186,6 +280,17 @@ export async function renderBoardImage(layer, bounds, { pad = 64, background = '
     const c = await cloneNode(child, ctx);
     if (c) world.appendChild(c);
   }
+
+  say('正在处理图片', 0.7, 0.82);
+  const tick = setInterval(() => ctx.report(), 120);
+  try {
+    await Promise.all(ctx.images);
+  } finally {
+    clearInterval(tick);
+  }
+  await breathe(ctx, true);
+
+  say('正在绘制', 0.82, 0.9);
   const style = document.createElementNS(XHTML, 'style');
   style.textContent = ctx.rules.join('\n');
   wrapper.appendChild(style);
@@ -196,15 +301,13 @@ export async function renderBoardImage(layer, bounds, { pad = 64, background = '
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
     `<foreignObject x="0" y="0" width="100%" height="100%">${xml}</foreignObject></svg>`;
   const img = new Image();
-  img.decoding = 'sync';
   await new Promise((resolve, reject) => {
     img.onload = resolve;
     img.onerror = () => reject(new Error('图片渲染失败'));
     img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   });
+  await breathe(ctx, true);
 
-  // Sharp on retina, but within what browsers allow for one canvas.
-  const scale = Math.max(0.25, Math.min(2, Math.sqrt(48e6 / (W * H)), 16000 / Math.max(W, H)));
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(W * scale);
   canvas.height = Math.round(H * scale);
@@ -213,6 +316,9 @@ export async function renderBoardImage(layer, bounds, { pad = 64, background = '
   g.fillStyle = background;
   g.fillRect(0, 0, W, H);
   g.drawImage(img, 0, 0, W, H);
+
+  say('正在生成 PNG', 0.9, 1);
+  await breathe(ctx, true);
   const blob = await new Promise((resolve, reject) => {
     try {
       canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('导出失败'))), 'image/png');
@@ -220,6 +326,8 @@ export async function renderBoardImage(layer, bounds, { pad = 64, background = '
       reject(new Error('当前浏览器不支持把白板导出成图片，请换用 Chrome 或 Edge'));
     }
   });
+  if (signal?.aborted) throw cancelled();
+  onProgress?.(1, '完成');
   return { blob, width: canvas.width, height: canvas.height };
 }
 

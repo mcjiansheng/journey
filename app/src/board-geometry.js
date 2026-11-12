@@ -70,6 +70,22 @@ export const groupBounds = (frames) => unionBounds(frames.map(frameBounds));
 export function intersects(a, b) {
   return a.x <= b.x + b.w && b.x <= a.x + a.w && a.y <= b.y + b.h && b.y <= a.y + a.h;
 }
+/** Share (0–1) of `inner`'s area lying inside `outer`. */
+export function overlapShare(outer, inner) {
+  const area = inner.w * inner.h;
+  if (!(area > 0)) return contains(outer, inner) ? 1 : 0;
+  const w = Math.min(outer.x + outer.w, inner.x + inner.w) - Math.max(outer.x, inner.x);
+  const h = Math.min(outer.y + outer.h, inner.y + inner.h) - Math.max(outer.y, inner.y);
+  return w > 0 && h > 0 ? (w * h) / area : 0;
+}
+/**
+ * Whether an object belongs to a section: at least half of it (its rotated
+ * outline's box) lies inside. Sections nest only when fully inside.
+ */
+export function inSection(sectionFrame, bounds, isSection = false) {
+  const area = frameBounds(sectionFrame);
+  return isSection ? contains(area, bounds) : overlapShare(area, bounds) >= 0.5;
+}
 export function contains(outer, inner) {
   return (
     inner.x >= outer.x &&
@@ -300,4 +316,71 @@ export function rebaseBox(box, from, to) {
   const c0 = frameCenter(from);
   const d = rotatePoint(c0, frameCenter(to), -r);
   return { ...box, x: box.x - c0.x + d.x, y: box.y - c0.y + d.y };
+}
+
+// ---------- Eraser ----------
+function pointSegDist(px, py, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len = dx * dx + dy * dy;
+  const t = len ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len)) : 0;
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+const cross = (ax, ay, bx, by, cx, cy) => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+/** Shortest distance between segments AB and CD. */
+export function segmentDistance(ax, ay, bx, by, cx, cy, dx, dy) {
+  const d1 = cross(ax, ay, bx, by, cx, cy);
+  const d2 = cross(ax, ay, bx, by, dx, dy);
+  const d3 = cross(cx, cy, dx, dy, ax, ay);
+  const d4 = cross(cx, cy, dx, dy, bx, by);
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0)))
+    return 0;
+  return Math.min(
+    pointSegDist(ax, ay, cx, cy, dx, dy),
+    pointSegDist(bx, by, cx, cy, dx, dy),
+    pointSegDist(cx, cy, ax, ay, bx, by),
+    pointSegDist(dx, dy, ax, ay, bx, by),
+  );
+}
+/**
+ * Whether the eraser, swept from `from` to `to` (world points) with `radius`,
+ * touches a stroke. Works on the stroke's own points (frame-local, turned with
+ * the frame), so a stroke under another object, a hairline at low zoom, or a
+ * quick swipe that skips past it between two pointer events are all caught.
+ */
+export function strokeHit(item, from, to, radius) {
+  const f = item?.frame;
+  const pts = item?.content?.points;
+  if (!f || !pts?.length) return false;
+  const c = frameCenter(f);
+  const r = f.rotation || 0;
+  const local = (p) => {
+    const q = rotatePoint(p, c, -r);
+    return [q.x - f.x, q.y - f.y];
+  };
+  const [ax, ay] = local(from);
+  const [bx, by] = local(to);
+  if (
+    Math.max(ax, bx) < -radius ||
+    Math.min(ax, bx) > f.w + radius ||
+    Math.max(ay, by) < -radius ||
+    Math.min(ay, by) > f.h + radius
+  ) {
+    // Points can stray a little outside the frame; check them before giving up.
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    if (
+      Math.max(ax, bx) < Math.min(...xs) - radius ||
+      Math.min(ax, bx) > Math.max(...xs) + radius ||
+      Math.max(ay, by) < Math.min(...ys) - radius ||
+      Math.min(ay, by) > Math.max(...ys) + radius
+    )
+      return false;
+  }
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const q = pts[i + 1] || p;
+    if (segmentDistance(ax, ay, bx, by, p[0], p[1], q[0], q[1]) <= radius) return true;
+  }
+  return false;
 }

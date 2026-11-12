@@ -491,7 +491,53 @@ export const STYLE_VARIANTS = {
     ['ring', '圆环'],
     ['minimal', '极简'],
   ],
+  // Map widgets: the card around the map (the map itself is style.mapStyle).
+  place: mapCardVariants(),
+  places: mapCardVariants(),
+  route: mapCardVariants(),
 };
+function mapCardVariants() {
+  return [
+    ['plain', '圆角卡片'],
+    ['flat', '扁平'],
+    ['polaroid', '相纸'],
+    ['outline', '描边'],
+  ];
+}
+/** Map looks for place / places / route widgets (mirrors server MAP_STYLES). */
+export const MAP_STYLES = [
+  ['standard', '标准'],
+  ['light', '浅色'],
+  ['dark', '深色'],
+  ['satellite', '卫星'],
+  ['sketch', '手绘'],
+];
+export const MAP_WIDGET_KINDS = ['place', 'places', 'route'];
+export const isMapWidget = (item) =>
+  item?.content?.type === 'widget' && MAP_WIDGET_KINDS.includes(item.content.kind);
+export const COLORABLE_TYPES = ['note', 'todo', 'section'];
+/** Frame styles an item can take (images and galleries), or null. */
+export function framesFor(item) {
+  const type = item?.content?.type;
+  if (type === 'image') return IMAGE_FRAMES;
+  if (type === 'gallery')
+    return IMAGE_FRAMES.filter(([id]) => ['none', 'polaroid', 'card', 'tape'].includes(id));
+  return null;
+}
+/**
+ * Which pop-up 「外观与样式」 should open for a selection: 'style' when it has
+ * styles, frames or map looks, 'color' when it can only change colour, else
+ * null (nothing to change, so the menu leaves the entry out).
+ */
+export function lookPopFor(items = []) {
+  if (!items.length || items.every((it) => it.style?.locked)) return null;
+  if (items.length === 1) {
+    const one = items[0];
+    if (variantsFor(one) || framesFor(one) || isMapWidget(one)) return 'style';
+  }
+  if (items.every((it) => COLORABLE_TYPES.includes(it.content?.type))) return 'color';
+  return null;
+}
 /** Variant list for an item: widgets by kind, everything else by type. */
 export function variantsFor(item) {
   const type = item?.content?.type;
@@ -519,6 +565,7 @@ export const BOARD_STYLE_KEYS = [
   'ratio',
   'autoWidth',
   'locked',
+  'mapStyle',
 ];
 /** Drop style fields the board does not know before they reach the server. */
 export function cleanBoardStylePatch(stylePatch = {}) {

@@ -21,7 +21,8 @@ export const WIDGET_KINDS={
   countdown:['S','M'],clock:['S','M'],expense:['S','M'],places:['M','L'],
 };
 // Board sticker styles. Kept here and mirrored in src/board.js (STYLE_VARIANTS).
-export const BOARD_VARIANTS={note:['plain','lined','grid','kraft','tape','torn'],text:['plain','hand','marker','outline','label'],emoji:['plain','sticker','shadow'],todo:['plain','paper','glass'],section:['plain','dashed','solid'],countdown:['plain','flip','calendar','ring'],clock:['plain','digital','minimal','sky'],expense:['plain','receipt','ring','minimal']};
+export const BOARD_VARIANTS={note:['plain','lined','grid','kraft','tape','torn'],text:['plain','hand','marker','outline','label'],emoji:['plain','sticker','shadow'],todo:['plain','paper','glass'],section:['plain','dashed','solid'],countdown:['plain','flip','calendar','ring'],clock:['plain','digital','minimal','sky'],expense:['plain','receipt','ring','minimal'],place:['plain','flat','polaroid','outline'],places:['plain','flat','polaroid','outline'],route:['plain','flat','polaroid','outline']};
+export const MAP_STYLES=['standard','light','dark','satellite','sketch'];
 export const IMAGE_FRAMES=['none','polaroid','tape','stamp','circle','card','sticker'];
 export const GALLERY_RATIOS=['1:1','3:4','4:3','16:9','9:16','1:2','2:1'];
 const assetMime=z.enum(['image/jpeg','image/webp','image/png','image/gif']);
@@ -51,6 +52,7 @@ export function validateBoardItem(item){
   const vkey=type==='widget'?item.content.kind:type;
   if(s.variant!==undefined&&!(BOARD_VARIANTS[vkey]||[]).includes(s.variant))fail('VALIDATION','贴纸样式不正确');
   if(s.autoWidth!==undefined&&type!=='text')fail('VALIDATION','只有文字可以自动宽度');
+  if(s.mapStyle!==undefined&&!(type==='widget'&&['place','places','route'].includes(item.content.kind)))fail('VALIDATION','只有地图小组件可以设置地图样式');
   if(s.fontSize!==undefined&&type!=='note')fail('VALIDATION','只有便签可以设置字号档位');
   if(s.tilt!==undefined&&!['image','note','gallery','emoji'].includes(type))fail('VALIDATION','此类型不允许倾斜');
   if(s.ratio!==undefined&&type!=='gallery')fail('VALIDATION','只有图库可以设置比例');
@@ -105,7 +107,7 @@ export const schemas={
   expense:z.object({title:text.default(''),date:date.nullable().default(null),payment:z.object({status:z.enum(['paid','estimated']),amountMinor:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable(),currency}).strict().refine(v=>v.status!=='paid'||v.amountMinor!==null,'已支付费用需填写金额'),notes:text.default(''),activityId:id.nullable().default(null)}).strict(),
   route:z.object({fromId:id.nullable(),fromPlace:place.nullable().default(null),toId:id,mode:z.enum(['walking','driving','bicycling','transit']),minutes:nullableNumber,manual:z.boolean(),inputSignature:z.string().max(1000),path:z.array(z.tuple([number,number])).max(100000).default([]),distance:nullableNumber.default(null)}).strict().refine(v=>Boolean(v.fromId)!==Boolean(v.fromPlace),'请选择前一活动或独立出发地'),
   board:z.object({title:z.string().trim().min(1).max(30),order:z.number().finite().default(0),background:z.enum(['dots','grid','plain']).default('dots')}).strict(),
-  boardItem:z.object({boardId:id,frame,z:z.number().finite().default(0),content:boardContent,style:z.object({color:z.string().max(12).optional(),size:z.union([z.enum(['title','body','small']),z.enum(['S','M','L']),z.number().min(1).max(32)]).optional(),frameStyle:z.enum(IMAGE_FRAMES).optional(),variant:z.string().max(16).optional(),fontSize:z.enum(['s','m','l']).optional(),tilt:z.number().min(-15).max(15).optional(),ratio:z.enum(GALLERY_RATIOS).optional(),autoWidth:z.boolean().optional(),locked:z.boolean().optional()}).strict().default({}),linkedActivityId:id.nullable().default(null),createdBy:id}).strict()
+  boardItem:z.object({boardId:id,frame,z:z.number().finite().default(0),content:boardContent,style:z.object({color:z.string().max(12).optional(),size:z.union([z.enum(['title','body','small']),z.enum(['S','M','L']),z.number().min(1).max(32)]).optional(),frameStyle:z.enum(IMAGE_FRAMES).optional(),variant:z.string().max(16).optional(),fontSize:z.enum(['s','m','l']).optional(),tilt:z.number().min(-15).max(15).optional(),ratio:z.enum(GALLERY_RATIOS).optional(),autoWidth:z.boolean().optional(),locked:z.boolean().optional(),mapStyle:z.enum(MAP_STYLES).optional()}).strict().default({}),linkedActivityId:id.nullable().default(null),createdBy:id}).strict()
 };
 export const tripSchema=z.object({id:id.max(160),name,teamMode:z.enum(['admin','equal']),timezone:z.string().max(80).refine(v=>{try{new Intl.DateTimeFormat('en',{timeZone:v});return true;}catch{return false;}}),currency,dayCount:z.number().int().min(1).max(365),startDate:date,destination:text.trim().min(1)}).strict();
 export const operationSchema=z.object({id,tripId:id.optional(),objectId:id,kind:z.enum(['create','patch','delete','restore','express','reschedule']),objectType:z.enum(['day','activity','favorite','markPreset','expense','route','board','boardItem']).optional(),patch:z.record(z.string(),z.unknown()).optional(),generation:z.number().int().nonnegative().optional(),expression:z.object({notParticipating:z.boolean().optional(),wishDelete:z.boolean().optional(),wishRestore:z.boolean().optional()}).strict().optional(),clock:z.object({leaseId:id,elapsedMs:number.nonnegative(),uncertaintyMs:number.nonnegative().max(60000),uncertain:z.boolean().optional()}).strict()}).strict();

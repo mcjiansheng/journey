@@ -73,6 +73,14 @@ export default function App() {
   const tripId = j.snapshot?.trip?.id;
   useEffect(() => setNotice(null), [j.user?.id, tripId]);
   useEffect(() => setExpenseActivityId(null), [j.user?.id, tripId]);
+  // Going offline is said once per visit, quietly; after that the header's
+  // 连接中断 badge carries it (offline use should not keep interrupting).
+  const offlineToldRef = useRef(false);
+  useEffect(() => {
+    if (j.status !== 'offline' || !j.user || offlineToldRef.current) return;
+    offlineToldRef.current = true;
+    notify({ message: '已离线：修改先保存在本机，联网后自动同步', timeout: 4000 });
+  }, [j.status, j.user, notify]);
   const editingActivity = edit?.object
     ? j.snapshot?.objects?.find((o) => o.id === edit.object.id) || edit.object
     : null;

@@ -27,6 +27,7 @@ export function RouteWidget({ item, model }) {
       {size === 'M' ? (
         <>
           <MapSketch
+            mapStyle={item.style?.mapStyle}
             seed={`route-${item.content?.dayId || 'x'}`}
             w={352}
             h={168}
@@ -60,6 +61,7 @@ export function RouteWidget({ item, model }) {
         <>
           <div className="maparea">
             <MapSketch
+              mapStyle={item.style?.mapStyle}
               seed={`route-${item.content?.dayId || 'x'}`}
               w={352}
               h={168}

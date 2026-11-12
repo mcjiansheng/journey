@@ -5,7 +5,7 @@
 
 ## 当前步骤
 
-- `dev`：第三轮及「第三轮追修」已在本机完成 `npm run check`（180 单测 + 构建 `fb5b03104dbdb7d2`）、`npm run format:check`、35 个 Playwright E2E 与真实 Chrome 手动验收（`57/57` PASS），修复 5 个交互与窄屏排版缺陷后推送 `origin/dev`。
+- `dev`：第三轮追修 2（右键单一高亮、选中即打字、默认 80%、导出图片等）与追修 3（外观入口、分区归属、地图外观、橡皮、离线提示、导出提速）已在 Linux 虚拟机内通过单测（183）、格式、CSS 变量检查与 SSR 冒烟；等待本机构建、E2E 与真实 Chrome 验收后推送 `origin/dev`。
 - 等待用户确认后以 `main` 为目标的 PR 合并发布；生产当前仍运行 `main`。
 
 ## 已做决定及理由
@@ -17,6 +17,9 @@
 - 浮动栏与弹层排版：实测 `#toolbar`、`#zoom`、`#top-left`、`.header-right` 避让；`.style-pop` 展开时隐藏 `#actions` 悬停提示；390 窄屏下 `.gallery-tools` 限宽折行。
 - 参考线与缩放控件：虚线连接屏幕约 `240px` 内最近对齐对象；「对齐吸附」开关记在 `localStorage`，拖动按住 `⌥` 临时反转；图库调整控件与箭头按 `scale(--ik)` 保持屏幕可读尺寸并避开侧边手柄。
 - 媒体与内容：富文本存 `content.html`（白名单清洗）并保留纯文本；表情库跟账号（服务端 `preferences.stickers`），我的表情右键菜单挂到页面顶层避免面板裁切；非 GIF/贴纸图片转 JPEG，表情/贴纸保留透明度；分区仅标题和边框接指针。
+- 分区归属：对象至少一半（旋转后外框）在分区内即属于它，分区套分区要求完全在内；拖动与选中提示共用 `inSection()`。
+- 断网是状态不是错误：`sync.js` 的 `setError` 遇 `NETWORK` 只置 `offline`，不出页面横幅；每次访问首次离线提示一次。
+- 地图小组件外观：卡片 `style.variant`（plain/flat/polaroid/outline）+ 地图 `style.mapStyle`（standard/light/dark/satellite/sketch），服务端只允许 place/places/route 设置 `mapStyle`。
 - 已知限制：新建便签/分区/文字后 4–5ms 内立即打字可能丢字；白板重进自动「适应全板」；缩放步进 1.2（无法精确 59%）。
 
 ## 产出物

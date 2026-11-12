@@ -152,7 +152,12 @@ test('rotation replaces the old tilt; widgets get looks by kind', () => {
     variantsFor({ content: { type: 'widget', kind: 'clock' } }).map(([id]) => id),
     ['plain', 'digital', 'minimal', 'sky'],
   );
-  assert.equal(variantsFor({ content: { type: 'widget', kind: 'route' } }), null);
+  // Map widgets got card looks (the map itself is style.mapStyle); day cards have none.
+  assert.deepEqual(
+    variantsFor({ content: { type: 'widget', kind: 'route' } }).map(([id]) => id),
+    ['plain', 'flat', 'polaroid', 'outline'],
+  );
+  assert.equal(variantsFor({ content: { type: 'widget', kind: 'day' } }), null);
 });
 
 test('board patches keep every style the UI can set', () => {

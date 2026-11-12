@@ -27,6 +27,7 @@ export function PlacesWidget({ item, model }) {
       {size === 'M' ? (
         <>
           <MapSketch
+            mapStyle={item.style?.mapStyle}
             seed={seed}
             w={352}
             h={168}
@@ -58,6 +59,7 @@ export function PlacesWidget({ item, model }) {
         <>
           <div className="maparea">
             <MapSketch
+              mapStyle={item.style?.mapStyle}
               seed={seed}
               w={352}
               h={200}

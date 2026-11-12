@@ -1698,3 +1698,67 @@
   font-weight: 600;
   opacity: 0.65;
 }
+
+/* 地图小组件外观：卡片样式（v-*）与地图样式（map-*）。 */
+:is(.w-place, .w-places, .w-route).v-flat {
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text, #222) 16%, transparent);
+}
+:is(.w-place, .w-places, .w-route).v-polaroid {
+  border-radius: 6px;
+  box-shadow:
+    0 2px 4px #0002,
+    0 16px 30px -14px #0007;
+}
+:is(.w-place, .w-places, .w-route).v-polaroid::after,
+:is(.w-place, .w-places, .w-route).v-outline::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 6;
+}
+:is(.w-place, .w-places, .w-route).v-polaroid::after {
+  border: 9px solid #fffdf7;
+  box-shadow: inset 0 0 0 1px #0000000f;
+}
+:is(.w-place, .w-places, .w-route).v-outline::after {
+  border: 3px solid var(--mc, var(--accent, #2f6b57));
+}
+:is(.w-place, .w-places, .w-route).v-outline {
+  box-shadow: 0 10px 24px -14px #0006;
+}
+
+.w.map-light {
+  --map-land: #f3f3f0;
+  --map-block: #e8e8e4;
+  --map-road: #ffffff;
+  --map-major: #ecebe4;
+  --map-water: #d9e3e9;
+  --map-park: #e2e8df;
+}
+.map-look-light :is(.static-map, .map-tiles img) {
+  filter: grayscale(0.9) brightness(1.06) contrast(0.9);
+}
+.w.map-dark {
+  --map-land: #232f45;
+  --map-block: #28364f;
+  --map-road: #3b4a66;
+  --map-major: #55647f;
+  --map-water: #1b3f7c;
+  --map-park: #1f4b3c;
+  --surface: #18212b;
+  --text: #e6ecf1;
+  --muted: #a1adb9;
+  --optical-edge: #ffffff1f;
+}
+.map-look-dark :is(.static-map, .map-tiles img) {
+  filter: invert(0.92) hue-rotate(180deg) saturate(0.6) brightness(0.95) contrast(0.92);
+}
+.map-look-satellite .map-tiles {
+  background: #2c3a30;
+}
+.map-tiles img.map-labels {
+  z-index: 1;
+}

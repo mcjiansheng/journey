@@ -3388,6 +3388,16 @@ html.has-modal body {
     bottom: calc(166px + env(safe-area-inset-bottom));
   }
 }
+/* 白板页底部是工具条：提示放到画布顶部居中，不挡操作栏。 */
+body:has(#stage) :is(.global-notice, .action-notice) {
+  top: calc(88px + env(safe-area-inset-top));
+  bottom: auto;
+  z-index: 1100;
+}
+body:has(#stage) .global-notice ~ .action-notice {
+  top: calc(148px + env(safe-area-inset-top));
+  bottom: auto;
+}
 
 .sr-only {
   position: absolute;

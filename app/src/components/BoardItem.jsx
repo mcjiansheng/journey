@@ -50,6 +50,7 @@ export const BoardItem = React.memo(function BoardItem({
   onAutoHeight,
   onMeasure,
   takeTyped,
+  sectionHint = null,
   ratioLabel = null,
   angleLabel = null,
 }) {
@@ -370,6 +371,14 @@ export const BoardItem = React.memo(function BoardItem({
             width: reshape.box.w,
             height: reshape.box.h,
           }}
+        />
+      )}
+
+      {sectionHint && (
+        <div
+          className={`section-hint ${sectionHint}`}
+          style={{ width: w, height: h }}
+          aria-hidden="true"
         />
       )}
 

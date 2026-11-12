@@ -27,6 +27,7 @@ import {
   GALLERY_PADDING,
   stickerUrl,
   itemRotation,
+  lookPopFor,
   DEFAULT_ZOOM,
 } from '../board.js';
 import { WIDGET_SIZES, widgetSize, widgetScale, pickWidgetSize } from '../board-widgets.js';
@@ -48,6 +49,8 @@ import {
   snapToGuides,
   alignFrames,
   rebaseBox,
+  inSection,
+  strokeHit,
 } from '../board-geometry.js';
 import { renderBoardImage, downloadBlob, exportFileName } from '../board-export.js';
 
@@ -85,6 +88,16 @@ function useOnline() {
 }
 
 const sameSet = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
+// What belongs to a section (see inSection): judged on each object's rotated outline.
+function sectionMembers(section, items) {
+  const out = [];
+  for (const it of items) {
+    if (it.id === section.id || it.state === 'deleted' || !it.frame) continue;
+    const bounds = frameBounds({ ...it.frame, rotation: itemRotation(it) });
+    if (inSection(section.frame, bounds, it.content?.type === 'section')) out.push(it);
+  }
+  return out;
+}
 const GROUP = '__group';
 const PREVIEW_ID = '__preview';
 const MIN_SIDE = { text: 40, note: 100, todo: 160, section: 160, gallery: 60 };
@@ -257,6 +270,8 @@ export function Board({
   // The first click only selects (move, scale, rotate); clicking the selection
   // again or right-clicking brings up the menus.
   const [actionsOpen, setActionsOpen] = useState(false);
+  // Which pop-up the menus open with (「外观与样式…」 opens the styles directly).
+  const [actionsPop, setActionsPop] = useState(null);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, kind, at }
   const selectedIdsRef = useRef(selectedIds);
   selectedIdsRef.current = selectedIds;
@@ -273,7 +288,10 @@ export function Board({
   const toggleMenuSoon = () => {
     clearTimeout(menuTimer.current);
     // Wait out a double click, which edits instead.
-    menuTimer.current = setTimeout(() => setActionsOpen((o) => !o), 230);
+    menuTimer.current = setTimeout(() => {
+      setActionsPop(null);
+      setActionsOpen((o) => !o);
+    }, 230);
   };
   useEffect(() => () => clearTimeout(menuTimer.current), []);
   // Interacting with a menu cancels a pending menu toggle: otherwise the
@@ -1129,14 +1147,36 @@ export function Board({
     } catch {}
   };
 
+  // The eraser sweeps a circle (about 10 screen px) along the pointer's path
+  // and removes every stroke it touches, judged on the stroke's points rather
+  // than on what is drawn on top (旧版只认最上层元素，压在便签或图片下的笔迹、
+  // 很细的线和快速划过的线都会漏掉).
+  const ERASER_RADIUS = 10; // .eraser-ring in board.css is drawn at this radius
   const eraseAt = (clientX, clientY, g) => {
-    const el = document.elementFromPoint(clientX, clientY);
-    const id = el?.closest?.('.board-item')?.dataset?.itemId;
-    if (!id || g.erased.has(id)) return;
-    const target = itemsByIdRef.current.get(id);
-    if (target?.content?.type !== 'stroke' || target.style?.locked) return;
-    g.erased.add(id);
-    deleteBoardItem(id).catch(() => {});
+    const at = screenToWorld(clientX, clientY);
+    const from = g.last || at;
+    g.last = at;
+    const k = viewRef.current.k || 1;
+    for (const it of activeItemsRef.current) {
+      if (it.content?.type !== 'stroke' || it.style?.locked || g.erased.has(it.id)) continue;
+      const look = strokeLook(
+        it.content.tool === 'highlighter' ? 'highlighter' : 'pen',
+        it.style?.color,
+        it.style?.size,
+      );
+      if (!strokeHit(it, from, at, ERASER_RADIUS / k + look.width / 2)) continue;
+      g.erased.add(it.id);
+      deleteBoardItem(it.id).catch(() => {});
+    }
+  };
+  // The eraser's reach, drawn around the pointer (moved directly, no render).
+  const eraserRingRef = useRef(null);
+  const moveEraserRing = (e) => {
+    const ring = eraserRingRef.current;
+    const box = stageRef.current?.getBoundingClientRect();
+    if (!ring || !box) return;
+    ring.style.transform = `translate(${e.clientX - box.left}px, ${e.clientY - box.top}px)`;
+    ring.style.opacity = '1';
   };
 
   const scheduleLive = (g, live) => {
@@ -1247,21 +1287,16 @@ export function Board({
     }
   };
 
-  // Objects that move with a section: everything lying fully inside it.
+  // Objects that move with a section: everything at least half inside it
+  // (sections nested in it only when fully inside). Selecting a section
+  // outlines exactly these, so what moves along is visible beforehand.
   const withSectionContents = (ids) => {
     const out = new Set(ids);
     for (const id of ids) {
       const it = itemsByIdRef.current.get(id);
       if (it?.content?.type !== 'section') continue;
-      const area = frameBounds(it.frame);
-      for (const other of activeItemsRef.current)
-        if (
-          !out.has(other.id) &&
-          !other.style?.locked &&
-          other.state !== 'deleted' &&
-          contains(area, frameBounds(other.frame || {}))
-        )
-          out.add(other.id);
+      for (const other of sectionMembers(it, activeItemsRef.current))
+        if (!out.has(other.id) && !other.style?.locked) out.add(other.id);
     }
     return [...out];
   };
@@ -1455,6 +1490,7 @@ export function Board({
   };
 
   const handlePointerMove = (e) => {
+    if (tool === 'eraser') moveEraserRing(e);
     const g = gestureRef.current;
     if (!g || e.pointerId !== g.pointerId) return;
     // A release that happened outside the window never reached us.
@@ -1801,6 +1837,8 @@ export function Board({
 
   // ---------- 导出为图片 ----------
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState({ p: 0, label: '' });
+  const exportAbort = useRef(null);
   const exportImage = async () => {
     if (exporting) return;
     const list = activeItemsRef.current;
@@ -1812,7 +1850,18 @@ export function Board({
     setEditingId(null);
     setContextMenu(null);
     setActionsOpen(false);
+    setExportProgress({ p: 0, label: '正在准备' });
+    const abort = new AbortController();
+    exportAbort.current = abort;
     setExporting(true);
+    let shown = 0;
+    const onProgress = (p, label) => {
+      // At most ~10 updates a second: each one re-renders the board.
+      const now = performance.now();
+      if (p < 1 && now - shown < 100) return;
+      shown = now;
+      setExportProgress({ p, label });
+    };
     try {
       // Let every object render (no off-screen culling) at board scale.
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -1830,12 +1879,19 @@ export function Board({
       const background =
         [stageRef.current, stageRef.current.parentElement, document.body].map(bgOf).find(solid) ||
         '#f6f4ee';
-      const { blob } = await renderBoardImage(layer, bounds, { pad: 64, background });
+      const { blob } = await renderBoardImage(layer, bounds, {
+        pad: 64,
+        background,
+        onProgress,
+        signal: abort.signal,
+      });
       downloadBlob(blob, exportFileName(snapshot?.trip?.name, activeBoard?.payload?.title));
       notify?.({ message: '已导出为图片' });
     } catch (err) {
-      notify?.({ message: err?.message || '导出失败，请稍后重试' });
+      if (err?.code === 'ABORT') notify?.({ message: '已取消导出', timeout: 2500 });
+      else notify?.({ message: err?.message || '导出失败，请稍后重试' });
     } finally {
+      exportAbort.current = null;
       setExporting(false);
     }
   };
@@ -2000,6 +2056,7 @@ export function Board({
       else if (k === 'h') setTool('highlighter');
       else if (k === 'e') setTool('eraser');
       else if (e.key === 'Escape') {
+        exportAbort.current?.abort();
         setEditingId(null);
         setContextMenu(null);
         setActionsOpen(false);
@@ -2032,6 +2089,26 @@ export function Board({
   // Display items keep their identity unless their frame/size is live, so
   // memoized BoardItems skip re-rendering.
   const displayCache = useRef(new Map());
+  // Selecting a section outlines what belongs to it; selecting (or dragging)
+  // anything else marks the section it sits in.
+  const sectionHints = useMemo(() => {
+    const hints = new Map();
+    if (exporting || selectedItems.length !== 1) return hints;
+    const live = (it) =>
+      localLive?.frames?.[it.id] ? { ...it, frame: localLive.frames[it.id] } : it;
+    const one = live(selectedItems[0]);
+    const sections = activeItems.filter((it) => it.content?.type === 'section' && it.id !== one.id);
+    if (one.content?.type === 'section') {
+      for (const m of sectionMembers(one, activeItems.map(live))) hints.set(m.id, 'member');
+    } else if (sections.length) {
+      const parent = sections
+        .filter((sec) => sectionMembers(sec, [one]).length)
+        .sort((a, b) => a.frame.w * a.frame.h - b.frame.w * b.frame.h)[0];
+      if (parent) hints.set(parent.id, 'parent');
+    }
+    return hints;
+  }, [exporting, selectedItems, activeItems, localLive]);
+
   const displayItem = (it) => {
     const f = frameOf(it);
     const size = localLive?.sizes?.[it.id];
@@ -2150,8 +2227,17 @@ export function Board({
       one.content.kind !== 'countdown'
     )
       out.push({ label: '打开', icon: 'open', onClick: () => openTarget(one) });
-    if (!locked)
-      out.push({ label: '外观与样式…', icon: 'style', onClick: () => setActionsOpen(true) });
+    const lookPop = lookPopFor(list);
+    if (lookPop)
+      out.push({
+        label: '外观与样式…',
+        icon: 'style',
+        onClick: () => {
+          clearTimeout(menuTimer.current);
+          setActionsPop(lookPop);
+          setActionsOpen(true);
+        },
+      });
     if (one && type === 'image' && one.content.assetId)
       out.push({ label: '收藏到我的表情', icon: 'heart', onClick: () => saveToStickers(one) });
     out.push({ divider: true });
@@ -2259,11 +2345,17 @@ export function Board({
         data-dropping={dropping ? 'true' : undefined}
         onPointerDown={handleStagePointerDown}
         onPointerMove={handlePointerMove}
+        onPointerLeave={() => {
+          if (eraserRingRef.current) eraserRingRef.current.style.opacity = '0';
+        }}
         onPointerUp={endGesture}
         onPointerCancel={endGesture}
         onLostPointerCapture={endGesture}
         onContextMenu={onStageContextMenu}
       >
+        {tool === 'eraser' && (
+          <div ref={eraserRingRef} className="eraser-ring" aria-hidden="true" />
+        )}
         <MapDetailContext.Provider value={mapDetail}>
           <div
             id="world"
@@ -2301,6 +2393,7 @@ export function Board({
                     ratioLabel={localLive?.labels?.[item.id] ?? null}
                     angleLabel={localLive?.angles?.[item.id] ?? null}
                     tripId={tripId}
+                    sectionHint={sectionHints.get(item.id) || null}
                     {...itemCallbacks}
                   />
                 );
@@ -2459,6 +2552,7 @@ export function Board({
           onSaveSticker={saveToStickers}
           onSchedulePlace={schedulePlace}
           onOpenTarget={openTarget}
+          initialPop={actionsPop}
         />
       )}
 
@@ -2482,9 +2576,29 @@ export function Board({
         }}
       />
       {exporting && (
-        <div className="export-busy ui glass" role="status">
-          <span className="ring" aria-hidden="true" />
-          正在导出图片…
+        <div className="export-busy ui glass" role="status" aria-live="polite">
+          <div className="export-head">
+            <span className="ring" aria-hidden="true" />
+            <span>正在导出图片 · {Math.round(exportProgress.p * 100)}%</span>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => exportAbort.current?.abort()}
+            >
+              取消
+            </button>
+          </div>
+          <div
+            className="export-bar"
+            role="progressbar"
+            aria-label="导出进度"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(exportProgress.p * 100)}
+          >
+            <i style={{ width: `${Math.max(3, exportProgress.p * 100)}%` }} />
+          </div>
+          <span className="export-step">{exportProgress.label}</span>
         </div>
       )}
 

@@ -674,6 +674,13 @@ test('board: rich notes, gallery, todo, place groups, sticker styles and the per
   assert.equal(r.status, 200, JSON.stringify(r.data));
   r = await create({ type: 'widget', kind: 'places' }, { size: 'M' });
   assert.equal(r.status, 422, 'a place group needs its mark');
+  // Map widgets: card variant and map look; other objects cannot take a map look
+  r = await create({ type: 'widget', kind: 'places', mark: { icon: 'heart', color: 'rose' } }, { size: 'M', variant: 'polaroid', mapStyle: 'dark' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  r = await create({ type: 'widget', kind: 'places', mark: { icon: 'heart', color: 'rose' } }, { size: 'M', mapStyle: 'neon' });
+  assert.equal(r.status, 422, 'unknown map looks are refused');
+  r = await create({ type: 'note', text: 'x' }, { color: 'yellow', mapStyle: 'dark' });
+  assert.equal(r.status, 422, 'only map widgets take a map look');
 
   // Emoji: longer ZWJ sequences and sticker style
   r = await create({ type: 'emoji', char: '👨‍👩‍👧‍👦' }, { variant: 'sticker' });

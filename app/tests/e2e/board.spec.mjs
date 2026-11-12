@@ -1824,3 +1824,113 @@ test('board: export the board as one PNG with a margin', async ({ page }) => {
   const { copyFileSync } = await import('node:fs');
   copyFileSync(path, evidence('3c-export.png'));
 });
+
+// ---------- Third pass, follow-up 3 ----------
+test('board: 外观与样式 opens styles; sections show what belongs; eraser reaches covered strokes and quick swipes', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  const a = await noteAt(page, 380, 260, '甲');
+  const b = await noteAt(page, 860, 260, '乙');
+
+  // Right-click → 外观与样式… opens the style choices right away.
+  await a.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: /外观与样式/ }).click();
+  const pop = page.locator('.style-pop');
+  await expect(pop).toBeVisible();
+  await expect(pop.getByRole('button', { name: '横线' })).toBeVisible();
+  await page.screenshot({ path: evidence('3d-look-from-menu.png') });
+  await page.keyboard.press('Escape');
+
+  // A section around 甲: selecting it outlines 甲 (not 乙); selecting 甲 marks the section.
+  await a.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '框进分区' }).click();
+  const section = page.locator('.board-item.item-section');
+  await expect(section).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.locator('#stage').click({ position: { x: 1100, y: 650 } });
+  await section.locator('.section-title').click();
+  await expect(a.locator('.section-hint.member')).toHaveCount(1);
+  await expect(b.locator('.section-hint')).toHaveCount(0);
+  await page.screenshot({ path: evidence('3d-section-members.png') });
+  await page.locator('#stage').click({ position: { x: 1100, y: 650 } });
+  await a.click();
+  await expect(section.locator('.section-hint.parent')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+
+  // A stroke under a note: the eraser on the note still removes the stroke.
+  const draw = async (x0, y, x1) => {
+    await page.locator('#toolbar button[data-tool="pen"]').click();
+    await page.mouse.move(x0, y);
+    await page.mouse.down();
+    await page.mouse.move((x0 + x1) / 2, y, { steps: 4 });
+    await page.mouse.move(x1, y, { steps: 4 });
+    await page.mouse.up();
+  };
+  await draw(300, 600, 700);
+  await expect(page.locator('.board-item.item-stroke')).toHaveCount(1);
+  await page.locator('#toolbar button[data-tool="select"]').click();
+  const cover = await noteAt(page, 500, 640, '盖住');
+  const cb = await cover.boundingBox();
+  expect(cb.x < 500 && cb.x + cb.width > 500 && cb.y < 600 && cb.y + cb.height > 600).toBe(true);
+  await page.locator('#toolbar button[data-tool="eraser"]').click();
+  await page.mouse.move(500, 600);
+  await expect(page.locator('.eraser-ring')).toHaveCSS('opacity', '1');
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(page.locator('.board-item.item-stroke')).toHaveCount(0);
+  await expect(cover).toBeVisible();
+
+  // A quick swipe whose two samples sit on either side of a line still erases it.
+  await draw(300, 470, 700);
+  await expect(page.locator('.board-item.item-stroke')).toHaveCount(1);
+  await page.locator('#toolbar button[data-tool="eraser"]').click();
+  await page.mouse.move(360, 440);
+  await page.mouse.down();
+  await page.mouse.move(360, 500, { steps: 1 });
+  await page.mouse.up();
+  await expect(page.locator('.board-item.item-stroke')).toHaveCount(0);
+  await expect
+    .poll(
+      async () =>
+        (await boardItems(page)).items.filter(
+          (i) => i.payload.content.type === 'stroke' && i.state !== 'deleted',
+        ).length,
+    )
+    .toBe(0);
+});
+
+test('board: offline shows once, never as a returning banner, and notices stay off the toolbar', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await page.context().setOffline(true);
+  await noteAt(page, 500, 300, '离线也能写');
+  await expect(page.locator('.sync-status.offline')).toBeVisible();
+  const notice = page.locator('.action-notice');
+  await expect(notice).toContainText('已离线');
+  const nb = await notice.boundingBox();
+  const tb = await page.locator('#toolbar').boundingBox();
+  expect(nb.y + nb.height < tb.y || nb.y > tb.y + tb.height).toBe(true);
+  await page.screenshot({ path: evidence('3d-offline-notice.png') });
+  // Keep working offline for a while: no page-wide 连接中断 banner shows up.
+  await noteAt(page, 800, 300, '再写一张');
+  await page.waitForTimeout(3000);
+  await expect(page.locator('.global-notice')).toHaveCount(0);
+  await page.context().setOffline(false);
+  await expect
+    .poll(
+      async () =>
+        (await boardItems(page)).items.filter((i) => i.payload.content.type === 'note').length,
+      {
+        timeout: 20000,
+      },
+    )
+    .toBe(2);
+});

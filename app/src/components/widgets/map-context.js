@@ -44,3 +44,10 @@ export function tileUrl({ x, y, z }) {
   const s = 1 + ((x + y) % 4);
   return `https://webrd0${s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x=${x}&y=${y}&z=${z}`;
 }
+
+// Satellite imagery, and (labels = true) the transparent road and name layer
+// drawn over it.
+export function satelliteTileUrl({ x, y, z }, labels = false) {
+  const s = 1 + ((x + y) % 4);
+  return `https://webst0${s}.is.autonavi.com/appmaptile?style=${labels ? 8 : 6}&x=${x}&y=${y}&z=${z}`;
+}

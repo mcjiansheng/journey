@@ -6,7 +6,16 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { NOTE, NOTE_NAMES, noteColor, IMAGE_FRAMES, variantsFor } from '../board.js';
+import {
+  NOTE,
+  NOTE_NAMES,
+  noteColor,
+  variantsFor,
+  framesFor,
+  isMapWidget,
+  MAP_STYLES,
+  COLORABLE_TYPES,
+} from '../board.js';
 
 // Above the selection the bar clears the rotation handle; below it, the size label.
 const GAP_ABOVE = 58;
@@ -183,7 +192,6 @@ const ALIGNS = [
   ['hspace', '水平等距', 'hspace'],
   ['vspace', '垂直等距', 'vspace'],
 ];
-const COLORABLE = ['note', 'todo', 'section'];
 const OPEN_LABEL = {
   place: '在地图查看',
   places: '在地图查看',
@@ -219,12 +227,13 @@ export function BoardActions({
   onSaveSticker,
   onSchedulePlace,
   onOpenTarget,
+  initialPop = null,
 }) {
   const barRef = useRef(null);
   const railRef = useRef(null);
   const popRef = useRef(null);
   const [pos, setPos] = useState(null);
-  const [pop, setPop] = useState(null); // 'color' | 'style' | 'align'
+  const [pop, setPop] = useState(initialPop); // 'color' | 'style' | 'align'
   const [tipState, setTipState] = useState(null); // { label, x, y, side }
   const tipTimer = useRef(0);
   const tipApi = useRef(null);
@@ -392,17 +401,11 @@ export function BoardActions({
   const type = one?.content?.type;
   const kind = one?.content?.kind;
   const locked = items.every((it) => Boolean(it.style?.locked ?? it.locked));
-  const colorable = !locked && items.every((it) => COLORABLE.includes(it.content?.type));
+  const colorable = !locked && items.every((it) => COLORABLE_TYPES.includes(it.content?.type));
   const currentColor = colorable ? noteColor(items[0].style?.color || 'yellow') : null;
   const variants = one && !locked ? variantsFor(one) : null;
-  const frames =
-    one && !locked
-      ? type === 'image'
-        ? IMAGE_FRAMES
-        : type === 'gallery'
-          ? IMAGE_FRAMES.filter(([id]) => ['none', 'polaroid', 'card', 'tape'].includes(id))
-          : null
-      : null;
+  const frames = one && !locked ? framesFor(one) : null;
+  const mapLooks = one && !locked && isMapWidget(one) ? MAP_STYLES : null;
   const style = one?.style || {};
   const toggle = (name) => {
     tipApi.current.hide();
@@ -489,7 +492,7 @@ export function BoardActions({
         <span className="dot" style={{ background: NOTE[currentColor] }} />
       </button>,
     );
-  if (variants || frames)
+  if (variants || frames || mapLooks)
     looks.push(
       <IconButton
         side={barTipSide}
@@ -549,6 +552,11 @@ export function BoardActions({
                 aria-label={`颜色：${NOTE_NAMES[id]}`}
               />
             ))}
+          {pop === 'style' && mapLooks && (
+            <span className="pop-label" aria-hidden="true">
+              卡片
+            </span>
+          )}
           {pop === 'style' &&
             variants?.map(([id, name]) => (
               <button
@@ -573,6 +581,26 @@ export function BoardActions({
                 {name}
               </button>
             ))}
+          {pop === 'style' && mapLooks && (
+            <>
+              <span className="pop-break" aria-hidden="true" />
+              <span className="pop-label" aria-hidden="true">
+                地图
+              </span>
+              {mapLooks.map(([id, name]) => (
+                <button
+                  key={`map-${id}`}
+                  type="button"
+                  className={`style-chip map-chip m-${id}`}
+                  aria-label={`地图：${name}`}
+                  aria-pressed={(style.mapStyle || 'standard') === id}
+                  onClick={() => onStyle({ mapStyle: id })}
+                >
+                  {name}
+                </button>
+              ))}
+            </>
+          )}
           {pop === 'align' &&
             ALIGNS.map(([mode, label, icon]) => (
               <IconButton

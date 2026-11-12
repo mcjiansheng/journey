@@ -214,11 +214,16 @@ const emit = (patch) => {
 };
 const clone = (value) => structuredClone(value);
 const message = (e) => (e instanceof Error ? e.message : String(e));
+// A lost connection is a state, not an error: the header shows 连接中断 and
+// changes keep queueing on this device. Raising it as the page-wide error
+// banner made it pop up again on every retry while offline.
 const setError = (e) =>
-  emit({
-    error: { message: message(e), code: e.code || 'ERROR', details: e.details },
-    status: e.code === 'NETWORK' ? 'offline' : 'error',
-  });
+  e?.code === 'NETWORK'
+    ? emit({ status: 'offline' })
+    : emit({
+        error: { message: message(e), code: e.code || 'ERROR', details: e.details },
+        status: 'error',
+      });
 const emptyAccount = (user) => ({
   user,
   trips: [],

@@ -1,6 +1,12 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { mapSvg, project, geoFit, geoProject, geoTiles } from '../../board.js';
-import { MapDetailContext, staticMapUrl, tileUrl, useStaticMapAvailable } from './map-context.js';
+import {
+  MapDetailContext,
+  staticMapUrl,
+  tileUrl,
+  satelliteTileUrl,
+  useStaticMapAvailable,
+} from './map-context.js';
 
 function useOnlineStatus() {
   const [online, setOnline] = useState(() =>
@@ -38,11 +44,12 @@ export function MapSketch({
   anchor = null,
   location = null,
   className = '',
+  mapStyle = 'standard',
 }) {
   const detail = useContext(MapDetailContext);
   const staticOk = useStaticMapAvailable();
   // static image → raster tiles → generated sketch, each step on failure
-  const [failed, setFailed] = useState({ static: false, tiles: false });
+  const [failed, setFailed] = useState({ static: false, tiles: false, labels: false });
   const bgMarkup = useMemo(() => mapSvg(seed, w, h), [seed, w, h]);
 
   const located = useMemo(() => stops.filter((s) => s.lng != null && s.lat != null), [stops]);
@@ -67,16 +74,20 @@ export function MapSketch({
 
   const online = useOnlineStatus();
   const offline = !online;
-  const real = Boolean(detail && view && !offline);
+  // 手绘 always draws the sketch; 卫星 needs raster tiles (the static image
+  // service has no satellite layer); 浅色/深色 tint whichever real map loads.
+  const look = mapStyle || 'standard';
+  const satellite = look === 'satellite';
+  const real = Boolean(detail && view && !offline && look !== 'sketch');
   const mode = !real
     ? 'sketch'
-    : staticOk && !failed.static
+    : !satellite && staticOk && !failed.static
       ? 'static'
       : !failed.tiles
         ? 'tiles'
         : 'sketch';
   const useStatic = mode !== 'sketch';
-  const showOfflineBadge = Boolean(detail && view && mode === 'sketch');
+  const showOfflineBadge = Boolean(detail && view && mode === 'sketch' && look !== 'sketch');
   const tiles = useMemo(() => (mode === 'tiles' ? geoTiles(view, w, h) : []), [mode, view, w, h]);
 
   const projectPoints = (pts) =>
@@ -167,7 +178,7 @@ export function MapSketch({
 
   return (
     <div
-      className={`map-sketch-container ${useStatic ? 'is-static' : ''} ${className}`}
+      className={`map-sketch-container map-look-${look} ${useStatic ? 'is-static' : ''} ${className}`}
       style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}
     >
       {mode === 'static' ? (
@@ -184,7 +195,7 @@ export function MapSketch({
           {tiles.map((t) => (
             <img
               key={`${t.z}/${t.x}/${t.y}`}
-              src={tileUrl(t)}
+              src={satellite ? satelliteTileUrl(t) : tileUrl(t)}
               alt=""
               draggable={false}
               loading="lazy"
@@ -193,6 +204,21 @@ export function MapSketch({
               onError={() => setFailed((f) => ({ ...f, tiles: true }))}
             />
           ))}
+          {satellite &&
+            !failed.labels &&
+            tiles.map((t) => (
+              <img
+                key={`l${t.z}/${t.x}/${t.y}`}
+                className="map-labels"
+                src={satelliteTileUrl(t, true)}
+                alt=""
+                draggable={false}
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                style={{ left: t.left, top: t.top, width: t.size, height: t.size }}
+                onError={() => setFailed((f) => ({ ...f, labels: true }))}
+              />
+            ))}
         </div>
       ) : (
         <div
