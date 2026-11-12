@@ -1290,6 +1290,8 @@ test('board: right-click menus, box select, group move, align and sections', asy
   await page.getByRole('menuitem', { name: '框进分区' }).click();
   const section = page.locator('.board-item.item-section');
   await expect(section).toBeVisible();
+  // 框进分区 opens the title for editing; wait for its input before typing.
+  await expect(page.getByLabel('分区名称')).toBeFocused();
   await page.keyboard.type('第1天');
   await page.keyboard.press('Enter');
   await expect(section.locator('.section-title')).toContainText('第1天');
@@ -1310,9 +1312,10 @@ test('board: right-click menus, box select, group move, align and sections', asy
     .toEqual([80, 80, 80]);
   await page.screenshot({ path: evidence('3-section.png') });
 
-  // Clicking inside the section (not on its title or border) pans the canvas.
+  // Clicking inside the section (not on its title, border or resize handles)
+  // pans the canvas and drops the section selection.
   const sb = await section.boundingBox();
-  await page.mouse.click(sb.x + sb.width / 2, sb.y + sb.height - 20);
+  await page.mouse.click(sb.x + 30, sb.y + sb.height - 30);
   await expect(page.locator('.group-box')).toHaveCount(0);
   await expect(section.locator('.box')).toHaveCount(0);
 });
@@ -1357,6 +1360,9 @@ test('board: text boxes fit their text and wrap from the side handles', async ({
   await openBoard(page);
   await page.locator('#toolbar button[data-tool="text"]').click();
   await page.mouse.click(400, 400);
+  // Item creation round-trips, so the editor may take a moment to focus; typing
+  // before that would go nowhere (and an empty text box is discarded).
+  await expect(page.locator('.board-item.item-text .text-inner')).toBeFocused();
   await page.keyboard.type('一段比较长的说明文字用来测试换行');
   await page.keyboard.press('Escape');
   const text = page.locator('.board-item.item-text');
@@ -1375,8 +1381,14 @@ test('board: text boxes fit their text and wrap from the side handles', async ({
   await page.mouse.up();
   const wrapped = await inner.boundingBox();
   expect(wrapped.height).toBeGreaterThan(tb.height * 1.6);
-  const box2 = await text.locator('.box').boundingBox();
-  expect(Math.abs(box2.height - wrapped.height)).toBeLessThan(3);
+  // The laid-out height is measured one frame later and the selection follows.
+  await expect
+    .poll(async () => {
+      const b = await text.locator('.box').boundingBox();
+      const w = await inner.boundingBox();
+      return Math.abs(b.height - w.height);
+    })
+    .toBeLessThan(3);
   await expect
     .poll(async () => {
       const it = (await boardItems(page)).items.find((i) => i.payload.content.type === 'text');

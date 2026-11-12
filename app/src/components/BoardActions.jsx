@@ -2,9 +2,9 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 import { NOTE, NOTE_NAMES, noteColor, IMAGE_FRAMES, variantsFor } from '../board.js';
 
 // Above the selection the bar clears the rotation handle; below it, the size label.
-const GAP_ABOVE = 50;
+const GAP_ABOVE = 58;
 const GAP_BELOW = 36;
-const RAIL_GAP = 14;
+const RAIL_GAP = 26;
 
 // Line icons on a 24px grid (stroke = currentColor), shared with the context menu.
 const ICONS = {

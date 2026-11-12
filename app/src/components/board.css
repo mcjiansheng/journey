@@ -2022,10 +2022,10 @@
   transition: opacity 0.15s;
 }
 .gallery-nav.prev {
-  left: 8px;
+  left: 26px;
 }
 .gallery-nav.next {
-  right: 8px;
+  right: 26px;
 }
 .board-item:hover .gallery-nav,
 .gallery-view:focus-within .gallery-nav,
@@ -2879,6 +2879,8 @@
 }
 
 /* ---------- Sections (分区) ---------- */
+/* Only the title and the border catch the pointer: inside the section the
+   canvas can still be panned, drawn on, or marquee-selected. */
 .board-item.item-section {
   pointer-events: none;
 }

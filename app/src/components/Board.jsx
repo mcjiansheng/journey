@@ -273,9 +273,44 @@ export function Board({
     menuTimer.current = setTimeout(() => setActionsOpen((o) => !o), 230);
   };
   useEffect(() => () => clearTimeout(menuTimer.current), []);
-  // Laid-out size of text items, reported by BoardItem (no re-render here).
+  // Interacting with a menu cancels a pending menu toggle: otherwise the
+  // delayed toggle (which waits out a double click) can fire just after a
+  // style/color click and close the menus the user is still using.
+  useEffect(() => {
+    const cancelPendingToggle = (e) => {
+      if (e.target?.closest?.('.ui')) clearTimeout(menuTimer.current);
+    };
+    document.addEventListener('pointerdown', cancelPendingToggle, true);
+    return () => document.removeEventListener('pointerdown', cancelPendingToggle, true);
+  }, []);
+  // Fixed-width text follows the height it actually wraps to. Measured from
+  // layout, not from the pointer maths, so the server frame stays truthful
+  // (also after reload or a redo of the side resize).
+  useEffect(() => {
+    if (gestureRef.current || editingId) return;
+    const changes = [];
+    for (const [id, size] of measuredRef.current) {
+      const it = itemsByIdRef.current.get(id);
+      if (
+        it?.content?.type === 'text' &&
+        it.style?.autoWidth === false &&
+        stageSize.w &&
+        Math.abs((it.frame?.h || 0) - size.h) > 1
+      )
+        changes.push({ id, patch: { frame: { ...it.frame, h: size.h } } });
+    }
+    if (changes.length) applyPatches(changes, { record: false });
+  });
+  // Laid-out size of text items, reported by BoardItem. A tick lets the board
+  // persist the wrapped height once layout settles (the drag release only knows
+  // the height from before the last wrap).
   const measuredRef = useRef(new Map());
-  const onMeasure = useCallback((id, size) => measuredRef.current.set(id, size), []);
+  const [measureTick, setMeasureTick] = useState(0);
+  const onMeasure = useCallback((id, size) => {
+    const prev = measuredRef.current.get(id);
+    measuredRef.current.set(id, size);
+    if (!prev || prev.w !== size.w || prev.h !== size.h) setMeasureTick((t) => t + 1);
+  }, []);
 
   // ---------- Live frames ----------
   // Local gesture frames and peer frames are kept apart: a peer heartbeat must
@@ -457,6 +492,11 @@ export function Board({
     if (!el) return undefined;
     const onWheel = (e) => {
       if (e.target.closest?.('.ui')) return;
+      // Content that can scroll keeps the wheel (long checklists, photo windows).
+      for (let n = e.target; n && n !== el; n = n.parentElement) {
+        const cs = getComputedStyle(n);
+        if (/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1) return;
+      }
       e.preventDefault();
       const rect = el.getBoundingClientRect();
       if (e.ctrlKey || e.metaKey) {
