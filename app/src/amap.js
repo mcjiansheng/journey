@@ -89,22 +89,53 @@ function call(service, method, args, { signal } = {}) {
       service[method](...args, (status, result) => {
         if (status === 'complete') finish(resolve, result);
         else if (status === 'no_data') finish(resolve, null);
-        else finish(reject, new Error('地图查询未完成，请重试'));
+        else {
+          const error = new Error('地图查询未完成，请重试');
+          error.info = typeof result === 'string' ? result : result?.info || '';
+          finish(reject, error);
+        }
       });
     } catch (error) {
       finish(reject, error);
     }
   });
 }
+const searchCity = (city) => {
+  const value = str(city).trim();
+  if (!value || value === '全国') return '';
+  return /[\u4e00-\u9fff]|^\d{3,6}$/.test(value) ? value : '';
+};
+const isCityLookupError = (error) =>
+  /ABROAD|INVALID|ENGINE_RESPONSE_DATA_ERROR/i.test(str(error?.info));
 export async function searchPlaces(query, city = '') {
+  const text = str(query).trim();
+  if (!text) return [];
   const AMap = await loadAmap();
-  const search = new AMap.PlaceSearch({ city: city || '全国', pageSize: 20, extensions: 'base' });
-  const result = await call(search, 'search', [query]);
+  const targetCity = searchCity(city);
+  const run = (c) =>
+    call(new AMap.PlaceSearch({ city: c, pageSize: 20, extensions: 'base' }), 'search', [text]);
+  let result;
+  try {
+    result = await run(targetCity);
+  } catch (error) {
+    if (!targetCity || !isCityLookupError(error)) throw error;
+    result = await run('');
+  }
   return result?.poiList?.pois?.map(normalizePlace) || [];
 }
 export async function suggestPlaces(query, city = '') {
+  const text = str(query).trim();
+  if (!text) return [];
   const AMap = await loadAmap();
-  const result = await call(new AMap.AutoComplete({ city: city || '全国' }), 'search', [query]);
+  const targetCity = searchCity(city);
+  const run = (c) => call(new AMap.AutoComplete({ city: c }), 'search', [text]);
+  let result;
+  try {
+    result = await run(targetCity);
+  } catch (error) {
+    if (!targetCity || !isCityLookupError(error)) throw error;
+    result = await run('');
+  }
   return result?.tips?.map(normalizePlace) || [];
 }
 export async function placeDetail(id) {
@@ -116,7 +147,40 @@ export async function placeDetail(id) {
 async function geocodeResponse(address, city = '', { signal } = {}) {
   if (signal?.aborted) throw signal.reason || new DOMException('地图查询已取消', 'AbortError');
   const AMap = await loadAmap();
-  return call(new AMap.Geocoder({ city: city || '全国' }), 'getLocation', [address], { signal });
+  const geocoder = new AMap.Geocoder({ city: city || '全国' });
+  if (
+    typeof geocoder._geocodingComplete === 'function' &&
+    typeof geocoder._onError === 'function' &&
+    geocoder.url &&
+    AMap.WebService?.get
+  ) {
+    return call(
+      {
+        getLocation(target, callback) {
+          if (!target) {
+            callback?.('error', 'NO_PARAMS');
+            return;
+          }
+          const params = {
+            key: geocoder.config?.key,
+            s: 'rsv3',
+            language: geocoder.opt?.lang || 'zh_cn',
+            address: Array.isArray(target) ? target.join('|') : target,
+            ...(geocoder.opt?.city ? { city: geocoder.opt.city } : {}),
+          };
+          if (Array.isArray(target)) params.batch = true;
+          AMap.WebService.get(`${geocoder.url}/geo`, params, (status, data) => {
+            if (status === 'complete' && data?.status) geocoder._geocodingComplete(data, callback);
+            else geocoder._onError(data || { info: status }, callback);
+          });
+        },
+      },
+      'getLocation',
+      [address],
+      { signal },
+    );
+  }
+  return call(geocoder, 'getLocation', [address], { signal });
 }
 export async function geocode(address, city = '', { signal } = {}) {
   const result = await geocodeResponse(address, city, { signal });

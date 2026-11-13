@@ -121,7 +121,7 @@ for(const width of [390,320])test(`real map selection and activity entry leave t
  expect(await viewport()).toEqual(beforeExpansion);await visibleMapFooter(page);
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();
  const activityRequest=await cameraRequest(page);
- await page.locator('.activity-card').getByRole('button',{name:'地图',exact:true}).click();
+ await page.locator('.activity-card').getByRole('button',{name:/^在地图查看：/}).click();
  await settledCamera(page,activityRequest);await visibleSelectedMarker(page);
 });
 

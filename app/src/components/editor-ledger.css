@@ -299,3 +299,54 @@
     padding-inline: 14px;
   }
 }
+
+.editor-modal select {
+  appearance: none;
+  padding-right: 42px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237f999e' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+  background-position: right 14px center;
+}
+
+.workspace-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.workspace-body > .main-content {
+  min-width: 0;
+}
+.modal.activity-editor-panel[open] {
+  position: relative;
+  inset: auto;
+  margin: 0;
+  width: 420px;
+  min-width: 400px;
+  max-width: 440px;
+  flex: 0 0 400px;
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+}
+.activity-editor-panel .form-grid {
+  grid-template-columns: 1fr;
+}
+.activity-editor-panel .modal-head {
+  padding: 18px 20px 14px;
+}
+.activity-editor-panel .modal-body {
+  padding: 20px;
+}
+.has-activity-panel .itinerary-page {
+  padding-inline: 24px;
+}
+@media (min-width: 1440px) {
+  .modal.activity-editor-panel[open] {
+    flex-basis: 420px;
+  }
+}

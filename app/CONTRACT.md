@@ -6,7 +6,7 @@
 
 JSON 请求/响应；错误 {error:{code,message,details?}}。Cookie HttpOnly 会话，变更检查 Origin + CSRF（GET /api/session 返回 csrfToken）。
 
-- GET /api/config -> {basePath,amapKey,auth:{email:boolean,phone:boolean},version}
+- GET /api/config -> {basePath,amapKey,staticMap:boolean,auth:{email:boolean,phone:boolean},version}（`staticMap` 表示服务端配置了高德「Web 服务」key `AMAP_WEB_KEY`，可用 `/_AMapService/v3/staticmap`；否则白板地图小组件直接拼接高德栅格瓦片）
 - POST /api/auth/register {identifier,password,displayName}、POST /api/auth/login {identifier,password} -> session；本轮正式 UI 使用密码账号。
 - 可选验证码渠道：POST /api/auth/request {identifier} -> {challengeId,expiresIn}，POST /api/auth/verify {challengeId,code,displayName?} -> session。
 - GET /api/session -> {user:{id,displayName,identifier,isAdmin,preferences},csrfToken,serverTime}，未登录返回 401。
@@ -17,7 +17,13 @@ JSON 请求/响应；错误 {error:{code,message,details?}}。Cookie HttpOnly �
 - GET /api/trips/:id -> Snapshot={trip:Trip,members:[Member],objects:[Object],cursor:number,epoch:number}。
 - GET /api/trips/:id/members -> {members:[Member]}，供成员与邀请界面独立刷新；Snapshot 中继续保留成员摘要，支持顶部头像、权限判断与离线展示。
 - Trip={id,name,ownerId,createdBy,teamMode,timezone,currency,destination,startDate:null|string,dayCount,state,generation,...}；Member={userId,displayName,isAdmin,canInvite,joinOrder}。
-- Object={id,tripId,kind:'day'|'activity'|'favorite'|'expense'|'route',payload,state:'active'|'deleted',generation,clocks?,expressions?}。expressions 数组 {userId,notParticipating,wishDelete,wishRestore}，只含当前成员。
+- Object={id,tripId,kind:'day'|'activity'|'favorite'|'expense'|'route'|'board'|'boardItem',payload,state:'active'|'deleted',generation,clocks?,expressions?}。expressions 数组 {userId,notParticipating,wishDelete,wishRestore}，只含当前成员。主快照排除 boardItem（仅返回 board）。
+- board payload={title,order:number,background:'dots'|'grid'|'plain'}；boardItem payload={boardId,frame:{x,y,w,h,rotation,scale},z:number,content,style,linkedActivityId,createdBy}。content 区分 note / text / emoji / image / link / widget / stroke / shape；widget.kind 为 activity / day / place / route / countdown / clock / expense；frame、z、content、style、linkedActivityId 各为独立逻辑组。boardItem 删除与恢复不走表态，任何成员可直接执行，express 返回 VALIDATION。每旅程 active board ≤ 20，每 board active boardItem ≤ 2000，超限返回 BOARD_FULL (409)。
+- GET /api/trips/:id/boards/:boardId/items?since=<cursor> -> {items:[Object],cursor,epoch} 白板增量拉取（无 since 全量含 deleted；有 since 仅返回变化项）。POST /operations 操作 boardItem 时省略 snapshot，仅返回 receipt。新建旅程自动写入 id='default-board'（title='主白板'）；旧旅程在首次读取 items/presence 时惰性补齐同一 id，客户端可始终按 default-board 处理无自定义板的情况。epoch 与本地缓存的 epoch 不一致时客户端必须丢弃 cursor 全量重读（服务端每次进程启动分配更高 epoch）。
+- 便签的 content.html 由服务端在创建和修改时按便签工具条的白名单清洗后保存（客户端渲染前仍应清洗）。笔迹的 content.points 是相对 frame 原点的坐标；缩放笔迹时客户端须把 frame 与 points 按同一比例一起提交。
+- boardItem 的 delete / restore 由任何成员直接执行。请求携带的 generation 已过期时：对象若已处于目标状态（同伴先删除或先恢复了同一对象），返回 200 且 receipt.changed=false，不推进 cursor；否则仍返回 409 `STALE_GENERATION`。其他对象类型的 generation 校验不变。
+- PUT /api/trips/:id/assets/:assetId?variant=full|thumb 二进制上传（静态图 ≤ 1.5MB，GIF ≤ 5MB，thumb ≤ 300KB，限流 60 次/分/用户）；GET 同路径返回不可变缓存资源。
+- POST /api/trips/:id/boards/:boardId/presence {deviceId,selected,editing,live,leave?} -> 204（仅内存；限频 15次/秒/设备 且 60次/秒/用户；selected ≤ 20；live 最多 200 个对象，超限 422 VALIDATION；同一旅程 presence 条目上限 200，超限 429 RATE_LIMITED；15s 超时由服务端清理并广播 leave，不依赖是否有人订阅 SSE）；GET /api/trips/:id/events SSE 广播 event: presence/change。每用户每旅程最多 4 条 SSE 连接、服务全局 200 条，超限 429 RATE_LIMITED。presence 请求不占用全局 API 的 IP 限流配额。
 - day payload={ordinal,date:null|string}；activity={title,dayId,order:number,time:{mode:'flexible'|'precise',period:'',start:null|'HH:mm',end:null|'HH:mm',endDayOffset:0},place:null|Place,buffers:{before:null|number,after:null|number},notes:'',url:''}。
 - Place={name,address:'',lng:null|number,lat:null|number,provider:null|'amap',providerPlaceId:null|string,category:'',sourceUrl:'',fetchedAt:null|number,coordSystem:'GCJ-02'}，成组修改地点。
 - favorite payload=Place；expense={title:'',payment:{status:'paid'|'estimated',amountMinor:null|integer,currency},notes:'',activityId:null|string}；route={fromId:null|string,fromPlace:null|Place,toId,mode:'walking'|'driving'|'bicycling'|'transit',minutes:null|number,manual:boolean,inputSignature:string,path:[],distance:null|number}。
@@ -45,7 +51,7 @@ setContext(patch)（同步更新 React、异步持久化/上传）、setDraft(ke
 
 ## 实施选择
 
-- 手机底栏四项 行程/地图/费用/设置；首页个人设置同组件。
+- 主导航五项 行程/地图/白板/费用/设置；手机底栏五项；白板全视口布局；首页个人设置同组件。
 - 归档为个人列表整理，权限由本人控制，共享行程保持可编辑。
 - 通知先提供本人设备的协作变化通知（用户主动开启权限；页面保持连接时），无行程闹钟或假送达开关。
 - 日期范围、逻辑组、生命周期、永久清除与邀请撤权以正式规则为准。软删除保留，不提供未经决定的到期清理。
@@ -55,3 +61,11 @@ setContext(patch)（同步更新 React、异步持久化/上传）、setDraft(ke
 - trip 与 objects 均在快照附 expressions；临时删除不会删除关联对象，恢复使用最新内容。
 
 - 新计划日使用 planDayId(tripId,{date,ordinal}) 的稳定标识，离线日期预览与服务器一致。较早的改期操作落败时仍建立其活动依赖的日期对象，作为范围外安排保留；命中已删除日期返回 DAY_DELETED，须先恢复。
+
+## 收藏标记与预设（2026-11-03）
+
+favorite 增加可空的 mark: { icon, color }。icon 为 circle / triangle / square / diamond / hexagon / star / heart / flag；color 为 blue / green / coral / amber / purple / rose / sky / graphite。mark 使用独立字段时钟；其余地点字段继续使用 $place 组时钟。
+
+operationSchema.objectType 新增 markPreset。payload 为 { icon, color, name, order }，name 可空且最多 12 字，order 默认为 0。活动预设在旅程内按 icon+color 唯一。修改组合时，服务端在操作事务内更新使用旧组合的收藏，并按 mark 时钟合并；名称修改不改变收藏。删除预设保留收藏标记。收藏按显式设置的组合查找名称，不保存预设引用。mark=null 表示未设置标记，不参与预设匹配；Web 将其显示为黄色星形（star/amber），新收藏始终以 null 创建。用户应用预设或存为预设时显式写入 mark。
+
+费用 date=null 且关联活动仍有效时，以活动所在计划日日期显示和分组；显式 date 保持付款日期。关联活动被删除后，空日期费用显示“未记录日期”。

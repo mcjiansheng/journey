@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync,rmSync,writeFileSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {loadConfig} from '../server/config.mjs';
@@ -59,3 +59,39 @@ test('invalid JSON in an explicit map file retains its parse error',()=>withConf
  process.env.AMAP_CONFIG_FILE=path;
  assert.throws(()=>loadConfig(),SyntaxError);
 }));
+
+test('the default map file falls back to amap-test.json when amap.json is absent',()=>withConfigFiles(()=>{
+ mkdirSync('.local');
+ writeFileSync('.local/amap-test.json',JSON.stringify({key:'fallback-test-key',securityJsCode:'fallback-test-secret'}));
+ const config=loadConfig();
+ assert.equal(config.amapKey,'fallback-test-key');
+ assert.equal(config.amapSecurityJsCode,'fallback-test-secret');
+}));
+
+test('the default map file falls back to parent directory when running from a subdirectory',()=>withConfigFiles(directory=>{
+ mkdirSync('.local');
+ writeFileSync('.local/amap-test.json',JSON.stringify({key:'parent-test-key',securityJsCode:'parent-test-secret'}));
+ const subDir=join(directory,'app');
+ mkdirSync(subDir);
+ const previousCwd=process.cwd();
+ try {
+  process.chdir(subDir);
+  const config=loadConfig();
+  assert.equal(config.amapKey,'parent-test-key');
+  assert.equal(config.amapSecurityJsCode,'parent-test-secret');
+ } finally {
+  process.chdir(previousCwd);
+ }
+}));
+
+test('nginx raises the body limit for every route that accepts image uploads',()=>{
+ const conf=readFileSync(new URL('../ops/journey.nginx.conf',import.meta.url),'utf8');
+ const match=/location ~ (\S+) \{\s*client_max_body_size 6m;/.exec(conf);
+ assert.ok(match,'the 6m upload location exists');
+ const upload=new RegExp(match[1]);
+ // Server routes with a 5MB raw body: trip assets and the personal sticker library.
+ assert.ok(upload.test('/api/trips/trip-1/assets/asset-1'));
+ assert.ok(upload.test('/api/me/stickers/sticker-1'));
+ assert.ok(!upload.test('/api/me'));
+ assert.ok(!upload.test('/api/trips/trip-1/operations'));
+});

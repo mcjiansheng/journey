@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Compass,
   CalendarDays,
-  Map,
+  Map as MapIcon,
   Wallet,
   SlidersHorizontal as SettingsIcon,
   Users,
@@ -14,10 +14,12 @@ import {
   AlertCircle,
   X,
   UserRound,
+  StickyNote,
 } from 'lucide-react';
 import { useJourney } from './sync.js';
 import { usePageNavigation } from './usePageNavigation.js';
 import TripMap from './components/TripMap.jsx';
+import { Board } from './components/Board.jsx';
 import { Login, Home, CreateTrip, JoinTrip } from './components/Entry.jsx';
 import ActivityEditor from './components/ActivityEditor.jsx';
 import Itinerary, { Reschedule } from './components/Itinerary.jsx';
@@ -31,11 +33,12 @@ import Settings, {
 } from './components/Settings.jsx';
 import { ActionNotice, IconButton } from './components/ui.jsx';
 import { visibleDays } from './domain.js';
-import { appearanceKey, readAppearance, mergeAccountAppearance } from './appearance.js';
+import { appearanceKey, readAppearance, mergeAccountAppearance, boardDock } from './appearance.js';
 import { syncStatusText } from './components/SyncSettings.jsx';
 const pages = [
   ['itinerary', '行程', CalendarDays],
-  ['map', '地图', Map],
+  ['map', '地图', MapIcon],
+  ['board', '白板', StickyNote],
   ['expenses', '费用', Wallet],
   ['settings', '旅程设置', SettingsIcon],
 ];
@@ -58,10 +61,26 @@ export default function App() {
     [edit, setEdit] = useState(null),
     [intent, setIntent] = useState(initialInvite);
   const scrollRef = useRef(null);
+  const editorRef = useRef(null);
+  const [wideEditor, setWideEditor] = useState(() => matchMedia('(min-width: 1280px)').matches);
+  useEffect(() => {
+    const query = matchMedia('(min-width: 1280px)');
+    const update = () => setWideEditor(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
   const [expenseActivityId, setExpenseActivityId] = useState(null);
   const tripId = j.snapshot?.trip?.id;
   useEffect(() => setNotice(null), [j.user?.id, tripId]);
   useEffect(() => setExpenseActivityId(null), [j.user?.id, tripId]);
+  // Going offline is said once per visit, quietly; after that the header's
+  // 连接中断 badge carries it (offline use should not keep interrupting).
+  const offlineToldRef = useRef(false);
+  useEffect(() => {
+    if (j.status !== 'offline' || !j.user || offlineToldRef.current) return;
+    offlineToldRef.current = true;
+    notify({ message: '已离线：修改先保存在本机，联网后自动同步', timeout: 4000 });
+  }, [j.status, j.user, notify]);
   const editingActivity = edit?.object
     ? j.snapshot?.objects?.find((o) => o.id === edit.object.id) || edit.object
     : null;
@@ -71,10 +90,31 @@ export default function App() {
     j.snapshot?.objects?.some((o) => o.id === editingDayId && o.state === 'deleted');
   const tripDeleted = j.snapshot?.trip?.state === 'deleted';
   const page = tripDeleted ? 'recovery' : j.context?.page || 'itinerary';
+  // Map and board share the immersive shell: collapsed sidebar, floating header.
+  const immersive = page === 'map' || page === 'board';
+  const [panelDock, setPanelDock] = useState(() => boardDock(readAppearance()));
+  const journeyRef = useRef(journey);
+  journeyRef.current = journey;
+  const changePanelDock = useCallback((value) => {
+    setPanelDock(value);
+    const next = { ...readAppearance(), boardPanelDock: value };
+    localStorage.setItem(appearanceKey, JSON.stringify(next));
+    const jr = journeyRef.current;
+    if (jr.user) jr.updateProfile({ preferences: { boardPanelDock: value } }).catch(() => {});
+  }, []);
+  // Members currently on this board get a colored ring in the header (N-9).
+  const [boardPeers, setBoardPeers] = useState(() => new Map());
+  const onBoardPeers = useCallback((peers) => {
+    setBoardPeers((prev) => {
+      if (prev.size === peers.size && [...peers].every(([k, v]) => prev.get(k) === v)) return prev;
+      return peers;
+    });
+  }, []);
   useEffect(() => {
     const preferences = mergeAccountAppearance(readAppearance(), j.user?.preferences);
     localStorage.setItem(appearanceKey, JSON.stringify(preferences));
     applyAppearance(preferences);
+    setPanelDock(boardDock(preferences));
     const media = matchMedia('(prefers-color-scheme: dark)');
     const update = () => applyAppearance(readAppearance());
     media.addEventListener('change', update);
@@ -97,21 +137,24 @@ export default function App() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = j.context?.scroll?.[page] || 0;
   }, [tripId, page]);
-  function onEdit(object, initial = {}) {
-    setEdit({
-      object,
-      initial: {
-        ...initial,
-        _draftId:
-          object?.id || initial._draftId || j.context?.pendingActivityId || crypto.randomUUID(),
-      },
-    });
+  function onEdit(object, initial = {}, trigger = document.activeElement) {
+    const pendingId = j.context?.pendingActivityId;
+    const unfinishedId = j.snapshot.objects.some((o) => o.kind === 'activity' && o.id === pendingId)
+      ? null
+      : pendingId;
+    const nextId = object?.id || initial._draftId || unfinishedId || crypto.randomUUID();
+    if (edit && nextId === (edit.object?.id || edit.initial._draftId)) return;
+    const returnFocus =
+      trigger?.closest('[data-activity-id]')?.querySelector('.activity-main') || trigger;
+    editorRef.current?.requestClose();
+    setEdit({ object, returnFocus, initial: { ...initial, _draftId: nextId } });
   }
   function closeEdit() {
     setEdit(null);
     j.setContext({ selection: null });
   }
   function switchPage(p) {
+    editorRef.current?.requestClose();
     setExpenseActivityId(null);
     if (!tripDeleted)
       j.setContext({
@@ -129,12 +172,22 @@ export default function App() {
     else if (p === 'settings') setModal('personal');
   }
   function home() {
+    editorRef.current?.requestClose();
     setNotice(null);
     if (scrollRef.current)
       j.setContext({ scroll: { ...j.context.scroll, [page]: scrollRef.current.scrollTop } });
     setEdit(null);
     j.goHome();
   }
+  const previousPage = useRef(page);
+  useEffect(() => {
+    if (previousPage.current === 'itinerary' && page !== 'itinerary')
+      editorRef.current?.requestClose();
+    previousPage.current = page;
+  }, [page]);
+  const panelOpen = Boolean(
+    wideEditor && page === 'itinerary' && tripId && !tripDeleted && !editingDayDeleted && edit,
+  );
   const statusText = syncStatusText[j.status] || '正在连接';
   const tripMembers = j.snapshot?.members || [];
   const otherMembers = tripMembers.filter((m) => m.userId !== j.user?.id);
@@ -180,7 +233,9 @@ export default function App() {
           onSync={() => setModal('sync')}
         />
       ) : (
-        <div className={`app-shell ${page === 'map' ? 'map-shell' : ''}`}>
+        <div
+          className={`app-shell ${immersive ? 'immersive-shell' : ''} ${page === 'map' ? 'map-shell' : ''} ${page === 'board' ? 'board-shell' : ''}`}
+        >
           <aside className="sidebar">
             <button className="brand" onClick={home}>
               <Compass />
@@ -199,12 +254,7 @@ export default function App() {
                 <span>我的旅程</span>
               </button>
               {!tripDeleted && (
-                <SelectionTrack
-                  as="nav"
-                  activeKey={page}
-                  layoutKey={page === 'map'}
-                  aria-label="主导航"
-                >
+                <SelectionTrack as="nav" activeKey={page} layoutKey={immersive} aria-label="主导航">
                   {pages.map(([key, label, Icon]) => (
                     <button
                       aria-label={label}
@@ -244,7 +294,7 @@ export default function App() {
                 </div>
               }
               <div className="header-right">
-                <div className="map-trip-title" aria-hidden={page !== 'map'}>
+                <div className="map-trip-title" aria-hidden={!immersive}>
                   <span>
                     <span title={j.snapshot.trip.name}>{j.snapshot.trip.name}</span>
                   </span>
@@ -278,11 +328,23 @@ export default function App() {
                 >
                   <div className="avatar-stack">
                     {/* 同伴排在前面：手机端只显示第一个头像，自己的头像已在右侧“我的设置”入口 */}
-                    {[...otherMembers, ...selfMembers].slice(0, 3).map((m) => (
-                      <span className="avatar" key={m.userId}>
-                        {m.displayName.slice(0, 1)}
-                      </span>
-                    ))}
+                    {[...otherMembers, ...selfMembers].slice(0, 3).map((m) => {
+                      const onBoard = page === 'board' && boardPeers.has(m.userId);
+                      return (
+                        <span
+                          className={`avatar ${onBoard ? 'on-board' : ''}`}
+                          key={m.userId}
+                          style={
+                            onBoard
+                              ? { '--ring': `var(--peer-${(boardPeers.get(m.userId) % 4) + 1})` }
+                              : undefined
+                          }
+                          title={onBoard ? `${m.displayName} 正在看这块白板` : undefined}
+                        >
+                          {m.displayName.slice(0, 1)}
+                        </span>
+                      );
+                    })}
                   </div>
                   {otherMembers.length > 1 && (
                     <span className="member-overflow" aria-hidden="true">
@@ -302,63 +364,111 @@ export default function App() {
                 </button>
               </div>
             </header>
-            <main
-              id="main"
-              className={`main-content ${page === 'map' ? 'map-content' : ''}`}
-              ref={scrollRef}
-              onScroll={(e) => {
-                clearTimeout(scrollRef.timer);
-                const top = e.currentTarget.scrollTop;
-                scrollRef.timer = setTimeout(
-                  () => j.setContext({ scroll: { ...j.context.scroll, [page]: top } }),
-                  180,
-                );
-              }}
-            >
-              {!tripDeleted && (
-                <TripMap
-                  key={`${j.user.id}:${tripId}`}
-                  active={page === 'map'}
+            <div className={`workspace-body${panelOpen ? ' has-activity-panel' : ''}`}>
+              <main
+                id="main"
+                className={`main-content ${page === 'map' ? 'map-content' : ''} ${page === 'board' ? 'board-content' : ''}`}
+                ref={scrollRef}
+                onScroll={(e) => {
+                  clearTimeout(scrollRef.timer);
+                  const top = e.currentTarget.scrollTop;
+                  scrollRef.timer = setTimeout(
+                    () => j.setContext({ scroll: { ...j.context.scroll, [page]: top } }),
+                    180,
+                  );
+                }}
+              >
+                {!tripDeleted && (
+                  <TripMap
+                    key={`${j.user.id}:${tripId}`}
+                    active={page === 'map'}
+                    journey={j}
+                    onEditActivity={onEdit}
+                  />
+                )}{' '}
+                {tripDeleted ? (
+                  <TripRecovery
+                    journey={j}
+                    onHome={home}
+                    onTeam={() => setModal('team')}
+                    onDeleted={() => setModal('deleted')}
+                  />
+                ) : page === 'map' ? null : page === 'board' ? (
+                  <Board
+                    key={`${j.user.id}:${tripId}:${j.context?.board?.boardId || 'default'}`}
+                    tripId={tripId}
+                    boardId={j.context?.board?.boardId}
+                    snapshot={j.snapshot}
+                    currentUserId={j.user?.id}
+                    mutate={j.mutate}
+                    notify={notify}
+                    modalOpen={Boolean(modal) || Boolean(edit)}
+                    dock={panelDock}
+                    onDockChange={changePanelDock}
+                    boardContext={j.context?.board}
+                    onBoardContext={(patch) =>
+                      j.setContext({ board: { ...(j.context?.board || {}), ...patch } })
+                    }
+                    onPeersChange={onBoardPeers}
+                    stickers={j.user?.preferences?.stickers}
+                    onStickersChange={(list) =>
+                      j.updateLocalUser({
+                        preferences: { ...(j.user?.preferences || {}), stickers: list },
+                      })
+                    }
+                    onNavigate={(targetPage, targetContext) => {
+                      j.setContext({ page: targetPage, ...targetContext });
+                    }}
+                  />
+                ) : page === 'expenses' ? (
+                  <Ledger
+                    key={`${j.user.id}:${tripId}:${expenseActivityId || 'all'}`}
+                    journey={j}
+                    onViewActivity={(activity) =>
+                      j.setContext({
+                        page: 'itinerary',
+                        dayId: activity.payload.dayId,
+                        focusActivityId: activity.id,
+                      })
+                    }
+                    activityId={expenseActivityId}
+                    onClearActivityFilter={() => setExpenseActivityId(null)}
+                  />
+                ) : page === 'settings' ? (
+                  <Settings
+                    journey={j}
+                    onTeam={() => setModal('team')}
+                    onDeleted={() => setModal('deleted')}
+                    onDates={() => setModal('dates')}
+                    onPersonal={() => setModal('personal')}
+                  />
+                ) : (
+                  <Itinerary
+                    selectedActivityId={panelOpen ? edit.object?.id || edit.initial._draftId : null}
+                    journey={j}
+                    onEdit={onEdit}
+                    onDates={() => setModal('dates')}
+                    onDeleted={() => setModal('deleted')}
+                    onViewExpenses={(activityId) => {
+                      setExpenseActivityId(activityId);
+                      j.setContext({ page: 'expenses' });
+                    }}
+                  />
+                )}
+              </main>
+              {tripId && !tripDeleted && !editingDayDeleted && edit && (
+                <ActivityEditor
+                  key={edit.object?.id || edit.initial._draftId || 'new'}
+                  ref={editorRef}
+                  panel={panelOpen}
+                  returnFocus={edit.returnFocus}
                   journey={j}
-                  onEditActivity={onEdit}
-                />
-              )}{' '}
-              {tripDeleted ? (
-                <TripRecovery
-                  journey={j}
-                  onHome={home}
-                  onTeam={() => setModal('team')}
-                  onDeleted={() => setModal('deleted')}
-                />
-              ) : page === 'map' ? null : page === 'expenses' ? (
-                <Ledger
-                  key={`${j.user.id}:${tripId}:${expenseActivityId || 'all'}`}
-                  journey={j}
-                  onEditActivity={onEdit}
-                  activityId={expenseActivityId}
-                  onClearActivityFilter={() => setExpenseActivityId(null)}
-                />
-              ) : page === 'settings' ? (
-                <Settings
-                  journey={j}
-                  onTeam={() => setModal('team')}
-                  onDeleted={() => setModal('deleted')}
-                  onDates={() => setModal('dates')}
-                  onPersonal={() => setModal('personal')}
-                />
-              ) : (
-                <Itinerary
-                  journey={j}
-                  onEdit={onEdit}
-                  onDates={() => setModal('dates')}
-                  onDeleted={() => setModal('deleted')}
-                  onViewExpenses={(activityId) => {
-                    setExpenseActivityId(activityId);
-                    j.setContext({ page: 'expenses' });
-                  }}
+                  object={edit.object}
+                  initial={edit.initial}
+                  onClose={closeEdit}
                 />
               )}
-            </main>
+            </div>
             {!tripDeleted && (
               <SelectionTrack
                 as="nav"
@@ -430,15 +540,6 @@ export default function App() {
       {tripId && modal === 'deleted' && (
         <Deleted journey={j} onClose={() => setModal(null)} onEdit={onEdit} />
       )}{' '}
-      {tripId && !tripDeleted && !editingDayDeleted && edit && (
-        <ActivityEditor
-          key={edit.object?.id || edit.initial._draftId || 'new'}
-          journey={j}
-          object={edit.object}
-          initial={edit.initial}
-          onClose={closeEdit}
-        />
-      )}
     </>
   );
 }

@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {createApp,shutdownServer} from '../../server/index.mjs';
 
@@ -99,7 +100,8 @@ test('basemap hotspot opens details and supports favorite and itinerary actions'
  await expect(page.getByRole('button',{name:'已收藏',exact:true})).toBeDisabled();
  await page.getByRole('button',{name:'加入行程',exact:true}).click();
  await expect(page.getByRole('dialog')).toBeVisible();
- await expect(page.getByRole('dialog').getByRole('textbox').first()).toHaveValue('底图玄武湖');
+ await expect(page.getByRole('dialog').getByRole('textbox').first()).toHaveValue('');
+ await expect(page.getByRole('dialog').getByRole('textbox').first()).toHaveAttribute('placeholder','底图玄武湖');
 });
 
 test('blank map clicks select their coordinates only while picking',async({page})=>{
@@ -211,4 +213,39 @@ test('successful place search remains visible when autocomplete fails',async({pa
  await page.getByRole('textbox',{name:'搜索地点',exact:true}).fill('主搜索');
  await expect(page.locator('.map-result').filter({hasText:'主搜索成功地点'})).toBeVisible();
  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('destination geocode failure falls back to the current city and keeps place search working',async({page})=>{
+ test.setTimeout(90000);await page.setViewportSize({width:390,height:844});
+ mkdirSync('../.local/evidence/1110-map-geocode-fallback',{recursive:true});
+ await page.route('**/_AMapService/v3/geocode/geo?**',route=>fulfillAmap(route,{status:'0',info:'ENGINE_RESPONSE_DATA_ERROR',infocode:'30001'}));
+ await page.goto(base);
+ await page.evaluate(async()=>{
+  const auth=await fetch('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:`geocode-fallback-${crypto.randomUUID()}@example.test`,password:'JourneySelection2026!',displayName:'降级验收'})}).then(r=>r.json());
+  const headers={'Content-Type':'application/json','X-CSRF-Token':auth.csrfToken};
+  const snapshot=await fetch('/api/trips',{method:'POST',headers,body:JSON.stringify({id:crypto.randomUUID(),name:'南大出游',teamMode:'admin',timezone:'Asia/Shanghai',currency:'CNY',dayCount:1,startDate:'2026-11-01',destination:'nju'})}).then(r=>r.json());
+  await fetch('/api/navigation',{method:'PUT',headers,body:JSON.stringify({lastTripId:snapshot.trip.id})});
+ });
+ await page.reload();await page.getByRole('button',{name:/继续旅程/}).click();
+ await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'地图',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>!!window.AMap?.Map),{timeout:30000}).toBe(true);
+ await expect(page.getByText('正在定位地图…',{exact:true})).toHaveCount(0);
+ await expect(page.locator('.map-offline-message')).toHaveCount(0);
+ const searchInput=page.getByRole('textbox',{name:'搜索地点',exact:true});
+ await expect(searchInput).toBeVisible();
+ await page.screenshot({path:'../.local/evidence/1110-map-geocode-fallback/fallback-390.png',animations:'disabled',scale:'css'});
+ await page.setViewportSize({width:1440,height:900});
+ await expect(searchInput).toBeVisible();
+ await page.screenshot({path:'../.local/evidence/1110-map-geocode-fallback/fallback-1440.png',animations:'disabled',scale:'css'});
+ await page.setViewportSize({width:390,height:844});
+ await page.route('**/_AMapService/v3/place/text?**',route=>{
+  const city=new URL(route.request().url()).searchParams.get('city')||'';
+  if(city==='nju')return fulfillAmap(route,{status:'0',info:'USER_ABROAD_DAILY_QUERY_OVER_LIMIT',infocode:'10045'});
+  return fulfillAmap(route,ok({count:'1',pois:[poi('南京大学仙林校区','BNJU001')]}));
+ });
+ await emptySuggestions(page);
+ await searchInput.fill('南京大学');
+ await expect(page.locator('.map-result').filter({hasText:'南京大学仙林校区'})).toBeVisible();
+ await page.locator('.map-result').filter({hasText:'南京大学仙林校区'}).click();
+ await expect(page.getByRole('heading',{name:'南京大学仙林校区',exact:true})).toBeVisible();
 });

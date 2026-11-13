@@ -74,8 +74,11 @@ function operationSummary(op, objects) {
       activity: '活动',
       expense: '费用',
       favorite: '地点',
+      markPreset: '标记预设',
       day: '日期',
       route: '路线',
+      board: '白板',
+      boardItem: '白板贴纸',
     }[kind] || '内容';
   const objectName = (id) => {
     const object = objects.get(id);
@@ -211,11 +214,16 @@ const emit = (patch) => {
 };
 const clone = (value) => structuredClone(value);
 const message = (e) => (e instanceof Error ? e.message : String(e));
+// A lost connection is a state, not an error: the header shows 连接中断 and
+// changes keep queueing on this device. Raising it as the page-wide error
+// banner made it pop up again on every retry while offline.
 const setError = (e) =>
-  emit({
-    error: { message: message(e), code: e.code || 'ERROR', details: e.details },
-    status: e.code === 'NETWORK' ? 'offline' : 'error',
-  });
+  e?.code === 'NETWORK'
+    ? emit({ status: 'offline' })
+    : emit({
+        error: { message: message(e), code: e.code || 'ERROR', details: e.details },
+        status: 'error',
+      });
 const emptyAccount = (user) => ({
   user,
   trips: [],
@@ -225,20 +233,25 @@ const emptyAccount = (user) => ({
   queue: [],
 });
 
-export async function api(path, { body, method = 'GET', ...options } = {}) {
+export async function api(path, { body, method = 'GET', raw = false, ...options } = {}) {
   let res;
   const requestEpoch = authEpoch;
+  const isBinary =
+    raw ||
+    (typeof Blob !== 'undefined' && body instanceof Blob) ||
+    (typeof ArrayBuffer !== 'undefined' &&
+      (body instanceof ArrayBuffer || ArrayBuffer.isView(body)));
   try {
     res = await fetch(base.replace(/\/$/, '') + path, {
       method,
       credentials: 'same-origin',
       ...options,
       headers: {
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(body !== undefined && !isBinary ? { 'Content-Type': 'application/json' } : {}),
         ...(method !== 'GET' && csrf ? { 'X-CSRF-Token': csrf } : {}),
         ...options.headers,
       },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      ...(body !== undefined ? { body: isBinary ? body : JSON.stringify(body) } : {}),
     });
   } catch {
     if (requestEpoch === authEpoch) {
@@ -249,6 +262,9 @@ export async function api(path, { body, method = 'GET', ...options } = {}) {
     error.code = 'NETWORK';
     throw error;
   }
+  // 204/205 carry no body (board presence answers 204). Parsing them as JSON
+  // used to fail and mark the whole app "连接中断" every heartbeat.
+  if (res.status === 204 || res.status === 205) return null;
   let value;
   try {
     value = await res.json();
@@ -263,7 +279,7 @@ export async function api(path, { body, method = 'GET', ...options } = {}) {
     value = {};
   }
   if (!res.ok) {
-    const e = new Error(value.error?.message || '请求失败，请重试');
+    const e = new Error(value.error?.message || '服务器响应异常，请检查网络或稍后重试');
     e.code = value.error?.code || 'REQUEST_FAILED';
     e.status = res.status;
     e.details = value.error?.details;
@@ -319,6 +335,7 @@ function optimistic(snapshot, queue) {
   if (!snapshot) return null;
   let next = clone(snapshot);
   for (const op of queue.filter((x) => x.tripId === snapshot.trip.id)) {
+    if (op.objectType === 'boardItem') continue;
     const obj =
       op.objectId === next.trip.id ? next.trip : next.objects.find((x) => x.id === op.objectId);
     if (op.kind === 'reschedule') {
@@ -339,7 +356,22 @@ function optimistic(snapshot, queue) {
       });
     else if (op.kind === 'patch' && obj) {
       if (obj === next.trip) Object.assign(obj, op.patch);
-      else Object.assign(obj.payload, op.patch);
+      else {
+        if (obj.kind === 'markPreset' && (op.patch.icon || op.patch.color)) {
+          const old = obj.payload;
+          for (const f of next.objects)
+            if (
+              f.kind === 'favorite' &&
+              f.payload.mark?.icon === old.icon &&
+              f.payload.mark?.color === old.color
+            )
+              f.payload.mark = {
+                icon: op.patch.icon || old.icon,
+                color: op.patch.color || old.color,
+              };
+        }
+        Object.assign(obj.payload, op.patch);
+      }
     } else if (
       (op.kind === 'delete' || op.kind === 'restore') &&
       obj &&
@@ -561,6 +593,20 @@ async function accessFailure(e, id) {
     setError(e);
   });
 }
+const presenceListeners = new Set();
+const changeListeners = new Set();
+export function onPresence(fn) {
+  presenceListeners.add(fn);
+  return () => presenceListeners.delete(fn);
+}
+export function onTripChange(fn) {
+  changeListeners.add(fn);
+  return () => changeListeners.delete(fn);
+}
+export function getDeviceId() {
+  return deviceId;
+}
+
 function closeSource() {
   source?.close();
   source = null;
@@ -578,6 +624,11 @@ function subscribeTrip(id) {
     } catch {
       return;
     }
+    for (const fn of changeListeners) {
+      try {
+        fn(notice);
+      } catch {}
+    }
     const current = account.snapshots[id];
     if (
       (notice.epoch ?? 0) < (current?.epoch ?? 0) ||
@@ -590,6 +641,13 @@ function subscribeTrip(id) {
     } catch {
       /* refresh sets recoverable error */
     }
+  });
+  source.addEventListener('presence', (event) => {
+    if (epoch !== authEpoch || selected !== id) return;
+    try {
+      const data = JSON.parse(event.data);
+      for (const fn of presenceListeners) fn(data);
+    } catch {}
   });
   source.addEventListener('revoked', () => {
     if (epoch === authEpoch) void refresh().catch(() => {});
@@ -908,7 +966,7 @@ async function recover(preview, mode) {
           code: 'RECEIPT_UNCONFIRMED',
         });
       if (reapply && !current.canReapply)
-        throw Object.assign(new Error('这些修改需要按原顺序重试或放弃'), {
+        throw Object.assign(new Error('存在依赖先后关系的离线修改，请按顺序点击重试或选择放弃'), {
           code: 'RECOVERY_NOT_REAPPLICABLE',
         });
       if (reapply) await calibrate();
@@ -1053,6 +1111,21 @@ async function retry(options = {}) {
     throw e;
   }
 }
+// Local-only user update for state the server owns (the sticker library is
+// written through /api/me/stickers, so PATCH /api/me would drop it). Keeps the
+// in-memory account in step so other trips see it without a reload.
+function updateLocalUser(patch) {
+  if (!account) return;
+  account.user = {
+    ...account.user,
+    ...patch,
+    preferences: { ...(account.user.preferences || {}), ...(patch.preferences || {}) },
+  };
+  // The server already holds the truth; a local cache write failure must not
+  // break the screen that just changed.
+  persist().catch(() => {});
+  renderAccount();
+}
 async function updateProfile(patch) {
   const epoch = authEpoch,
     owner = account;
@@ -1115,7 +1188,9 @@ export function useJourney() {
     clearError,
     retry,
     updateProfile,
+    updateLocalUser,
     isCurrentUser: (id) => account?.user?.id === id,
     refreshTrips,
+    getDeviceId,
   };
 }

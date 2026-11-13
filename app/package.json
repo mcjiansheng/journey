@@ -14,7 +14,7 @@
     "test:e2e": "node scripts/run-browser-tests.mjs",
     "check": "npm run tokens:check && npm run contrast:check && npm run timezones:check && npm run test && npm run build",
     "test:browser": "node scripts/run-browser-tests.mjs --script",
-    "tokens:check": "node ../scripts/generate-design-tokens.mjs --check",
+    "tokens:check": "node ../scripts/generate-design-tokens.mjs --check && node ../scripts/check-css-vars.mjs",
     "timezones:check": "node ../scripts/generate-destination-timezones.mjs --check",
     "format": "prettier --write \"src/**/*.{js,jsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{js,jsx,css}\"",

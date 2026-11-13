@@ -18,15 +18,21 @@ export function Modal({
   initialFocus = 'title',
   action,
   dismissOnBackdrop = false,
+  nonModal = false,
+  returnFocus,
 }) {
   const ref = useRef(null),
     titleRef = useRef(null),
     titleId = useId();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const previous = document.activeElement,
+    const previous = returnFocus || document.activeElement,
       dialog = ref.current;
-    modalDepth++;
-    document.documentElement.classList.add('has-modal');
+    if (!nonModal) {
+      modalDepth++;
+      document.documentElement.classList.add('has-modal');
+    }
     // Entrance belongs to opening the dialog. Restoring motion later must not
     // replay it on a dialog that is already visible.
     const finishEntrance = (event) => {
@@ -36,7 +42,15 @@ export function Modal({
     dialog.addEventListener('animationend', finishEntrance);
     dialog.addEventListener('animationcancel', finishEntrance);
     if (!reducedMotion()) dialog.dataset.enter = '';
-    dialog.showModal();
+    if (nonModal) dialog.show();
+    else dialog.showModal();
+    const escape = (event) => {
+      if (event.key === 'Escape' && modalDepth === 0) {
+        event.preventDefault();
+        closeRef.current();
+      }
+    };
+    if (nonModal) document.addEventListener('keydown', escape);
     const target =
       initialFocus === 'title'
         ? titleRef.current
@@ -47,15 +61,17 @@ export function Modal({
       dialog.removeEventListener('animationcancel', finishEntrance);
       delete dialog.dataset.enter;
       dialog.close();
-      modalDepth--;
+      if (nonModal) document.removeEventListener('keydown', escape);
+      else modalDepth--;
       if (modalDepth === 0) document.documentElement.classList.remove('has-modal');
       if (previous?.isConnected) previous.focus?.({ preventScroll: true });
     };
-  }, []);
+  }, [nonModal]);
   return (
     <dialog
       ref={ref}
       aria-labelledby={titleId}
+      aria-modal={nonModal ? false : true}
       className={`modal ${wide ? 'wide' : ''} ${className}`}
       onCancel={(e) => {
         e.preventDefault();
@@ -77,6 +93,12 @@ export function Modal({
 }
 export function ActionNotice({ notice, onClose }) {
   const [error, setError] = useState('');
+  // Undo offers (e.g. 白板「已删除 · 撤销」) disappear on their own.
+  useEffect(() => {
+    if (!notice.timeout) return undefined;
+    const t = setTimeout(onClose, notice.timeout);
+    return () => clearTimeout(t);
+  }, [notice.id]);
   return (
     <div className="action-notice" role="status">
       <span>{error || notice.message}</span>
@@ -191,7 +213,32 @@ export function Back({ onClick, children = '返回' }) {
 }
 export const id = () => crypto.randomUUID();
 export function errorMessage(e) {
-  return e?.message || '操作未完成，请重试。';
+  if (!e) return '操作未能完成，请稍后重试；若持续出现请刷新页面。';
+  if (e.code === 'ORIGIN_REJECTED') {
+    return '当前网页访问地址与服务端安全配置不一致。请使用配置的标准网址访问，或联系管理员设置 APP_ORIGIN。';
+  }
+  if (e.code === 'CSRF_REJECTED') {
+    return '页面会话安全凭据已失效，请刷新页面后重试。';
+  }
+  if (e.code === 'LOGIN_INVALID') {
+    return '账号或密码不正确，请核对后重新输入。';
+  }
+  if (e.code === 'RATE_LIMITED') {
+    return '操作过于频繁，请稍候片刻后再试。';
+  }
+  if (e.code === 'NETWORK') {
+    return '网络连接中断，请检查网络设置后重试。';
+  }
+  if (e.code === 'STALE_GENERATION') {
+    return '其他同行成员刚刚更新了此内容，请刷新查看最新版本。';
+  }
+  if (e.code === 'CLOCK_UNCERTAIN') {
+    return '未能确认离线修改的先后顺序，请保持网络连接后重新保存。';
+  }
+  if (e.code === 'CLOCK_INVALID') {
+    return '设备系统时间与服务器差异过大，请核对设备系统时间后重试。';
+  }
+  return e.message || '操作未能完成，请稍后重试；若持续出现请刷新页面。';
 }
 export const clone = (x) => JSON.parse(JSON.stringify(x));
 export function money(minor, currency = 'CNY') {

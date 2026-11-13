@@ -12,7 +12,9 @@ import {
 } from 'lucide-react';
 import { Modal, Field, AsyncButton, Section, Empty, errorMessage } from './ui.jsx';
 import { ObjectActions } from './Itinerary.jsx';
-import { timezoneLabel } from '../destination-timezone.js';
+import { dateAdd } from '../domain.js';
+import './trip-settings.css';
+import { knownDestinationTimezone, timezoneLabel } from '../destination-timezone.js';
 import { supportsNativeSwitch } from '../feedback.js';
 import { TeamModeSetting } from './TeamModePicker.jsx';
 export { applyAppearance } from '../appearance.js';
@@ -322,6 +324,22 @@ export function TripRecovery({ journey: j, onHome, onTeam, onDeleted }) {
 export default function Settings({ journey: j, onTeam, onDeleted, onDates, onPersonal }) {
   const trip = j.snapshot.trip;
   const [error, setError] = useState('');
+  const [timezoneOpen, setTimezoneOpen] = useState(false),
+    [timezoneSearch, setTimezoneSearch] = useState('');
+  const preferredZones = [
+    ...new Set(
+      [
+        knownDestinationTimezone(trip.destination || ''),
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+        trip.timezone,
+      ].filter(Boolean),
+    ),
+  ];
+  const zones = [
+    ...new Set([...preferredZones, 'UTC', ...Intl.supportedValuesOf('timeZone')]),
+  ].filter((zone) =>
+    `${timezoneLabel(zone)} ${zone}`.toLowerCase().includes(timezoneSearch.toLowerCase()),
+  );
   const [name, setName] = useState(trip.name),
     [destination, setDestination] = useState(trip.destination || '');
   const [exit, setExit] = useState(false),
@@ -346,6 +364,8 @@ export default function Settings({ journey: j, onTeam, onDeleted, onDates, onPer
     try {
       if (value !== trip[key])
         await j.mutate({ objectId: trip.id, kind: 'patch', patch: { [key]: value } });
+      setError('');
+      return true;
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -358,53 +378,72 @@ export default function Settings({ journey: j, onTeam, onDeleted, onDates, onPer
           ? `修改会同步给其他 ${j.snapshot.members.length - 1} 位同伴`
           : '目前只有你一人。邀请同伴后，这里的修改会同步给他们'}
       </p>
-      <Section title="当前旅程">
-        <div className="form-grid">
-          <Field label="旅程名称">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => {
-                if (name.trim()) patch('name', name.trim());
-                else setError('旅程名称不能为空。');
-              }}
-            />
-          </Field>
-          <Field label="目的地">
-            <input
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              onBlur={() => patch('destination', destination)}
-            />
-          </Field>
-        </div>
-        <Field label="旅程时区">
-          <select value={trip.timezone} onChange={(e) => patch('timezone', e.target.value)}>
-            {[...new Set([trip.timezone, 'UTC', ...Intl.supportedValuesOf('timeZone')])].map(
-              (zone) => (
-                <option key={zone} value={zone}>
-                  {timezoneLabel(zone)} · {zone}
-                </option>
-              ),
-            )}
-          </select>
-        </Field>
-        <button className="settings-link" onClick={onDates}>
-          <span>日期与计划天数</span>
+      <Section title="基本信息">
+        <label className="settings-link trip-inline-setting">
+          <span>名称</span>
+          <input
+            aria-label="旅程名称"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => {
+              if (name.trim()) patch('name', name.trim());
+              else setError('旅程名称不能为空。');
+            }}
+          />
+        </label>
+        <label className="settings-link trip-inline-setting">
+          <span>目的地</span>
+          <input
+            aria-label="目的地"
+            value={destination}
+            onChange={(e) => setDestination(e.target.value)}
+            onBlur={() => patch('destination', destination)}
+          />
+        </label>
+        <button className="settings-link" onClick={() => setTimezoneOpen(true)}>
+          <span>时区</span>
           <span>
-            {trip.startDate || '日期未定'} · {trip.dayCount} 天<ChevronRight size={17} />
-          </span>
-        </button>
-        <button className="settings-link" onClick={onTeam}>
-          <span>成员与邀请</span>
-          <span>
-            {j.snapshot.members.length} 位同伴
+            {timezoneLabel(trip.timezone)}
             <ChevronRight size={17} />
           </span>
         </button>
-        <button className="settings-link" onClick={onDeleted}>
-          <span>已删除的内容</span>
-          <ChevronRight size={17} />
+      </Section>
+      <Section title="日程">
+        <button className="settings-link" onClick={onDates}>
+          <span>日期</span>
+          <span>
+            {trip.startDate
+              ? `${trip.startDate.slice(5).replace('-', '/')} – ${dateAdd(
+                  trip.startDate,
+                  trip.dayCount - 1,
+                )
+                  .slice(5)
+                  .replace('-', '/')}`
+              : '日期未定'}{' '}
+            · {trip.dayCount} 天<ChevronRight size={17} />
+          </span>
+        </button>
+      </Section>
+      <Section title="成员与权限">
+        <button className="settings-link" onClick={onTeam}>
+          <span>成员与邀请</span>
+          <span>
+            {j.snapshot.members.length === 1 ? (
+              '仅你一人'
+            ) : (
+              <>
+                <span className="trip-member-avatars" aria-hidden="true">
+                  {j.snapshot.members.slice(0, 3).map((member) => (
+                    <span className="avatar" key={member.userId}>
+                      {member.displayName.slice(0, 1)}
+                    </span>
+                  ))}
+                </span>
+                {j.snapshot.members.length} 人
+              </>
+            )}
+            <ChevronRight size={17} />
+          </span>
         </button>
         {owner && (
           <TeamModeSetting
@@ -414,35 +453,87 @@ export default function Settings({ journey: j, onTeam, onDeleted, onDates, onPer
             onChange={changeTeamMode}
           />
         )}
-        <details className="lifecycle-menu">
-          <summary>旅程删除与恢复</summary>
-          <ObjectActions journey={j} object={{ ...trip, kind: 'trip' }} />
-        </details>
-        <div className="button-row">
-          <AsyncButton
-            className="text-button"
-            onClick={async () => {
-              try {
-                const t = j.trips.find((t) => t.id === trip.id);
-                await j.api(`/api/trips/${trip.id}/archive`, {
-                  method: 'POST',
-                  body: { archived: !t?.archived },
-                });
-                await j.refreshTrips();
-              } catch (e) {
-                setError(errorMessage(e));
-              }
-            }}
-          >
-            <Archive size={16} />
-            {j.trips.find((t) => t.id === trip.id)?.archived ? '取消归档' : '归档旅程'}
-          </AsyncButton>
-          <button className="text-button danger" onClick={() => setExit(true)}>
-            <LogOut size={16} />
-            退出旅程
-          </button>
-        </div>
       </Section>
+      <Section title="整理">
+        <button className="settings-link" onClick={onDeleted}>
+          <span>已删除的内容</span>
+          <span>
+            {
+              j.snapshot.objects.filter(
+                (o) =>
+                  o.state === 'deleted' &&
+                  ['activity', 'favorite', 'expense', 'day', 'route'].includes(o.kind),
+              ).length
+            }
+            <ChevronRight size={17} />
+          </span>
+        </button>
+        <AsyncButton
+          className="settings-link"
+          onClick={async () => {
+            const archived = j.trips.find((t) => t.id === trip.id)?.archived;
+            if (!archived && !confirm('归档旅程？将从我的旅程列表收起，可随时取消。')) return;
+            try {
+              await j.api(`/api/trips/${trip.id}/archive`, {
+                method: 'POST',
+                body: { archived: !archived },
+              });
+              await j.refreshTrips();
+            } catch (e) {
+              setError(errorMessage(e));
+            }
+          }}
+        >
+          <span>
+            {j.trips.find((t) => t.id === trip.id)?.archived ? '取消归档' : '归档旅程'}
+            <small className="trip-setting-help">从我的旅程列表收起，可随时取消</small>
+          </span>
+          <ChevronRight size={17} />
+        </AsyncButton>
+      </Section>
+      <div className="section trip-exit-group">
+        {owner && <ObjectActions journey={j} object={{ ...trip, kind: 'trip' }} />}
+        <button className="settings-link danger" onClick={() => setExit(true)}>
+          <span>
+            <LogOut size={16} /> {j.snapshot.members.length === 1 ? '退出并删除旅程' : '退出旅程'}
+            {j.snapshot.members.length === 1 && (
+              <small className="trip-setting-help">你是唯一的成员，退出后会永久清除旅程</small>
+            )}
+          </span>
+          <ChevronRight size={17} />
+        </button>
+      </div>
+      {timezoneOpen && (
+        <Modal title="旅程时区" onClose={() => setTimezoneOpen(false)}>
+          <Field label="搜索时区">
+            <input
+              type="search"
+              value={timezoneSearch}
+              onChange={(e) => setTimezoneSearch(e.target.value)}
+              placeholder="城市、时区名称或 UTC 偏移"
+            />
+          </Field>
+          <div className="timezone-options">
+            {!timezoneSearch && <p className="muted">目的地与本机时区优先显示</p>}
+            {zones.map((zone) => (
+              <button
+                key={zone}
+                className="settings-link"
+                onClick={async () => {
+                  if (await patch('timezone', zone)) setTimezoneOpen(false);
+                }}
+              >
+                <span>
+                  {timezoneLabel(zone)}
+                  <small className="trip-setting-help">{zone}</small>
+                </span>
+                {zone === trip.timezone && <Check size={17} />}
+              </button>
+            ))}
+            {!zones.length && <p className="muted">没有找到匹配的时区</p>}
+          </div>
+        </Modal>
+      )}
       <button className="text-button" onClick={onPersonal}>
         想改主题色或提醒方式？打开我的设置
       </button>

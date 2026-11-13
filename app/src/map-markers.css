@@ -1,4 +1,4 @@
-/* The map coordinate sits at the pin tip; saved places use a smaller star. */
+/* Favorites keep a 44px hit target around the smaller visible shape. */
 .place-marker {
   position: relative;
   display: block;
@@ -8,7 +8,7 @@
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
-  color: #246b58;
+  color: var(--map-accent);
   cursor: pointer;
   overflow: visible;
 }
@@ -21,22 +21,19 @@
   top: 9px;
   width: 26px;
   height: 26px;
-  border: 1.5px solid #fffefa;
-  border-radius: 50%;
-  background: #fffefa;
-  box-shadow: 0 1px 5px #183c3040;
+  border: 0;
+  background: transparent;
+  filter: drop-shadow(0 1px 2px #183c3040);
 }
 .place-marker .marker-graphic svg {
   display: block;
-  width: 19px;
-  height: 19px;
-}
-.place-marker.arranged .marker-graphic {
-  background: #e5eee5;
-  border-color: #fffefa;
+  width: 26px;
+  height: 26px;
 }
 .place-marker.route-marker .marker-graphic {
-  background: #294c68;
+  border: 2px solid #fffefa;
+  border-radius: 50%;
+  background: var(--map-route-marker);
   color: #fffefa;
   font-size: var(--fs-caption);
   font-weight: 650;
@@ -84,11 +81,325 @@
 }
 @media (hover: hover) and (pointer: fine) {
   .place-marker:hover .marker-graphic {
-    filter: brightness(1.08);
+    filter: drop-shadow(0 1px 3px #183c3060) brightness(1.08);
   }
 }
 @media (max-width: 760px) {
   .marker-label {
     max-width: 130px;
+  }
+}
+.place-marker.arranged .marker-graphic::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 7px;
+  height: 7px;
+  background: var(--map-accent);
+  border: 2px solid white;
+  border-radius: 50%;
+}
+.marker-graphic {
+  font-size: 24px;
+  line-height: 1;
+}
+.marker-count {
+  position: absolute;
+  right: 0;
+  top: 0;
+  min-width: 17px;
+  border-radius: 12px;
+  background: white;
+  color: #1b3442;
+  border: 1px solid currentColor;
+  font-size: 12px;
+}
+.mixed-marker .marker-graphic {
+  width: auto;
+  min-width: 48px;
+  border-radius: 18px;
+  font-size: 17px;
+}
+.marker-label.left {
+  left: auto;
+  right: 40px;
+}
+.favorite-marker {
+  animation: marker-enter 150ms ease-out;
+}
+@keyframes marker-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .favorite-marker {
+    animation: none;
+  }
+}
+.mark-preset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block: 12px;
+}
+.mark-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+}
+.map-legend {
+  position: absolute;
+  right: 88px;
+  bottom: 44px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 30%;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 5px;
+}
+.map-legend button {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  font-size: var(--fs-caption);
+}
+.map-legend-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.map-legend-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.map-legend-check {
+  flex-shrink: 0;
+  color: var(--accent);
+  visibility: hidden;
+}
+.map-legend [aria-pressed='true'] .map-legend-check {
+  visibility: visible;
+}
+.map-legend .mark-symbol {
+  flex-basis: 20px;
+  width: 20px;
+  height: 20px;
+}
+.map-legend .mark-symbol svg {
+  width: 18px;
+  height: 18px;
+}
+.map-legend [aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+@media (max-width: 760px) {
+  .map-legend {
+    bottom: calc(104px + env(safe-area-inset-bottom));
+    max-width: 150px;
+  }
+}
+
+.mark-symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+}
+.mark-symbol svg {
+  width: 22px;
+  height: 22px;
+}
+.mark-preset-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+}
+.favorite-mark-editor {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 16px;
+}
+.favorite-mark-editor h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+.mark-choices {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+.mark-choice-row {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 4px;
+}
+.mark-choice-row .mark-choice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+}
+.mark-choice svg {
+  width: 20px;
+  height: 20px;
+}
+.mark-choice-row .mark-choice:hover {
+  background: var(--optical-selected);
+}
+.mark-choice-row .mark-choice[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--optical-selected);
+}
+.mark-choice:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.mark-color-choice span {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+.mark-color-choice span svg {
+  color: #fffefa;
+  width: 13px;
+  height: 13px;
+}
+.mark-presets-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 16px;
+}
+.mark-presets-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.favorite-mark-editor .mark-text-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+}
+.favorite-mark-editor .mark-text-button:hover {
+  color: var(--text);
+  background: var(--optical-selected);
+}
+.mark-preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.mark-preset-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: var(--fs-caption);
+}
+.mark-preset-chips button[aria-pressed='true'] {
+  background: var(--optical-selected);
+  border-color: var(--accent);
+}
+.mark-preset-chips svg {
+  width: 18px;
+  height: 18px;
+}
+.mark-save-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+  align-items: center;
+  margin-top: 10px;
+}
+.mark-save-form label {
+  min-width: 0;
+  margin: 0;
+}
+.mark-save-form input {
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  font-size: var(--fs-caption);
+}
+.mark-save-form button {
+  min-height: 38px;
+  padding: 6px 10px;
+  font-size: var(--fs-caption);
+}
+.mark-error {
+  font-size: var(--fs-caption);
+  color: var(--danger);
+}
+.mark-manager .mark-choice-row {
+  max-width: 360px;
+}
+.mark-manager .mark-preset-row > button:first-child {
+  flex: 1;
+  justify-content: flex-start;
+}
+.mark-manager .mark-preview {
+  margin-top: 24px;
+}
+.mark-manager .mark-name-field {
+  display: grid;
+  gap: 6px;
+  margin: 16px 0;
+}
+.mark-manager .mark-name-field input {
+  margin: 0;
+}
+@media (max-width: 360px) {
+  .mark-choice-row {
+    gap: 2px;
+  }
+  .mark-choice-row .mark-choice {
+    min-height: 32px;
+    height: 32px;
   }
 }

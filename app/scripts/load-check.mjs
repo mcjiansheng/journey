@@ -56,11 +56,11 @@ async function run() {
         startDate: null, dayCount: 1, state: 'active', generation: 0, clocks: {}, createdAt: Date.now(),
       };
       db.prepare('INSERT INTO trips VALUES(?,?,0,10)').run(tripId, JSON.stringify(trip));
-      db.prepare('INSERT INTO objects VALUES(?,?,?,?,?,?,?)').run(dayId, tripId, 'day', JSON.stringify({ ordinal: 1, date: null }), 'active', 0, '{}');
+      db.prepare('INSERT INTO objects(id,tripId,kind,payload,state,generation,clocks) VALUES(?,?,?,?,?,?,?)').run(dayId, tripId, 'day', JSON.stringify({ ordinal: 1, date: null }), 'active', 0, '{}');
       for (let userIndex = 0; userIndex < ACCOUNTS; userIndex++) {
         db.prepare('INSERT INTO members VALUES(?,?,0,1,?,0)').run(tripId, `load-user-${userIndex}`, userIndex + 1);
         const payload = schemas.activity.parse({ title: `Activity ${userIndex}`, dayId, order: userIndex });
-        db.prepare('INSERT INTO objects VALUES(?,?,?,?,?,?,?)').run(`load-activity-${userIndex}`, tripId, 'activity', JSON.stringify(payload), 'active', 0, '{}');
+        db.prepare('INSERT INTO objects(id,tripId,kind,payload,state,generation,clocks) VALUES(?,?,?,?,?,?,?)').run(`load-activity-${userIndex}`, tripId, 'activity', JSON.stringify(payload), 'active', 0, '{}');
       }
     });
     server = app.listen(0, '127.0.0.1');

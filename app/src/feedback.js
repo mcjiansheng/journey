@@ -80,61 +80,70 @@ export function installFeedback() {
   if (installedCleanup) return installedCleanup;
   let frame = 0;
   let viewportFrame = 0;
-  let surface = null;
+  const surfaces = new Set();
   let latestPoint = null;
   let disposed = false;
   const root = document.documentElement;
   const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
 
+  function releaseSurface(surface) {
+    surface.removeAttribute('data-pointer-active');
+    // Keep the last light position while opacity fades out.
+    surfaces.delete(surface);
+  }
   function clearSurface() {
     cancelAnimationFrame(frame);
     frame = 0;
     latestPoint = null;
-    if (surface) {
-      surface.removeAttribute('data-pointer-active');
-      surface.style.removeProperty('--pointer-x');
-      surface.style.removeProperty('--pointer-y');
-      surface = null;
-    }
+    for (const surface of surfaces) releaseSurface(surface);
   }
   function pointerMove(event) {
     if (event.pointerType !== 'mouse' || !finePointer.matches || reducedMotion()) {
       clearSurface();
       return;
     }
-    const element = event.target instanceof Element ? event.target.closest(SURFACES) : null;
-    if (
-      !element ||
-      element.closest('[inert]') ||
-      element.matches(':disabled,[aria-disabled="true"]')
-    ) {
-      clearSurface();
-      return;
-    }
-    latestPoint = { element, x: event.clientX, y: event.clientY };
+    latestPoint = { x: event.clientX, y: event.clientY };
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
-      if (disposed || !latestPoint?.element.isConnected || reducedMotion()) {
+      if (disposed || !latestPoint || reducedMotion()) {
         clearSurface();
         return;
       }
-      const { element: next, x, y } = latestPoint;
-      if (surface !== next) {
-        clearSurface();
-        surface = next;
-        surface.setAttribute('data-pointer-active', '');
+      const { x, y } = latestPoint;
+      const dialogs = document.querySelectorAll('dialog[open]');
+      const scope = dialogs[dialogs.length - 1] || document;
+      const nearby = new Map();
+      for (const element of scope.querySelectorAll(SURFACES)) {
+        if (element.closest('[inert]') || element.matches(':disabled,[aria-disabled="true"]'))
+          continue;
+        const bounds = element.getBoundingClientRect();
+        if (
+          !bounds.width ||
+          !bounds.height ||
+          !element.checkVisibility({ visibilityProperty: true })
+        )
+          continue;
+        const distance = Math.hypot(
+          Math.max(bounds.left - x, 0, x - bounds.right),
+          Math.max(bounds.top - y, 0, y - bounds.bottom),
+        );
+        if (distance >= 48) continue;
+        nearby.set(element, { x: x - bounds.left, y: y - bounds.top, strength: 1 - distance / 48 });
       }
-      const bounds = next.getBoundingClientRect();
-      next.style.setProperty('--pointer-x', `${x - bounds.left}px`);
-      next.style.setProperty('--pointer-y', `${y - bounds.top}px`);
+      for (const surface of surfaces) if (!nearby.has(surface)) releaseSurface(surface);
+      // Read every rectangle before updating styles to avoid repeated layout flushes.
+      for (const [element, point] of nearby) {
+        element.style.setProperty('--pointer-x', `${point.x}px`);
+        element.style.setProperty('--pointer-y', `${point.y}px`);
+        element.style.setProperty('--pointer-strength', String(point.strength));
+        element.setAttribute('data-pointer-active', '');
+        surfaces.add(element);
+      }
     });
   }
   function pointerOut(event) {
-    if (!surface) return;
-    const next =
-      event.relatedTarget instanceof Element ? event.relatedTarget.closest(SURFACES) : null;
-    if (next !== surface) clearSurface();
+    if (!event.relatedTarget) clearSurface();
   }
   function clicked(event) {
     if (!event.isTrusted || event.defaultPrevented) return;

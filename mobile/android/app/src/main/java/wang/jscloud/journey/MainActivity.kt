@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.input.pointer.pointerInput
@@ -377,15 +378,16 @@ fun JourneyApp(s: JourneyStore, initialInvite: String?) {
                                         },
                                     )
                                 "费用" ->
-                                    LedgerScreen(s) { o ->
+                                    LedgerScreen(s, onViewActivity = { activity -> s.selectedDay = activity.o("payload").s("dayId"); s.highlightedActivity = activity.s("id"); s.page = "行程" }, edit = { o ->
                                         editing = o
                                         modal = "expense"
-                                    }
+                                    })
                                 "旅程设置" ->
                                     ManagementScreen(
                                         s,
                                         onInvite = { modal = "invites" },
                                         onRename = { modal = "rename" },
+                                        onSchedule = { modal = "schedule" },
                                     )
                             }
                         }
@@ -587,7 +589,7 @@ fun ItineraryScreen(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Heading("行程")
-        IconButton(onSchedule) { Icon(Icons.Outlined.DateRange, "调整日期") }
+        IconButton(onSchedule) { Icon(Icons.Outlined.DateRange, "调整日期与天数") }
     }
     Row(
         Modifier.horizontalScroll(rememberScrollState()),
@@ -616,20 +618,40 @@ fun ItineraryScreen(
     var sorting by remember(id) { mutableStateOf(false) }
     val positions = remember(id) { mutableMapOf<String, Float>() }
     var dragging by remember(id) { mutableStateOf<String?>(null) }
+    var dayMenu by remember { mutableStateOf(false) }
+    var swap by remember { mutableStateOf(false) }
     Row {
-        TextButton({ sorting = !sorting }) { Text(if (sorting) "完成排序" else "排序") }
-        if (sorting) Text("长按拖动", style = MaterialTheme.typography.bodySmall)
+        if (sorting) { Text("按住 ⋮⋮ 拖动调整顺序；有具体时间的安排会按时间自动排列", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall); TextButton({ sorting = false }) { Text("完成") } }
+        else Box {
+            IconButton({ dayMenu = true }) { Icon(Icons.Outlined.MoreHoriz, "当天菜单") }
+            DropdownMenu(dayMenu, { dayMenu = false }) {
+                DropdownMenuItem(text = { Text("调整顺序") }, onClick = { sorting = true; dayMenu = false })
+                DropdownMenuItem(text = { Text("与另一天交换") }, onClick = { swap = true; dayMenu = false })
+            }
+        }
     }
+    if (swap) AlertDialog(onDismissRequest = { swap = false }, title = { Text("与哪一天交换") }, text = { Column { days.filter { it.s("id") != id }.forEach { target -> TextButton({
+        s.action {
+            val moves = s.objects("activity").filter { it.s("state") == "active" && it.o("payload").s("dayId") in listOf(id, target.s("id")) }.map { obj("activityId" to it.s("id"), "dayId" to if (it.o("payload").s("dayId") == id) target.s("id") else id) }
+            val trip = s.snapshot!!.o("trip")
+            s.mutate("reschedule", trip.s("id"), patch = obj("startDate" to trip.opt("startDate"), "dayCount" to trip.optInt("dayCount"), "moves" to org.json.JSONArray(moves))); swap = false
+        }
+    }) { Text("第 ${target.o("payload").optInt("ordinal")} 天 · ${target.o("payload").s("date")}") } } } }, confirmButton = { TextButton({ swap = false }) { Text("取消") } })
     val rows = orderedActivities(s.objects(), id.orEmpty())
     val currentRows by rememberUpdatedState(rows)
     if (rows.isEmpty()) Panel { Text("这一天还没有安排，添上第一站吧。") }
     rows.forEachIndexed { i, o ->
         val p = o.o("payload")
-        RouteLink(s, rows.getOrNull(i - 1), o, onRoute, showEmpty = sorting)
+        val placeName = p.o("place").s("name")
+        val displayPlace = placeName.takeIf { it.isNotBlank() && it.trim() != p.s("title").trim() }
+        if (!sorting) RouteLink(s, rows.getOrNull(i - 1), o, onRoute, showEmpty = false)
         key(o.s("id")) {
         var distance by remember { mutableFloatStateOf(0f) }
         var startY by remember { mutableFloatStateOf(0f) }
-        Panel(Modifier.onGloballyPositioned { positions[o.s("id")] = it.positionInRoot().y }
+        val bringIntoView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+        LaunchedEffect(s.highlightedActivity) { if (s.highlightedActivity == o.s("id")) { kotlinx.coroutines.delay(100); bringIntoView.bringIntoView(); kotlinx.coroutines.delay(1000); s.highlightedActivity = null } }
+        Panel(Modifier.then(if (s.highlightedActivity == o.s("id")) Modifier.background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp)) else Modifier)
+            .bringIntoViewRequester(bringIntoView).onGloballyPositioned { positions[o.s("id")] = it.positionInRoot().y }
             .zIndex(if (dragging == o.s("id")) 1f else 0f)
             .graphicsLayer { translationY = if (dragging == o.s("id")) distance else 0f }
             .pointerInput(sorting, o.s("id"), p.o("time").s("mode")) {
@@ -655,10 +677,16 @@ fun ItineraryScreen(
                 Text(
                     "${i+1}  ${p.s("title")}",
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f), maxLines = if (sorting) 1 else Int.MAX_VALUE, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
 
+                if (sorting) {
+                    val time = if (p.o("time").s("mode") == "precise") p.o("time").s("start") else p.o("time").s("period")
+                    val details = listOfNotNull(time.takeIf { it.isNotBlank() }, displayPlace).joinToString(" · ")
+                    if (details.isNotEmpty()) Text(details, maxLines = 1, modifier = Modifier.weight(1f), overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                }
             }
+            if (!sorting) {
             val t = p.o("time")
             Text(
                 if (t.s("mode") == "precise")
@@ -669,8 +697,8 @@ fun ItineraryScreen(
                 else t.s("period", "时间灵活"),
                 color = MaterialTheme.colorScheme.primary,
             )
-            if (p.o("place").s("name").isNotEmpty()) Text("⌖ " + p.o("place").s("name"))
-            if (p.s("notes").isNotEmpty()) Text(p.s("notes"), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            if (displayPlace != null) Text("⌖ " + displayPlace)
+            if (!sorting && p.s("notes").isNotEmpty()) Text(p.s("notes"), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             if (p.s("url").isNotEmpty()) {
                 val ctx = LocalContext.current
                 TextButton({
@@ -680,7 +708,8 @@ fun ItineraryScreen(
                 }
             }
             if (dragging == o.s("id")) Text("拖动到新的位置", color = MaterialTheme.colorScheme.primary)
-            ObjectActions(s, o, onEdit = { onEdit(o) }, onMap = if (p.o("place").s("name").isNotBlank()) ({ s.page = "地图" }) else null)
+            if (!sorting) ObjectActions(s, o, onEdit = { onEdit(o) }, onMap = if (placeName.isNotBlank()) ({ s.page = "地图" }) else null)
+            }
         }
         }
     }

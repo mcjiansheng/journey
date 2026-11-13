@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Map, MapPin, Search, X } from 'lucide-react';
 import { searchPlaces } from '../amap.js';
+import FavoritePlacePicker from './FavoritePlacePicker.jsx';
 import './activity-place.css';
 
 const blankPlace = {
@@ -19,6 +20,7 @@ export default function ActivityPlaceField({
   place,
   destination,
   favorites,
+  presets = [],
   onChange,
   onCommit,
   onMap,
@@ -115,7 +117,7 @@ export default function ActivityPlaceField({
     <div
       className="field activity-place-field"
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
+        if (mode !== 'favorites' && !event.currentTarget.contains(event.relatedTarget)) {
           dismiss();
           onCommit(place);
         }
@@ -228,6 +230,7 @@ export default function ActivityPlaceField({
           type="button"
           className="text-button"
           aria-expanded={mode === 'favorites'}
+          aria-haspopup="dialog"
           onClick={() => {
             const show = mode !== 'favorites';
             dismiss();
@@ -251,23 +254,12 @@ export default function ActivityPlaceField({
         </button>
       </div>
       {mode === 'favorites' && (
-        <div className="activity-place-favorites">
-          {favorites.length ? (
-            favorites.map((favorite) => (
-              <button type="button" key={favorite.id} onClick={() => choose(favorite.payload)}>
-                <MapPin size={17} aria-hidden="true" />
-                <span>
-                  <strong>{favorite.payload.name}</strong>
-                  {favorite.payload.address && <small>{favorite.payload.address}</small>}
-                </span>
-              </button>
-            ))
-          ) : (
-            <p className="activity-place-status" role="status">
-              还没有收藏的地点。
-            </p>
-          )}
-        </div>
+        <FavoritePlacePicker
+          favorites={favorites}
+          presets={presets}
+          onChoose={choose}
+          onClose={dismiss}
+        />
       )}
     </div>
   );

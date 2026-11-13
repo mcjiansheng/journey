@@ -1229,10 +1229,11 @@ details[open] > summary {
     transform: rotate(360deg);
   }
 }
-.map-shell {
+.map-shell,
+.immersive-shell {
   position: relative;
 }
-.map-shell .trip-header {
+.immersive-shell .trip-header {
   position: absolute;
   z-index: 6;
   top: 18px;
@@ -1248,15 +1249,21 @@ details[open] > summary {
   padding: 0 20px;
   box-shadow: var(--shadow);
 }
-.map-shell .main-content {
+.immersive-shell .main-content {
   height: 100dvh;
   overflow: hidden;
 }
-.map-shell .workspace {
+.immersive-shell .workspace {
   height: 100dvh;
 }
 .map-content {
   position: relative;
+}
+.board-content {
+  position: relative;
+  overflow: hidden;
+  padding: 0 !important;
+  height: 100%;
 }
 .bottom-nav button {
   display: flex;
@@ -1423,7 +1430,9 @@ details[open] > summary {
   }
   .bottom-nav {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    /* 行程/地图/白板/费用/旅程设置 — five items must stay on one row; a wrapped
+       second row covers the add-activity FAB and blocks it on phones. */
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     position: fixed;
     bottom: calc(9px + env(safe-area-inset-bottom));
     left: 16px;
@@ -1648,7 +1657,7 @@ details[open] > summary {
   .login-wrap > .muted {
     font-size: var(--fs-caption);
   }
-  .map-shell .trip-header {
+  .immersive-shell .trip-header {
     top: calc(12px + env(safe-area-inset-top));
     left: 12px;
     right: 12px;
@@ -1657,7 +1666,7 @@ details[open] > summary {
     border-radius: var(--radius-lg);
     padding: 0 14px;
   }
-  .map-shell .bottom-nav {
+  .immersive-shell .bottom-nav {
     bottom: calc(9px + env(safe-area-inset-bottom));
   }
   .member-row {
@@ -2770,7 +2779,7 @@ body:has(> .site-filing),
     0 3px 13px var(--optical-shadow);
   font-weight: 600;
 }
-.app-shell:not(.map-shell) .trip-header {
+.app-shell:not(.immersive-shell) .trip-header {
   background: transparent;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -3030,33 +3039,16 @@ body:has(> .site-filing),
       box-shadow 200ms;
   }
   [data-pointer-active]::after {
-    opacity: 1;
-    box-shadow: inset 0 0 0 1px var(--pointer-edge);
+    opacity: var(--pointer-strength, 1);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--pointer-edge) calc(var(--pointer-strength, 1) * 100%), transparent);
   }
-  .primary[data-pointer-active]::after {
+  .primary::after {
     background: radial-gradient(
       120px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
       var(--pointer-highlight),
       transparent 80%
     );
-  }
-  :root[data-theme='dark'] [data-pointer-active]::after {
-    background: radial-gradient(
-      150px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
-      var(--pointer-highlight),
-      transparent 76%
-    );
-    box-shadow: inset 0 0 0 1px var(--pointer-edge);
-  }
-}
-@media (prefers-color-scheme: dark) and (hover: hover) and (pointer: fine) {
-  :root:not([data-theme='light']):not([data-theme='dark']) [data-pointer-active]::after {
-    background: radial-gradient(
-      150px circle at var(--pointer-x, 50%) var(--pointer-y, 50%),
-      var(--pointer-highlight),
-      transparent 76%
-    );
-    box-shadow: inset 0 0 0 1px var(--pointer-edge);
   }
 }
 :root[data-motion='true'] [data-pointer-active]::after {
@@ -3395,6 +3387,16 @@ html.has-modal body {
   .global-notice ~ .action-notice {
     bottom: calc(166px + env(safe-area-inset-bottom));
   }
+}
+/* 白板页底部是工具条：提示放到画布顶部居中，不挡操作栏。 */
+body:has(#stage) :is(.global-notice, .action-notice) {
+  top: calc(88px + env(safe-area-inset-top));
+  bottom: auto;
+  z-index: 1100;
+}
+body:has(#stage) .global-notice ~ .action-notice {
+  top: calc(148px + env(safe-area-inset-top));
+  bottom: auto;
 }
 
 .sr-only {

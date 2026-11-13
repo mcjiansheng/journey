@@ -183,11 +183,18 @@ export function formatMinutes(value) {
   const n = ((value % 1440) + 1440) % 1440;
   return `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
 }
+export function currencyFactor(currency) {
+  return (
+    10 **
+    new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions()
+      .maximumFractionDigits
+  );
+}
 export function money(amount, currency = 'CNY') {
   return amount === null || amount === undefined
     ? ''
     : new Intl.NumberFormat('zh-CN', { style: 'currency', currency }).format(
-        amount / (currency === 'JPY' ? 1 : 100),
+        amount / currencyFactor(currency),
       );
 }
 export function travelAdvice(previous, target, route) {

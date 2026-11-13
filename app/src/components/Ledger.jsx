@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Plus, Receipt, ArrowUpRight, MoreHorizontal } from 'lucide-react';
+import { Plus, Receipt, Link2, MoreHorizontal } from 'lucide-react';
 import { Modal, Field, Empty, money, active, id, errorMessage, currencyFactor } from './ui.jsx';
-import { visibleDays, dayLabel } from '../domain.js';
+import { visibleDays, timeLabel } from '../domain.js';
+import { linkedExpenseActivity, expenseDate, expenseTitle, expenseDateLabel } from '../expenses.js';
 import { ObjectActions } from './Itinerary.jsx';
+import { pinWidgetToBoard } from '../board-sync.js';
 import './editor-ledger.css';
 import ScrollableTabs from './ScrollableTabs.jsx';
 const groups = ['title', 'payment', 'notes', 'activityId', 'date'];
@@ -27,6 +29,7 @@ export function ExpenseEditor({
   object,
   objectId: providedId,
   initialPaymentStatus,
+  initialActivityId = null,
   onClose,
 }) {
   const scope = useRef(j.captureScope()).current;
@@ -40,8 +43,8 @@ export function ExpenseEditor({
     payment: { status: 'paid', amountMinor: null, currency: j.snapshot.trip.currency || 'CNY' },
     amount: '',
     notes: '',
-    activityId: null,
-    date: today(j.snapshot.trip.timezone),
+    activityId: initialActivityId,
+    date: null,
   }).current;
   const edited = useRef(new Set());
   edited.current = new Set(
@@ -156,7 +159,9 @@ export function ExpenseEditor({
         !Number.isSafeInteger(minor) ||
         Math.abs(Number(p.amount) * factor - minor) > 0.000001)
     )
-      return '请按所选币种填写有效金额。';
+      return factor === 1
+        ? `${p.payment.currency} 不含分位小数，请填写有效金额（整数，例如 1000）。`
+        : '请按所选币种填写有效金额（非负数字，最多 2 位小数，例如 99.50）。';
     if (p.payment.status === 'paid' && p.amount === '') return '请填写已支付金额。';
     return '';
   }
@@ -414,11 +419,41 @@ export function ExpenseEditor({
         <Field label="费用日期">
           <input
             type="date"
-            value={draft.date || ''}
+            value={expenseDate(j.snapshot, { payload: draft }) || ''}
             onChange={(e) => change('date', e.target.value || null)}
             onBlur={() => commit('date')}
           />
         </Field>
+        {draft.activityId &&
+          !draft.date &&
+          expenseDate(j.snapshot, { payload: draft }) &&
+          linkedExpenseActivity(j.snapshot, { payload: draft }) && (
+            <div className="editor-save-row">
+              <small className="muted">已按活动所在日填写</small>
+              <button
+                className="text-button small"
+                onClick={() => {
+                  const p = { ...draft, date: today(j.snapshot.trip.timezone) };
+                  setDraft(p);
+                  commit('date', p);
+                }}
+              >
+                改为付款当天（{today(j.snapshot.trip.timezone).slice(5).replace('-', '/')}）
+              </button>
+            </div>
+          )}
+        {draft.activityId && draft.date && (
+          <button
+            className="text-button small"
+            onClick={() => {
+              const p = { ...draft, date: null };
+              setDraft(p);
+              commit('date', p);
+            }}
+          >
+            跟随活动日期
+          </button>
+        )}
         <Field label="关联活动 · 选填">
           <select
             value={draft.activityId || ''}
@@ -459,7 +494,7 @@ export function ExpenseEditor({
 }
 export default function Ledger({
   journey: j,
-  onEditActivity,
+  onViewActivity,
   activityId = null,
   onClearActivityFilter,
 }) {
@@ -478,7 +513,10 @@ export default function Ledger({
   const totals = paid
     .filter(
       (o) =>
-        !dateFilter || (dateFilter === 'undated' ? !o.payload.date : o.payload.date === dateFilter),
+        !dateFilter ||
+        (dateFilter === 'undated'
+          ? !expenseDate(j.snapshot, o)
+          : expenseDate(j.snapshot, o) === dateFilter),
     )
     .reduce((a, o) => {
       const p = o.payload.payment;
@@ -490,24 +528,19 @@ export default function Ledger({
     ...new Set(
       [
         ...days.map((o) => o.payload.date),
-        ...expenses.map((o) => o.payload.date),
+        ...expenses.map((o) => expenseDate(j.snapshot, o)),
         dateFilter === 'undated' ? null : dateFilter,
       ].filter(Boolean),
     ),
   ].sort();
-  const dateLabel = (date) =>
-    date
-      ? new Intl.DateTimeFormat('zh-CN', {
-          month: '2-digit',
-          day: '2-digit',
-          weekday: 'short',
-          timeZone: 'UTC',
-        }).format(new Date(`${date}T12:00:00Z`))
-      : '未记录日期';
+  const dateLabel = (date) => expenseDateLabel(j.snapshot, date);
   const shown = (list) =>
     list.filter(
       (o) =>
-        !dateFilter || (dateFilter === 'undated' ? !o.payload.date : o.payload.date === dateFilter),
+        !dateFilter ||
+        (dateFilter === 'undated'
+          ? !expenseDate(j.snapshot, o)
+          : expenseDate(j.snapshot, o) === dateFilter),
     );
   function edit(objectId, status = null) {
     setPaying(status);
@@ -538,28 +571,27 @@ export default function Ledger({
         </div>
         <div className="expense-info">
           <button onClick={() => edit(o.id)} className="expense-title">
-            {o.payload.title ||
-              `${o.payload.payment.status === 'paid' ? '已支付' : '预计'} · ${money(o.payload.payment.amountMinor, o.payload.payment.currency)}`}
+            {expenseTitle(j.snapshot, o)}
           </button>
           {o.payload.notes && <p>{o.payload.notes}</p>}
           {o.payload.activityId &&
-            j.snapshot.objects.some(
-              (a) =>
-                a.id === o.payload.activityId &&
-                a.state === 'active' &&
-                j.snapshot.objects.some((d) => d.id === a.payload.dayId && d.state === 'active'),
-            ) && (
+            (linkedExpenseActivity(j.snapshot, o) ? (
               <button
                 className="text-button small"
-                onClick={() => {
-                  const a = j.snapshot.objects.find((a) => a.id === o.payload.activityId);
-                  if (a) onEditActivity(a);
-                }}
+                onClick={() => onViewActivity(linkedExpenseActivity(j.snapshot, o))}
               >
-                查看关联活动
-                <ArrowUpRight size={13} />
+                <Link2 size={13} />
+                {[
+                  linkedExpenseActivity(j.snapshot, o).payload.title,
+                  timeLabel(linkedExpenseActivity(j.snapshot, o).payload),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}{' '}
+                ›
               </button>
-            )}
+            ) : (
+              <small className="muted">关联活动已删除</small>
+            ))}
         </div>
         <div className="expense-trailing">
           <button className="expense-amount" onClick={() => edit(o.id)}>
@@ -587,7 +619,7 @@ export default function Ledger({
     ));
   }
   function groupedRows(list) {
-    const groups = Object.groupBy(list, (o) => o.payload.date || 'undated');
+    const groups = Object.groupBy(list, (o) => expenseDate(j.snapshot, o) || 'undated');
     return Object.keys(groups)
       .sort((a, b) => (a === 'undated' ? 1 : b === 'undated' ? -1 : a.localeCompare(b)))
       .map((date) => (
@@ -605,10 +637,18 @@ export default function Ledger({
         <div>
           <h1 className="sr-only">费用</h1>
         </div>
-        <button className="primary" onClick={() => edit(j.context.pendingExpenseId || id())}>
-          <Plus size={18} />
-          记一笔
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="secondary pin-to-board-button"
+            onClick={() => pinWidgetToBoard(j, { kind: 'expense' }, 'M')}
+          >
+            贴到白板
+          </button>
+          <button className="primary" onClick={() => edit(j.context.pendingExpenseId || id())}>
+            <Plus size={18} />
+            记一笔
+          </button>
+        </div>
       </div>
       {activityId && (
         <div className="ledger-activity-filter">
@@ -653,15 +693,10 @@ export default function Ledger({
               aria-pressed={dateFilter === date}
               onClick={() => setDateFilter(date)}
             >
-              {days.some((d) => d.payload.date === date)
-                ? dayLabel(
-                    days.find((d) => d.payload.date === date),
-                    j.snapshot.trip,
-                  )
-                : date.slice(5).replace('-', '/')}
+              {dateLabel(date)}
             </button>
           ))}
-          {expenses.some((o) => !o.payload.date) && (
+          {expenses.some((o) => !expenseDate(j.snapshot, o)) && (
             <button
               aria-pressed={dateFilter === 'undated'}
               onClick={() => setDateFilter('undated')}
@@ -721,6 +756,7 @@ export default function Ledger({
           objectId={editing}
           object={j.snapshot.objects.find((o) => o.id === editing)}
           initialPaymentStatus={paying}
+          initialActivityId={activityId}
           onClose={() => setEditing(undefined)}
         />
       )}

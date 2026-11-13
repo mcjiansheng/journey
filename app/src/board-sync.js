@@ -1,0 +1,790 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { openDB } from 'idb';
+import { api, onPresence, onTripChange, getDeviceId } from './sync.js';
+import { WIDGET_SIZES } from './board-widgets.js';
+import { cleanBoardStylePatch, nextBoardStyle } from './board.js';
+import { reconcilePending, mergeExpected, isStaleResponse } from './board-pending.js';
+
+let databasePromise = null;
+function getDb() {
+  return (databasePromise ||= openDB('journey-v1', 1, {
+    upgrade(d) {
+      if (!d.objectStoreNames.contains('kv')) {
+        d.createObjectStore('kv');
+      }
+    },
+  }));
+}
+
+export function normalizeBoardItem(item) {
+  if (!item) return item;
+  const p = item.payload || {};
+  const style = item.style ?? p.style ?? {};
+  const locked = Boolean(style.locked ?? item.locked);
+  const boardId = item.boardId ?? p.boardId;
+  const frame = item.frame ?? p.frame ?? { x: 0, y: 0, w: 100, h: 100, rotation: 0, scale: 1 };
+  const z = item.z ?? p.z ?? 0;
+  const content = item.content ?? p.content ?? {};
+  const linkedActivityId =
+    item.linkedActivityId !== undefined ? item.linkedActivityId : (p.linkedActivityId ?? null);
+  const createdBy = item.createdBy ?? p.createdBy;
+  return {
+    ...item,
+    boardId,
+    frame,
+    z,
+    content,
+    style,
+    locked,
+    linkedActivityId,
+    createdBy,
+    ...(item.payload
+      ? {
+          payload: {
+            ...p,
+            boardId,
+            frame,
+            z,
+            content,
+            style,
+            linkedActivityId,
+            createdBy,
+          },
+        }
+      : {}),
+  };
+}
+
+const ALLOWED_PATCH_KEYS = ['frame', 'z', 'content', 'style', 'linkedActivityId'];
+
+export function cleanBoardItemPatch(rawPatch) {
+  if (!rawPatch || typeof rawPatch !== 'object') return {};
+  const cleaned = {};
+  const source = rawPatch.payload ? { ...rawPatch.payload, ...rawPatch } : rawPatch;
+
+  let stylePatch = source.style ? { ...source.style } : undefined;
+  if ('locked' in source) {
+    stylePatch = { ...(stylePatch || {}), locked: Boolean(source.locked) };
+  }
+  if (stylePatch !== undefined) {
+    cleaned.style = cleanBoardStylePatch(stylePatch);
+  }
+
+  for (const k of ALLOWED_PATCH_KEYS) {
+    if (k === 'style') continue;
+    if (k in source && source[k] !== undefined) {
+      cleaned[k] = source[k];
+    }
+  }
+
+  if (cleaned.frame) {
+    cleaned.frame = {
+      x: cleaned.frame.x,
+      y: cleaned.frame.y,
+      w: cleaned.frame.w,
+      h: cleaned.frame.h,
+      rotation: cleaned.frame.rotation ?? 0,
+      scale: cleaned.frame.scale ?? 1,
+    };
+  }
+  return cleaned;
+}
+
+export async function readBoardCache(tripId, boardId) {
+  try {
+    const db = await getDb();
+    const key = `board:${tripId}:${boardId}`;
+    const cached = await db.get('kv', key);
+    if (cached && Array.isArray(cached.items)) {
+      return {
+        ...cached,
+        items: cached.items.map(normalizeBoardItem),
+      };
+    }
+    return cached || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeBoardCache(tripId, boardId, data) {
+  try {
+    const db = await getDb();
+    const key = `board:${tripId}:${boardId}`;
+    await db.put('kv', data, key);
+  } catch {
+    /* Ignore IDB quota or storage failure in background */
+  }
+}
+
+// Server limits (server/index.mjs): stills ≤ 1.5MB, GIFs ≤ 5MB, thumbnails ≤ 300KB.
+// Stay a little under them so a re-encode that lands right on the edge passes.
+const FULL_LIMIT = Math.round(1.4 * 1024 * 1024);
+const GIF_LIMIT = 5 * 1024 * 1024;
+const THUMB_LIMIT = 280 * 1024;
+
+function canvasBlob(canvas, type, quality) {
+  return new Promise((r) => canvas.toBlob(r, type, quality));
+}
+function drawScaled(img, w, h) {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(w));
+  canvas.height = Math.max(1, Math.round(h));
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+/**
+ * Re-encode until the file fits: lower quality first, then smaller sizes.
+ * `types` are tried in order; a browser that cannot encode one (Safari has no
+ * WebP encoder and returns PNG) falls through to the next.
+ */
+async function encodeUnder(img, { maxSide, types, limit }) {
+  const w0 = img.naturalWidth || img.width || 400;
+  const h0 = img.naturalHeight || img.height || 300;
+  let last = null;
+  for (const side of [maxSide, maxSide * 0.75, maxSide * 0.5, maxSide * 0.35, maxSide * 0.25]) {
+    const k = Math.min(1, side / Math.max(w0, h0));
+    const canvas = drawScaled(img, w0 * k, h0 * k);
+    for (const type of types) {
+      const lossy = type !== 'image/png';
+      for (const q of lossy ? [0.88, 0.76, 0.62, 0.5] : [undefined]) {
+        const blob = await canvasBlob(canvas, type, q);
+        if (!blob || blob.type !== type) break;
+        last = blob;
+        if (blob.size <= limit) return blob;
+      }
+    }
+  }
+  return last;
+}
+
+export async function processImageFile(file, { keepAlpha = false } = {}) {
+  const isGif = file.type === 'image/gif' || file.name?.toLowerCase().endsWith('.gif');
+  if (file.size > 40 * 1024 * 1024) throw new Error('图片文件过大（超过 40MB）');
+
+  // Outside the browser (tests): pass the file through.
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return {
+      fullBlob: file,
+      thumbBlob: file,
+      width: 400,
+      height: 300,
+      isGif,
+      mime: file.type || (isGif ? 'image/gif' : 'image/jpeg'),
+    };
+  }
+
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('这张图片无法读取，换一张试试'));
+      el.src = url;
+    });
+    const origW = img.naturalWidth || img.width || 400;
+    const origH = img.naturalHeight || img.height || 300;
+
+    // Thumbnail: a still (first frame for GIFs), always under the server limit.
+    const thumbBlob = await encodeUnder(img, {
+      maxSide: 400,
+      types: ['image/webp', 'image/jpeg'],
+      limit: THUMB_LIMIT,
+    });
+
+    // GIFs keep their animation when they fit; a larger one becomes a still
+    // picture instead of failing.
+    if (isGif && file.size <= GIF_LIMIT) {
+      return {
+        fullBlob: file,
+        thumbBlob,
+        width: origW,
+        height: origH,
+        isGif: true,
+        mime: 'image/gif',
+      };
+    }
+
+    const alpha = keepAlpha && /image\/(png|webp|gif)/.test(file.type);
+    // Small enough already: keep the original bytes (no quality loss).
+    if (
+      !isGif &&
+      file.size <= FULL_LIMIT &&
+      Math.max(origW, origH) <= 2048 &&
+      /image\/(png|jpeg|webp)/.test(file.type)
+    ) {
+      return {
+        fullBlob: file,
+        thumbBlob,
+        width: origW,
+        height: origH,
+        isGif: false,
+        mime: file.type,
+      };
+    }
+    const types = alpha ? ['image/webp', 'image/png'] : ['image/jpeg'];
+    const fullBlob = await encodeUnder(img, { maxSide: 2048, types, limit: FULL_LIMIT });
+    if (!fullBlob || fullBlob.size > FULL_LIMIT) throw new Error('图片压缩后仍然太大，换一张试试');
+    return {
+      fullBlob,
+      thumbBlob,
+      width: origW,
+      height: origH,
+      isGif: false,
+      mime: fullBlob.type,
+      converted: isGif,
+    };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+export async function uploadAsset(tripId, file, { keepAlpha = false } = {}) {
+  const processed = await processImageFile(file, { keepAlpha });
+  const assetId = crypto.randomUUID();
+
+  // Upload full variant
+  await api(`/api/trips/${tripId}/assets/${assetId}?variant=full`, {
+    method: 'PUT',
+    raw: true,
+    headers: { 'Content-Type': processed.mime },
+    body: processed.fullBlob,
+  });
+
+  // Upload thumb variant
+  await api(`/api/trips/${tripId}/assets/${assetId}?variant=thumb`, {
+    method: 'PUT',
+    raw: true,
+    headers: { 'Content-Type': processed.thumbBlob?.type || 'image/webp' },
+    body: processed.thumbBlob,
+  });
+
+  return {
+    assetId,
+    width: processed.width,
+    height: processed.height,
+    isGif: processed.isGif,
+    mime: processed.mime,
+    converted: Boolean(processed.converted),
+  };
+}
+
+export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
+  const [items, setItems] = useState([]);
+  const [cursor, setCursor] = useState(0);
+  const [epoch, setEpoch] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [peerPresences, setPeerPresences] = useState(new Map());
+  const [presenceOnline, setPresenceOnline] = useState(true);
+
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const cursorRef = useRef(cursor);
+  cursorRef.current = cursor;
+  const epochRef = useRef(epoch);
+  epochRef.current = epoch;
+  const pendingRef = useRef(new Map());
+  const expectLocal = useCallback((id, expect) => {
+    const prev = pendingRef.current.get(id);
+    pendingRef.current.set(id, { expect: mergeExpected(prev?.expect, expect), at: Date.now() });
+  }, []);
+
+  const presenceTimerRef = useRef(null);
+  const lastPresenceSendRef = useRef(0);
+  const consecutivePresenceErrorsRef = useRef(0);
+  const pendingPresenceRef = useRef(null);
+  // Selection and editing persist across partial updates and the heartbeat,
+  // so a live-frame or heartbeat update never clears them for peers.
+  const presenceStateRef = useRef({ selected: [], editing: null, live: null });
+
+  // Load from IndexedDB and server. The cached cursor may sit on a previous
+  // process epoch (server restart, deploy, backup restore). In that case the
+  // incremental response is not a complete board, so refetch without `since`,
+  // replace the cache, and only then trust it again.
+  const loadData = useCallback(async () => {
+    if (!tripId || !boardId) return;
+    try {
+      const itemsUrl = (since) =>
+        `/api/trips/${tripId}/boards/${boardId}/items${since ? `?since=${since}` : ''}`;
+      const cached = await readBoardCache(tripId, boardId);
+      if (cached && Array.isArray(cached.items)) {
+        const normCached = cached.items.map(normalizeBoardItem);
+        setItems(normCached);
+        setCursor(cached.cursor || 0);
+        setEpoch(cached.epoch || null);
+        itemsRef.current = normCached;
+        cursorRef.current = cached.cursor || 0;
+        epochRef.current = cached.epoch || null;
+      }
+
+      const since = cached?.cursor ? cached.cursor : 0;
+      let res = await api(itemsUrl(since));
+      let replace = !cached || !Array.isArray(cached.items) || !since;
+      if (
+        res &&
+        cached &&
+        Array.isArray(cached.items) &&
+        Number(res.epoch) !== Number(cached.epoch)
+      ) {
+        res = await api(itemsUrl(0));
+        replace = true;
+      }
+
+      if (res) {
+        const fromServer = replace
+          ? (res.items || []).map(normalizeBoardItem)
+          : Array.from(
+              (() => {
+                const map = new Map();
+                for (const item of cached.items) {
+                  const norm = normalizeBoardItem(item);
+                  map.set(norm.id, norm);
+                }
+                for (const item of res.items || []) {
+                  const norm = normalizeBoardItem(item);
+                  map.set(norm.id, norm);
+                }
+                return map;
+              })().values(),
+            );
+        const merged = reconcilePending(fromServer, itemsRef.current, pendingRef.current);
+
+        setItems(merged);
+        setCursor(res.cursor || 0);
+        setEpoch(res.epoch || 0);
+        itemsRef.current = merged;
+        cursorRef.current = res.cursor || 0;
+        epochRef.current = res.epoch || 0;
+
+        await writeBoardCache(tripId, boardId, {
+          cursor: res.cursor || 0,
+          epoch: res.epoch || 0,
+          items: merged,
+        });
+      }
+    } catch {
+      /* If offline, cached items remain available */
+    } finally {
+      setLoading(false);
+    }
+  }, [tripId, boardId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Listen to trip change notifications from SSE
+  useEffect(() => {
+    const unsub = onTripChange(async () => {
+      if (!tripId || !boardId) return;
+      try {
+        const itemsUrl = (since) =>
+          `/api/trips/${tripId}/boards/${boardId}/items${since ? `?since=${since}` : ''}`;
+        const since = cursorRef.current || 0;
+        let res = await api(itemsUrl(since));
+        if (!res) return;
+        // Every change event starts its own request; an answer that arrives
+        // after a newer one must not put older copies back.
+        if (isStaleResponse(res, cursorRef.current, epochRef.current)) return;
+
+        // An epoch change means the server was restarted/restored. The
+        // incremental payload only contains changed items, never replace the
+        // whole board with it; refetch the complete board instead.
+        let merged;
+        if (since && epochRef.current != null && Number(res.epoch) === Number(epochRef.current)) {
+          const map = new Map(itemsRef.current.map((it) => [it.id, normalizeBoardItem(it)]));
+          for (const item of res.items || []) {
+            const norm = normalizeBoardItem(item);
+            map.set(norm.id, norm);
+          }
+          merged = Array.from(map.values());
+        } else if (since && Number(res.epoch) !== Number(epochRef.current)) {
+          res = await api(itemsUrl(0));
+          merged = (res?.items || []).map(normalizeBoardItem);
+        } else {
+          merged = (res.items || []).map(normalizeBoardItem);
+        }
+        merged = reconcilePending(merged, itemsRef.current, pendingRef.current);
+
+        setItems(merged);
+        setCursor(res.cursor || 0);
+        setEpoch(res.epoch || 0);
+        itemsRef.current = merged;
+        cursorRef.current = res.cursor || 0;
+        epochRef.current = res.epoch || 0;
+
+        await writeBoardCache(tripId, boardId, {
+          cursor: res.cursor || 0,
+          epoch: res.epoch || 0,
+          items: merged,
+        });
+      } catch {
+        /* Ignore transient SSE refresh errors */
+      }
+    });
+    return unsub;
+  }, [tripId, boardId]);
+
+  // Listen to presence events from SSE
+  useEffect(() => {
+    const unsub = onPresence((data) => {
+      if (data.boardId && data.boardId !== boardId) return;
+      const key = `${data.userId}:${data.deviceId}`;
+      setPeerPresences((prev) => {
+        const next = new Map(prev);
+        if (data.leave) {
+          next.delete(key);
+        } else {
+          next.set(key, { ...data, at: data.at || Date.now() });
+        }
+        return next;
+      });
+    });
+
+    // Clean up stale presences every 5 seconds
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setPeerPresences((prev) => {
+        let changed = false;
+        const next = new Map(prev);
+        for (const [k, p] of next.entries()) {
+          if (now - (p.at || 0) > 15000) {
+            next.delete(k);
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, 5000);
+
+    return () => {
+      unsub();
+      clearInterval(interval);
+    };
+  }, [boardId]);
+
+  // Upstream presence
+  const sendPresence = useCallback(
+    async (payload, { immediate = false } = {}) => {
+      if (!tripId || !boardId) return;
+      const devId = getDeviceId?.() || 'unknown-device';
+      const state = presenceStateRef.current;
+      if ('selected' in payload) state.selected = payload.selected || [];
+      if ('editing' in payload) state.editing = payload.editing ?? null;
+      if ('live' in payload) state.live = payload.live ?? null;
+      const body = {
+        deviceId: devId,
+        selected: state.selected.slice(0, 20),
+        editing: state.editing,
+        live: state.live,
+        ...(payload.leave ? { leave: true } : {}),
+      };
+
+      pendingPresenceRef.current = body;
+      const now = Date.now();
+      const elapsed = now - lastPresenceSendRef.current;
+
+      const doSend = async () => {
+        if (!pendingPresenceRef.current) return;
+        const toSend = pendingPresenceRef.current;
+        pendingPresenceRef.current = null;
+        lastPresenceSendRef.current = Date.now();
+        try {
+          await api(`/api/trips/${tripId}/boards/${boardId}/presence`, {
+            method: 'POST',
+            body: toSend,
+          });
+          consecutivePresenceErrorsRef.current = 0;
+          setPresenceOnline(true);
+        } catch (e) {
+          if (e.code === 'PRESENCE_RATE') return;
+          consecutivePresenceErrorsRef.current++;
+          if (consecutivePresenceErrorsRef.current >= 3) {
+            setPresenceOnline(false);
+          }
+        }
+      };
+
+      if (immediate || elapsed >= 80) {
+        clearTimeout(presenceTimerRef.current);
+        await doSend();
+      } else {
+        clearTimeout(presenceTimerRef.current);
+        presenceTimerRef.current = setTimeout(doSend, 80 - elapsed);
+      }
+    },
+    [tripId, boardId],
+  );
+
+  // Heartbeat presence every 5 seconds
+  useEffect(() => {
+    const heartbeat = setInterval(() => {
+      if (document.visibilityState === 'visible' && !loading) {
+        sendPresence({}, { immediate: true });
+      }
+    }, 5000);
+    return () => clearInterval(heartbeat);
+  }, [sendPresence, loading]);
+
+  // Leave presence on unmount
+  useEffect(() => {
+    return () => {
+      sendPresence({ leave: true }, { immediate: true });
+    };
+  }, [sendPresence]);
+
+  // Operations
+  const addBoardItem = useCallback(
+    async (itemData) => {
+      const now = Date.now();
+      const id = itemData.id || crypto.randomUUID();
+      const newItem = normalizeBoardItem({
+        id,
+        tripId,
+        boardId,
+        createdBy: currentUserId,
+        createdAt: now,
+        updatedAt: now,
+        state: 'active',
+        generation: 0,
+        ...itemData,
+      });
+
+      expectLocal(id, { state: 'active' });
+      // Keep the ref in step right away: a poll merging before the next render
+      // (or an eraser/undo acting on the new item) must already see it.
+      itemsRef.current = [...itemsRef.current, newItem];
+      setItems((prev) => {
+        const next = [...prev, newItem];
+        writeBoardCache(tripId, boardId, {
+          cursor: cursorRef.current,
+          epoch: epochRef.current,
+          items: next,
+        });
+        return next;
+      });
+
+      if (mutate) {
+        await mutate({
+          kind: 'create',
+          objectType: 'boardItem',
+          objectId: id,
+          patch: {
+            boardId,
+            content: newItem.content,
+            style: newItem.style || {},
+            frame: newItem.frame,
+            z: newItem.z || 0,
+            linkedActivityId: newItem.linkedActivityId || null,
+          },
+        });
+      }
+      return newItem;
+    },
+    [tripId, boardId, currentUserId, mutate],
+  );
+
+  const patchBoardItem = useCallback(
+    async (itemId, patch, { replaceStyle = false } = {}) => {
+      const now = Date.now();
+      const target = itemsRef.current.find((it) => it.id === itemId);
+      const replace = replaceStyle && Boolean(patch.style);
+      const styleWithLock = nextBoardStyle(target?.style, patch, { replace });
+      const patchToClean = {
+        ...patch,
+        ...(styleWithLock ? { style: styleWithLock } : {}),
+      };
+      const cleaned = cleanBoardItemPatch(patchToClean);
+      const updatedItem = target
+        ? normalizeBoardItem({
+            ...target,
+            ...cleaned,
+            content: cleaned.content
+              ? { ...(target.content || {}), ...cleaned.content }
+              : target.content,
+            style: cleaned.style
+              ? replace
+                ? cleaned.style
+                : { ...(target.style || {}), ...cleaned.style }
+              : target.style,
+            frame: cleaned.frame ? { ...(target.frame || {}), ...cleaned.frame } : target.frame,
+            updatedAt: now,
+          })
+        : null;
+      if (updatedItem) {
+        expectLocal(itemId, cleaned);
+        itemsRef.current = itemsRef.current.map((it) => (it.id === itemId ? updatedItem : it));
+      }
+      setItems((prev) => {
+        const next = prev.map((it) => (it.id === itemId && updatedItem ? updatedItem : it));
+        writeBoardCache(tripId, boardId, {
+          cursor: cursorRef.current,
+          epoch: epochRef.current,
+          items: next,
+        });
+        return next;
+      });
+
+      if (mutate && updatedItem) {
+        await mutate({
+          kind: 'patch',
+          objectType: 'boardItem',
+          objectId: itemId,
+          patch: cleaned,
+        });
+      }
+      return updatedItem;
+    },
+    [tripId, boardId, mutate],
+  );
+
+  const deleteBoardItem = useCallback(
+    async (itemId) => {
+      const target = itemsRef.current.find((it) => it.id === itemId);
+      if (target) {
+        expectLocal(itemId, { state: 'deleted' });
+        itemsRef.current = itemsRef.current.map((it) =>
+          it.id === itemId ? { ...it, state: 'deleted', generation: (it.generation || 0) + 1 } : it,
+        );
+      }
+      setItems((prev) => {
+        const next = prev.map((it) =>
+          it.id === itemId
+            ? {
+                ...it,
+                state: 'deleted',
+                generation: (it.generation || 0) + 1,
+                updatedAt: Date.now(),
+              }
+            : it,
+        );
+        writeBoardCache(tripId, boardId, {
+          cursor: cursorRef.current,
+          epoch: epochRef.current,
+          items: next,
+        });
+        return next;
+      });
+
+      if (mutate && target) {
+        await mutate({
+          kind: 'delete',
+          objectType: 'boardItem',
+          objectId: itemId,
+          generation: target.generation || 0,
+        });
+      }
+    },
+    [tripId, boardId, mutate],
+  );
+
+  const restoreBoardItem = useCallback(
+    async (itemId) => {
+      const target = itemsRef.current.find((it) => it.id === itemId);
+      if (target) {
+        expectLocal(itemId, { state: 'active' });
+        itemsRef.current = itemsRef.current.map((it) =>
+          it.id === itemId ? { ...it, state: 'active', generation: (it.generation || 0) + 1 } : it,
+        );
+      }
+      setItems((prev) => {
+        const next = prev.map((it) =>
+          it.id === itemId
+            ? {
+                ...it,
+                state: 'active',
+                generation: (it.generation || 0) + 1,
+                updatedAt: Date.now(),
+              }
+            : it,
+        );
+        writeBoardCache(tripId, boardId, {
+          cursor: cursorRef.current,
+          epoch: epochRef.current,
+          items: next,
+        });
+        return next;
+      });
+
+      if (mutate && target) {
+        await mutate({
+          kind: 'restore',
+          objectType: 'boardItem',
+          objectId: itemId,
+          generation: target.generation || 0,
+        });
+      }
+    },
+    [tripId, boardId, mutate],
+  );
+
+  const activeItems = items.filter((it) => it.state !== 'deleted');
+  const deletedItems = items
+    .filter((it) => it.state === 'deleted')
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  return {
+    items,
+    activeItems,
+    deletedItems,
+    loading,
+    cursor,
+    peerPresences,
+    presenceOnline,
+    addBoardItem,
+    patchBoardItem,
+    deleteBoardItem,
+    restoreBoardItem,
+    sendPresence,
+    uploadAsset: (file, options) => uploadAsset(tripId, file, options),
+    reload: loadData,
+  };
+}
+
+export async function pinWidgetToBoard(journey, content, size = 'M') {
+  const [w, h] = WIDGET_SIZES[size] || [352, 168];
+  const boards = (journey.snapshot?.objects || []).filter(
+    (x) => x.kind === 'board' && x.state === 'active',
+  );
+  let boardId = boards[0]?.id || 'default-board';
+  const itemId = crypto.randomUUID();
+  const now = Date.now();
+  const newItem = normalizeBoardItem({
+    id: itemId,
+    tripId: journey.snapshot.trip.id,
+    boardId,
+    content: { type: 'widget', ...content },
+    style: { size },
+    frame: { x: 200, y: 150, w, h, scale: 1 },
+    z: 1,
+    state: 'active',
+    generation: 0,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const cached = (await readBoardCache(journey.snapshot.trip.id, boardId)) || {
+    cursor: 0,
+    epoch: 0,
+    items: [],
+  };
+  await writeBoardCache(journey.snapshot.trip.id, boardId, {
+    ...cached,
+    items: [...(cached.items || []), newItem],
+  });
+
+  await journey.mutate({
+    kind: 'create',
+    objectType: 'boardItem',
+    objectId: itemId,
+    patch: {
+      boardId,
+      content: { type: 'widget', ...content },
+      style: { size },
+      frame: { x: 200, y: 150, w, h, scale: 1 },
+      z: 1,
+    },
+  });
+  journey.notify?.({ message: '已贴到白板' });
+  journey.setContext({ page: 'board', board: { boardId } });
+}

@@ -66,6 +66,7 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
         private set
 
     var page by mutableStateOf("行程")
+    var highlightedActivity by mutableStateOf<String?>(null)
     var selectedDay by mutableStateOf<String?>(null)
     var pending by mutableStateOf<List<JSONObject>>(emptyList())
         private set

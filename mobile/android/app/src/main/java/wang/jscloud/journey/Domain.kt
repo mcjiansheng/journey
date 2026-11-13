@@ -2,6 +2,9 @@ package wang.jscloud.journey
 
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.net.IDN
+import java.net.URI
+import java.net.URL
 import java.util.Currency
 import kotlin.math.*
 import org.json.JSONArray
@@ -27,6 +30,32 @@ fun JSONObject.merge(other: JSONObject) {
 
 fun planDayId(tripId: String, date: String?, ordinal: Int) =
     if (date != null) "plan-day-$tripId-date-$date" else "plan-day-$tripId-ordinal-$ordinal"
+
+private val activityLinkScheme = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:")
+private val activityLinkHostWithPort = Regex("""^[^\s:/?#]+\.[^\s:/?#]+:[0-9]+(?:[/?#]|$)""")
+
+internal fun normalizeActivityLink(input: String): Result<String> {
+    val trimmed = input.trim()
+    if (trimmed.isEmpty()) return Result.success("")
+    val formatError = "链接格式不对，例如 ehall.nju.edu.cn"
+    val scheme = if (activityLinkHostWithPort.containsMatchIn(trimmed)) null else activityLinkScheme.find(trimmed)?.value
+    val value = when {
+        scheme != null && scheme.lowercase() in listOf("http:", "https:") ->
+            scheme.lowercase() + trimmed.drop(scheme.length)
+        scheme != null ->
+            return Result.failure(IllegalArgumentException("请输入 http 或 https 链接。"))
+        '.' in trimmed && trimmed.none(Char::isWhitespace) -> "https://$trimmed"
+        else -> return Result.failure(IllegalArgumentException(formatError))
+    }
+    val host = runCatching {
+        val url = URL(value)
+        URI(url.protocol, null, IDN.toASCII(url.host), url.port, null, null, null).host
+    }.getOrNull()
+    if (host.isNullOrBlank()) {
+        return Result.failure(IllegalArgumentException(formatError))
+    }
+    return Result.success(value)
+}
 
 fun orderedActivities(objects: List<JSONObject>, dayId: String): List<JSONObject> {
     val rows =
@@ -219,7 +248,14 @@ fun projectSnapshot(snapshot: JSONObject, queue: List<JSONObject>, userId: Strin
                 "patch" ->
                     if (target != null) {
                         if (target === trip) target.merge(op.o("patch"))
-                        else target.o("payload").merge(op.o("patch"))
+                        else {
+                            if (target.s("kind") == "markPreset" && (op.o("patch").has("icon") || op.o("patch").has("color"))) {
+                                val old = target.o("payload")
+                                val patch = op.o("patch")
+                                rows.filter { it.s("kind") == "favorite" && it.o("payload").o("mark").s("icon") == old.s("icon") && it.o("payload").o("mark").s("color") == old.s("color") }.forEach { it.o("payload").put("mark", obj("icon" to patch.s("icon", old.s("icon")), "color" to patch.s("color", old.s("color")))) }
+                            }
+                            target.o("payload").merge(op.o("patch"))
+                        }
                     }
                 "delete",
                 "restore" ->

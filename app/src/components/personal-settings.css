@@ -394,9 +394,11 @@
   }
 }
 @media (max-width: 760px) {
-  .app-shell .trip-header .header-right,
-  .app-shell .trip-header .header-right:has(.sync-status:not(.synced)) {
+  .app-shell .trip-header .header-right {
     grid-template-columns: 28px auto 40px;
+  }
+  .app-shell .trip-header .header-right:has(.sync-status:not(.synced)) {
+    grid-template-columns: auto auto 40px;
   }
   .app-shell .trip-header .my-settings-button {
     margin-left: 4px;

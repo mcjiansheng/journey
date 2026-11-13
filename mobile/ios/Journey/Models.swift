@@ -180,6 +180,34 @@ enum JourneyDate {
   }
 }
 
+enum ActivityLink {
+  static func normalize(_ input: String) throws -> String {
+    let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.isEmpty { return "" }
+    let formatError = APIError(message: "链接格式不对，例如 ehall.nju.edu.cn")
+    let value: String
+    let hostWithPort = trimmed.range(
+      of: #"^[^\s:/?#]+\.[^\s:/?#]+:[0-9]+(?:[/?#]|$)"#, options: .regularExpression)
+    if hostWithPort == nil,
+      let range = trimmed.range(of: #"^[a-zA-Z][a-zA-Z0-9+.-]*:"#, options: .regularExpression)
+    {
+      let scheme = trimmed[range].lowercased()
+      guard scheme == "http:" || scheme == "https:" else {
+        throw APIError(message: "请输入 http 或 https 链接。")
+      }
+      value = scheme + trimmed[range.upperBound...]
+    } else if trimmed.contains("."), trimmed.rangeOfCharacter(from: .whitespacesAndNewlines) == nil {
+      value = "https://" + trimmed
+    } else {
+      throw formatError
+    }
+    guard let host = URLComponents(string: value)?.host, !host.isEmpty,
+      host.rangeOfCharacter(from: .whitespacesAndNewlines) == nil
+    else { throw formatError }
+    return value
+  }
+}
+
 enum ActivityOrder {
   static func ordered(_ objects: [JSON], dayID: String) -> [JSON] {
     let rows = objects.filter {
@@ -292,6 +320,11 @@ enum SnapshotProjection {
       guard oid == tid || index != nil else { continue }
       var target = oid == tid ? trip : rows[index!]
       if kind == "patch" {
+        if target["kind"].string == "markPreset", !b["patch"]["icon"].isNull || !b["patch"]["color"].isNull {
+          let old = JSON.object(["icon": target["payload"]["icon"], "color": target["payload"]["color"]])
+          let next = JSON.object(["icon": b["patch"]["icon"].isNull ? old["icon"] : b["patch"]["icon"], "color": b["patch"]["color"].isNull ? old["color"] : b["patch"]["color"]])
+          for i in rows.indices where rows[i]["kind"].string == "favorite" && rows[i]["payload"]["mark"] == old { rows[i]["payload"]["mark"] = next }
+        }
         for (k, v) in b["patch"].dictionary {
           if oid == tid { target[k] = v } else { target["payload"][k] = v }
         }
@@ -428,5 +461,36 @@ enum TripCreationDate {
     return civil.dateComponents(
       [.day], from: civil.startOfDay(for: start), to: civil.startOfDay(for: end)
     ).day! + 1
+  }
+}
+
+struct ClusterPoint {
+  var id: String
+  var x: Double
+  var y: Double
+  var mark: String
+  var priority: Int = 0
+}
+enum FavoriteClusters {
+  static func groups(_ points: [ClusterPoint], previous: [[String]] = []) -> [[String]] {
+    var groups = points.sorted { $0.priority == $1.priority ? $0.id < $1.id : $0.priority > $1.priority }.map { [$0] }
+    for same in [true, false] {
+      var i = 0
+      while i < groups.count {
+        var j = i + 1
+        while j < groups.count {
+          let a = groups[i], b = groups[j], all = a + b
+          let retained = previous.contains { group in all.allSatisfy { group.contains($0.id) } }
+          let threshold: Double = same ? (retained ? 40 : 34) : (retained ? 30 : 24)
+          let ax = a.map(\.x).reduce(0,+) / Double(a.count), ay = a.map(\.y).reduce(0,+) / Double(a.count)
+          let bx = b.map(\.x).reduce(0,+) / Double(b.count), by = b.map(\.y).reduce(0,+) / Double(b.count)
+          if all.allSatisfy({ $0.priority == 0 }) && (!same || Set(all.map(\.mark)).count == 1) && hypot(ax-bx, ay-by) < threshold {
+            groups[i] = all; groups.remove(at: j)
+          } else { j += 1 }
+        }
+        i += 1
+      }
+    }
+    return groups.map { $0.map(\.id) }
   }
 }

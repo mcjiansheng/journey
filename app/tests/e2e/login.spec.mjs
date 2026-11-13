@@ -92,6 +92,9 @@ test('password visibility, recoverable login, registration and subsequent login'
  await expect(page.getByLabel('手机号或邮箱')).toHaveValue(identifier);await expect(page.getByLabel('密码',{exact:true})).toHaveValue(password);
  await page.getByRole('button',{name:'创建账号',exact:true}).click();await expect(page.locator('.login-form [role=alert]')).toHaveCount(0);
  await expect(page.getByLabel('密码',{exact:true})).toHaveAttribute('autocomplete','new-password');await page.getByLabel('你的称呼').fill('一起出发');
+ await page.getByLabel('密码',{exact:true}).fill('1234567');await page.getByRole('button',{name:'创建账号并继续'}).click();
+ await expect(page.getByText('密码长度至少需 10 个字符',{exact:true})).toBeVisible();await expect(page.getByLabel('密码',{exact:true})).toHaveAttribute('aria-invalid','true');
+ await page.getByLabel('密码',{exact:true}).fill(password);await expect(page.getByText('密码长度至少需 10 个字符',{exact:true})).toHaveCount(0);
  const registrations=[];page.on('request',request=>{if(request.url().endsWith('/api/auth/register'))registrations.push(request.postDataJSON())});
  await page.getByRole('button',{name:'创建账号并继续'}).click();await expect(page.getByLabel('确认密码',{exact:true})).toBeFocused();
  await page.getByLabel('确认密码',{exact:true}).fill('DifferentPassword!');await page.getByRole('button',{name:'创建账号并继续'}).click();

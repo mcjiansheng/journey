@@ -1,4 +1,5 @@
 import ScrollableTabs from './ScrollableTabs.jsx';
+import DateRangePicker from './DateRangePicker.jsx';
 import { reducedMotion } from '../usePageNavigation.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
@@ -20,8 +21,10 @@ import {
   UserMinus,
   UserPlus,
   LockKeyhole,
+  Link,
 } from 'lucide-react';
 import { Field, Modal, Empty, AsyncButton, active, id, errorMessage, money } from './ui.jsx';
+import { pinWidgetToBoard } from '../board-sync.js';
 import {
   visibleDays,
   outsideDays,
@@ -33,6 +36,8 @@ import {
 } from '../domain.js';
 import { estimateRoute, searchPlaces } from '../amap.js';
 import './itinerary.css';
+import { dateAdd } from '../domain.js';
+import { reschedulePlan } from '../reschedule.js';
 
 const routeEstimates = new Map();
 const located = (place) => [place?.lng, place?.lat].every(Number.isFinite);
@@ -130,7 +135,9 @@ export function ObjectActions({ journey: j, object: o, prominent = false, onDele
   const label = direct
     ? deleted
       ? '恢复'
-      : '删除'
+      : o.kind === 'day'
+        ? '删除这一天'
+        : '删除'
     : deleted
       ? expression.wishRestore
         ? '撤回恢复意见'
@@ -143,21 +150,34 @@ export function ObjectActions({ journey: j, object: o, prominent = false, onDele
     <div className={`object-actions${prominent ? ' prominent-actions' : ''}`}>
       {children}
       {!deleted && o.kind === 'activity' && (
-        <button
-          className="text-button"
-          disabled={pending}
-          onClick={() =>
-            perform({
-              objectId: o.id,
-              kind: 'express',
-              generation: o.generation,
-              expression: { notParticipating: !expression.notParticipating },
-            })
-          }
-        >
-          {expression.notParticipating ? <UserPlus size={16} /> : <UserMinus size={16} />}{' '}
-          {expression.notParticipating ? '重新参加' : '我不参加'}
-        </button>
+        <>
+          <button
+            className="text-button"
+            disabled={pending}
+            onClick={() =>
+              perform({
+                objectId: o.id,
+                kind: 'express',
+                generation: o.generation,
+                expression: { notParticipating: !expression.notParticipating },
+              })
+            }
+          >
+            {expression.notParticipating ? <UserPlus size={16} /> : <UserMinus size={16} />}{' '}
+            {expression.notParticipating ? '重新参加' : '我不参加'}
+          </button>
+          <button
+            className="text-button pin-to-board-button"
+            disabled={pending}
+            onClick={(event) => {
+              const d = event.currentTarget.closest('details');
+              if (d) d.open = false;
+              pinWidgetToBoard(j, { kind: 'activity', activityId: o.id }, 'M');
+            }}
+          >
+            贴到白板
+          </button>
+        </>
       )}
       <button
         className={
@@ -398,180 +418,187 @@ function RouteEditor({ journey: j, from, to, object, estimate, onClose }) {
 }
 
 export function Reschedule({ journey: j, onClose }) {
-  const trip = j.snapshot.trip,
-    days = active(j.snapshot, 'day'),
-    visible = visibleDays(j.snapshot);
-  const activities = active(j.snapshot, 'activity').filter((a) =>
-    days.some((d) => d.id === a.payload.dayId),
-  );
+  const trip = j.snapshot.trip;
   const [startDate, setStart] = useState(trip.startDate || ''),
     [count, setCount] = useState(trip.dayCount || 1),
-    [selected, setSelected] = useState(new Set()),
+    [step, setStep] = useState(1),
+    [selectingRange, setSelectingRange] = useState(false),
+    [strategy, setStrategy] = useState('move'),
     [targets, setTargets] = useState({}),
-    [error, setError] = useState(''),
-    [mode, setMode] = useState('dates'),
-    [source, setSource] = useState(visible[0]?.id || ''),
-    [destination, setDestination] = useState(visible[1]?.id || '');
-  function originalOrdinal(o) {
-    const d = days.find((d) => d.id === o.payload.dayId);
-    return trip.startDate && d?.payload.date
-      ? Math.round((Date.parse(d.payload.date) - Date.parse(trip.startDate)) / 86400000) + 1
-      : d?.payload.ordinal || 1;
-  }
-  function ordinal(o) {
-    return targets[o.id] || Math.max(1, Math.min(Number(count) || 1, originalOrdinal(o)));
-  }
-  function targetDate(o) {
-    if (!startDate) return null;
-    const d = new Date(`${startDate}T12:00:00Z`);
-    d.setUTCDate(d.getUTCDate() + ordinal(o) - 1);
-    return d.toISOString().slice(0, 10);
-  }
-  const rows =
-    mode === 'swap'
-      ? activities.filter((o) => [source, destination].includes(o.payload.dayId))
-      : activities;
-  function targetLabel(o) {
-    if (mode === 'swap') {
-      const d = days.find((d) => d.id === (o.payload.dayId === source ? destination : source));
-      return d
-        ? `${dayLabel(d, trip)}${d.payload.date ? ` · ${d.payload.date}` : ''}`
-        : '选择目标日';
+    [selected, setSelected] = useState(new Set()),
+    [error, setError] = useState('');
+  const valid = Number.isInteger(Number(count)) && count >= 1 && count <= 365;
+  const plan = reschedulePlan(
+    j.snapshot,
+    startDate || null,
+    valid ? Number(count) : 1,
+    strategy,
+    targets,
+    selected,
+  );
+  const endDate = startDate && valid ? dateAdd(startDate, Number(count) - 1) : '';
+  const shift =
+    trip.startDate && startDate
+      ? Math.round((Date.parse(startDate) - Date.parse(trip.startDate)) / 86400000)
+      : 0;
+  async function finish() {
+    try {
+      if (!valid) throw new Error('天数应为 1 至 365。');
+      await j.mutate({
+        objectId: trip.id,
+        kind: 'reschedule',
+        patch: {
+          startDate: startDate || null,
+          dayCount: Number(count),
+          moves: plan.affected || strategy === 'custom' ? plan.moves : [],
+        },
+      });
+      onClose();
+    } catch (e) {
+      setError(errorMessage(e));
     }
-    return targetDate(o) || `第${ordinal(o)}天`;
-  }
-  function selectActivity(activityId, checked = true) {
-    setSelected((previous) => {
-      const next = new Set(previous);
-      checked ? next.add(activityId) : next.delete(activityId);
-      return next;
-    });
   }
   return (
-    <Modal title="调整日期与安排" onClose={onClose} wide>
-      <div className="segmented">
-        <button
-          className={mode === 'dates' ? 'selected' : ''}
-          onClick={() => {
-            setMode('dates');
-            setSelected(new Set());
-          }}
-        >
-          调整旅程日期
-        </button>
-        <button
-          className={mode === 'swap' ? 'selected' : ''}
-          onClick={() => {
-            setMode('swap');
-            setSelected(new Set());
-          }}
-        >
-          交换两天安排
-        </button>
-      </div>
-      {mode === 'dates' ? (
-        <div className="form-grid">
-          <Field label="开始日期">
-            <input type="date" value={startDate} onChange={(e) => setStart(e.target.value)} />
-          </Field>
-          <Field label="计划天数">
-            <input
-              type="number"
-              min="1"
-              max="365"
-              value={count}
-              onChange={(e) => setCount(e.target.value)}
-            />
-          </Field>
-        </div>
-      ) : (
-        <div className="form-grid">
-          <Field label="第一天">
-            <select
-              value={source}
-              onChange={(e) => {
-                setSource(e.target.value);
-                setSelected(new Set());
-              }}
-            >
-              {days.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {dayLabel(d, trip)}
-                  {d.payload.date ? ` · ${d.payload.date}` : ''}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="第二天">
-            <select
-              value={destination}
-              onChange={(e) => {
-                setDestination(e.target.value);
-                setSelected(new Set());
-              }}
-            >
-              <option value="">选择另一天</option>
-              {days
-                .filter((d) => d.id !== source)
-                .map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {dayLabel(d, trip)}
-                    {d.payload.date ? ` · ${d.payload.date}` : ''}
-                  </option>
-                ))}
-            </select>
-          </Field>
-        </div>
-      )}
-      <p className="muted">
-        {mode === 'dates'
-          ? '直接调整目标日期即可自动选中；未选中的安排保留原日期和时间。'
-          : '选择本次交换的活动，其他安排保持不变。'}
-      </p>
-      <div className="reschedule-list">
-        {rows.map((o) => {
-          const d = days.find((d) => d.id === o.payload.dayId);
-          return (
-            <div
-              className={`check-row reschedule-row${selected.has(o.id) ? ' selected' : ''}`}
-              key={o.id}
-            >
-              <label className="reschedule-choice">
+    <Modal title={step === 1 ? '调整旅程日期' : '已有安排怎么办'} onClose={onClose} wide>
+      {step === 1 ? (
+        <>
+          <DateRangePicker
+            startDate={startDate}
+            endDate={endDate}
+            originalStartDate={trip.startDate}
+            originalEndDate={dateAdd(trip.startDate, trip.dayCount - 1)}
+            onSelectionChange={setSelectingRange}
+            onChange={(start, end) => {
+              setStart(start);
+              setCount(Math.round((Date.parse(end) - Date.parse(start)) / 86400000) + 1);
+            }}
+          />
+          <div className="form-grid">
+            <Field label="开始日期">
+              <input type="date" value={startDate} onChange={(e) => setStart(e.target.value)} />
+            </Field>
+            {startDate ? (
+              <Field label="结束日期">
                 <input
-                  type="checkbox"
-                  checked={selected.has(o.id)}
-                  onChange={(e) => selectActivity(o.id, e.target.checked)}
-                />
-                <span>
-                  <strong>{o.payload.title}</strong>
-                  <small>
-                    {d?.payload.date || `第${d?.payload.ordinal || 1}天`} → {targetLabel(o)}
-                  </small>
-                </span>
-              </label>
-              {mode === 'dates' && (
-                <select
-                  aria-label={`${o.payload.title}移动到哪一天`}
-                  value={ordinal(o)}
+                  type="date"
+                  min={startDate}
+                  value={endDate}
                   onChange={(e) => {
-                    setTargets({ ...targets, [o.id]: Number(e.target.value) });
-                    selectActivity(o.id);
+                    if (e.target.value)
+                      setCount(
+                        Math.round(
+                          (Date.parse(e.target.value) - Date.parse(startDate)) / 86400000,
+                        ) + 1,
+                      );
                   }}
-                >
-                  {Array.from(
-                    { length: Math.min(365, Math.max(1, Number(count) || 1)) },
-                    (_, i) => (
-                      <option key={i + 1} value={i + 1}>
+                />
+              </Field>
+            ) : (
+              <Field label="计划天数">
+                <input
+                  type="number"
+                  min="1"
+                  max="365"
+                  value={count}
+                  onChange={(e) => setCount(e.target.value)}
+                />
+              </Field>
+            )}
+          </div>
+          <p>{startDate ? `${startDate} – ${endDate} · ${count} 天` : `日期未定 · ${count} 天`}</p>
+          <p className="muted">
+            原来{' '}
+            {trip.startDate
+              ? `${trip.startDate} – ${dateAdd(trip.startDate, trip.dayCount - 1)}`
+              : '日期未定'}{' '}
+            · {trip.dayCount} 天
+            {shift ? `，整体${shift > 0 ? '推后' : '提前'} ${Math.abs(shift)} 天` : ''}
+          </p>
+        </>
+      ) : (
+        <>
+          <div className="reschedule-options">
+            {[
+              ['move', shift || !trip.startDate ? '跟着一起移动' : '移到最后一天'],
+              ['keep', shift ? '留在原来的日期' : '放进行程外安排'],
+              ['custom', '逐项选择…'],
+            ].map(([value, label]) => (
+              <label className="reschedule-option" key={value}>
+                <span>
+                  <input
+                    type="radio"
+                    name="date-strategy"
+                    checked={strategy === value}
+                    onChange={() => setStrategy(value)}
+                  />{' '}
+                  {label}
+                </span>
+                {value !== 'custom' &&
+                  plan.rows
+                    .filter((row) => row.affected)
+                    .slice(0, 3)
+                    .map((row) => (
+                      <small key={row.activity.id}>
+                        {row.activity.payload.title}：
+                        {row.day.payload.date || `第${row.day.payload.ordinal}天`} →{' '}
+                        {value === 'keep'
+                          ? row.day.payload.date || `第${row.day.payload.ordinal}天`
+                          : row.date || `第${row.ordinal}天`}
+                      </small>
+                    ))}
+              </label>
+            ))}
+          </div>
+          {strategy === 'custom' && (
+            <div className="reschedule-list">
+              <p className="muted">勾选要移动的安排；其他安排保留原来的日期。</p>
+              {plan.rows.map((row) => (
+                <div className="check-row reschedule-row" key={row.activity.id}>
+                  <label className="reschedule-choice">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(row.activity.id)}
+                      onChange={(e) =>
+                        setSelected((previous) => {
+                          const next = new Set(previous);
+                          e.target.checked
+                            ? next.add(row.activity.id)
+                            : next.delete(row.activity.id);
+                          return next;
+                        })
+                      }
+                    />
+                    <span>
+                      <strong>{row.activity.payload.title}</strong>
+                      <small>
+                        {row.day.payload.date || `第${row.day.payload.ordinal}天`} →{' '}
+                        {row.date || `第${row.ordinal}天`}
+                      </small>
+                    </span>
+                  </label>
+                  <select
+                    aria-label={`${row.activity.payload.title}移动到哪一天`}
+                    value={row.ordinal}
+                    onChange={(e) => {
+                      setTargets({ ...targets, [row.activity.id]: Number(e.target.value) });
+                      setSelected((previous) => new Set([...previous, row.activity.id]));
+                    }}
+                  >
+                    {Array.from({ length: Number(count) }, (_, i) => (
+                      <option key={i} value={i + 1}>
                         第{i + 1}天
                       </option>
-                    ),
-                  )}
-                </select>
-              )}
+                    ))}
+                  </select>
+                </div>
+              ))}
             </div>
-          );
-        })}
-      </div>
+          )}
+          <button className="text-button" onClick={() => setStep(1)}>
+            返回选日期
+          </button>
+        </>
+      )}
       {error && (
         <p className="field-error" role="alert">
           {error}
@@ -579,50 +606,76 @@ export function Reschedule({ journey: j, onClose }) {
       )}
       <AsyncButton
         className="primary full"
-        onClick={async () => {
-          try {
-            if (!Number.isInteger(Number(count)) || count < 1 || count > 365)
-              throw new Error('天数应为 1 至 365。');
-            if (mode === 'swap' && (!source || !destination || source === destination))
-              throw new Error('请选择两个不同的计划日。');
-            const moves = rows
-              .filter((o) => selected.has(o.id))
-              .map((o) =>
-                mode === 'swap'
-                  ? { activityId: o.id, dayId: o.payload.dayId === source ? destination : source }
-                  : {
-                      activityId: o.id,
-                      ordinal: ordinal(o),
-                      ...(startDate ? { date: targetDate(o) } : {}),
-                    },
-              );
-            await j.mutate({
-              objectId: trip.id,
-              kind: 'reschedule',
-              patch: {
-                startDate: mode === 'swap' ? trip.startDate : startDate || null,
-                dayCount: mode === 'swap' ? trip.dayCount : Number(count),
-                moves,
-              },
-            });
-            onClose();
-          } catch (e) {
-            setError(errorMessage(e));
-          }
-        }}
+        disabled={!valid || selectingRange}
+        onClick={step === 1 && plan.affected ? () => setStep(2) : finish}
       >
-        {mode === 'swap' ? '交换选中安排' : '调整日期'}
+        {step === 1 && plan.affected ? '下一步' : '完成'}
       </AsyncButton>
     </Modal>
   );
 }
 
-export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onViewExpenses }) {
+function SwapDays({ journey: j, source, onClose }) {
+  const days = visibleDays(j.snapshot).filter((day) => day.id !== source.id);
+  const [error, setError] = useState('');
+  return (
+    <Modal title="与另一天交换" onClose={onClose}>
+      <p>{dayLabel(source, j.snapshot.trip)}的全部安排将与所选日期对调。</p>
+      {days.map((day) => (
+        <AsyncButton
+          key={day.id}
+          className="settings-link"
+          onClick={async () => {
+            try {
+              const moves = active(j.snapshot, 'activity')
+                .filter((o) => [source.id, day.id].includes(o.payload.dayId))
+                .map((o) => ({
+                  activityId: o.id,
+                  dayId: o.payload.dayId === source.id ? day.id : source.id,
+                }));
+              await j.mutate({
+                objectId: j.snapshot.trip.id,
+                kind: 'reschedule',
+                patch: {
+                  startDate: j.snapshot.trip.startDate,
+                  dayCount: j.snapshot.trip.dayCount,
+                  moves,
+                },
+              });
+              onClose();
+            } catch (e) {
+              setError(errorMessage(e));
+            }
+          }}
+        >
+          {dayLabel(day, j.snapshot.trip)} {day.payload.date}
+          <ChevronRight size={17} />
+        </AsyncButton>
+      ))}
+      {error && (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      )}
+    </Modal>
+  );
+}
+
+export default function Itinerary({
+  journey: j,
+  onEdit,
+  onDates,
+  onDeleted,
+  onViewExpenses,
+  selectedActivityId,
+}) {
   const [route, setRoute] = useState(null),
     [dayMenuId, setDayMenuId] = useState(null),
     [dragging, setDragging] = useState(null),
     [sorting, setSorting] = useState(false),
+    [swapSource, setSwapSource] = useState(null),
     [now, setNow] = useState(() => Date.now());
+  const itineraryPage = useRef(null);
   const swipeStart = useRef(null),
     reorderSerial = useRef(Promise.resolve()),
     latestJourney = useRef(j);
@@ -636,6 +689,26 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
   const days = visibleDays(j.snapshot),
     outside = outsideDays(j.snapshot);
   const current = days.find((d) => d.id === j.context.dayId) || days[0];
+  useEffect(() => {
+    if (!j.context.focusActivityId) return;
+    const card = itineraryPage.current?.querySelector(
+      `[data-activity-id="${CSS.escape(j.context.focusActivityId)}"]`,
+    );
+    if (!card) return;
+    const outsideSection = card.closest('details.outside');
+    if (outsideSection) outsideSection.open = true;
+    card.scrollIntoView({ behavior: reducedMotion() ? 'instant' : 'smooth', block: 'center' });
+    card.classList.add('activity-focused');
+    const timer = setTimeout(() => {
+      card.classList.remove('activity-focused');
+      j.setContext({ focusActivityId: null });
+    }, 1000);
+    return () => {
+      clearTimeout(timer);
+      card.classList.remove('activity-focused');
+    };
+  }, [j.context.focusActivityId, current?.id]);
+
   const dayMenu = !!current && dayMenuId === current.id;
   useEffect(() => {
     setDayMenuId(null);
@@ -892,6 +965,10 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
         late = advice.lateMinutes,
         overlap = advice.overlapMinutes;
       const flexible = o.payload.time?.mode !== 'precise';
+      const time = timeLabel(o.payload);
+      const isNext = nextActivity?.id === o.id;
+      const place = o.payload.place;
+      const samePlaceName = place?.name?.trim() === o.payload.title.trim();
       const hasRoute = leg?.state === 'deleted' || Number.isFinite(routePayload?.minutes);
       const showRoute =
         !!prev || !!leg || (o.payload.time?.mode === 'precise' && !!o.payload.time.start);
@@ -952,28 +1029,43 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
           )}
           <article
             data-activity-id={o.id}
-            className={`activity-card${nextActivity?.id === o.id ? ' next-activity' : ''}${dragging?.id === o.id ? ' dragging' : ''}${dropClass}`}
+            className={`activity-card${isNext ? ' next-activity' : ''}${selectedActivityId === o.id ? ' activity-selected' : ''}${dragging?.id === o.id ? ' dragging' : ''}${dropClass}`}
           >
             <div className="activity-number">{index + 1}</div>
-            <div className="activity-content">
-              <button className="activity-main" onClick={() => onEdit(o)}>
-                {timeLabel(o.payload) && (
-                  <span className="activity-time">
-                    {timeLabel(o.payload)}
-                    {nextActivity?.id === o.id && <span className="next-label">下一项</span>}
+            {time && (
+              <div className="activity-time">
+                <span>{time}</span>
+                {(!flexible || isNext) && (
+                  <span className="activity-time-tags">
+                    {!flexible && (
+                      <span
+                        className="activity-time-lock"
+                        title="按具体时间排列，改时间即可调整位置"
+                      >
+                        <LockKeyhole size={12} />
+                      </span>
+                    )}
+                    {isNext && <span className="next-label">下一项</span>}
                   </span>
                 )}
+              </div>
+            )}
+            <div className="activity-content">
+              <button
+                className="activity-main"
+                onClick={(event) => onEdit(o, {}, event.currentTarget)}
+              >
                 <h3>{o.payload.title}</h3>
                 {o.payload.buffers?.before !== null && o.payload.buffers?.before !== undefined && (
                   <small>提前 {o.payload.buffers.before} 分钟到场</small>
                 )}
               </button>
-              {o.payload.place?.name && (
+              {place?.name && (
                 <div className="activity-place-row">
                   <button
-                    className="activity-place"
-                    aria-label="地图"
-                    title={`在地图查看：${o.payload.place.name}`}
+                    className={`activity-place${samePlaceName ? ' activity-place-icon' : ''}`}
+                    aria-label={`在地图查看：${place.name}`}
+                    title={`在地图查看：${place.name}`}
                     onClick={() =>
                       j.setContext({
                         page: 'map',
@@ -982,16 +1074,16 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                     }
                   >
                     <MapPin size={14} />
-                    <span>{o.payload.place.name}</span>
+                    {!samePlaceName && <span>{place.name}</span>}
                   </button>
-                  {located(o.payload.place) && (
+                  {located(place) && (
                     <a
                       className="activity-navigation"
-                      aria-label={`导航到${o.payload.place.name}`}
-                      title="导航到这里"
+                      aria-label={`导航到${place.name}`}
+                      title={`导航到${place.name}`}
                       target="_blank"
                       rel="noreferrer"
-                      href={`https://uri.amap.com/navigation?to=${o.payload.place.lng},${o.payload.place.lat},${encodeURIComponent(o.payload.place.name)}&mode=car&coordinate=gaode&callnative=1`}
+                      href={`https://uri.amap.com/navigation?to=${place.lng},${place.lat},${encodeURIComponent(place.name)}&mode=car&coordinate=gaode&callnative=1`}
                     >
                       <Navigation size={15} />
                     </a>
@@ -1008,8 +1100,14 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                   {o.payload.notes}
                 </p>
               )}
-              <div className="activity-toolbar">
-                {(expenseSummaries.length > 0 || notParticipating > 0 || wishDelete > 0) && (
+              {o.payload.url && (
+                <a className="activity-link" href={o.payload.url} target="_blank" rel="noreferrer">
+                  <Link size={14} />
+                  <span>{o.payload.url}</span>
+                </a>
+              )}
+              {(expenseSummaries.length > 0 || notParticipating > 0 || wishDelete > 0) && (
+                <div className="activity-toolbar">
                   <div className="activity-opinions">
                     {expenseSummaries.map(({ status, currency, amount, count, known }) => (
                       <button
@@ -1029,70 +1127,64 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                       </span>
                     )}
                   </div>
-                )}
-                <div className="activity-controls">
-                  {sortable && flexible && (
+                </div>
+              )}
+            </div>
+            <div className="activity-controls">
+              {sortable && flexible && (
+                <button
+                  className="drag-handle"
+                  aria-label={`拖动排序：${o.payload.title}`}
+                  title="拖动调整顺序 · 也可用 ↑ ↓ 键"
+                  onPointerDown={(event) => beginDrag(event, o)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      moveBy(o, event.key === 'ArrowUp' ? -1 : 1).catch(() => {});
+                    }
+                  }}
+                >
+                  <GripVertical size={18} />
+                </button>
+              )}
+              <details className="activity-more">
+                <summary aria-label={`活动更多操作：${o.payload.title}`} title="活动更多操作">
+                  <MoreHorizontal size={19} />
+                </summary>
+                <div className="activity-more-panel">
+                  <ObjectActions journey={j} object={o}>
                     <button
-                      className="drag-handle"
-                      aria-label={`拖动排序：${o.payload.title}`}
-                      title="拖动排序；键盘可用上下方向键"
-                      onPointerDown={(event) => beginDrag(event, o)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-                          event.preventDefault();
-                          moveBy(o, event.key === 'ArrowUp' ? -1 : 1).catch(() => {});
-                        }
+                      className="text-button"
+                      onClick={(event) => {
+                        event.currentTarget.closest('details').open = false;
+                        onEdit(o, {}, event.currentTarget);
                       }}
                     >
-                      <GripVertical size={18} />
+                      <Pencil size={16} />
+                      编辑
                     </button>
-                  )}
-                  {sortable && sorting && !flexible && (
-                    <span className="activity-time-lock" title="具体时间的活动按时间固定">
-                      <LockKeyhole size={14} />
-                      <span>按时间排序</span>
-                    </span>
-                  )}
-                  <details className="activity-more">
-                    <summary aria-label={`活动更多操作：${o.payload.title}`} title="活动更多操作">
-                      <MoreHorizontal size={19} />
-                    </summary>
-                    <div className="activity-more-panel">
-                      <ObjectActions journey={j} object={o}>
-                        <button
-                          className="text-button"
-                          onClick={(event) => {
-                            event.currentTarget.closest('details').open = false;
-                            onEdit(o);
-                          }}
-                        >
-                          <Pencil size={16} />
-                          编辑
-                        </button>
-                        {o.payload.place && (
-                          <button
-                            className="text-button"
-                            onClick={(event) => {
-                              event.currentTarget.closest('details').open = false;
-                              j.setContext({
-                                page: 'map',
-                                map: {
-                                  ...j.context.map,
-                                  dayId: o.payload.dayId,
-                                  selectedActivityId: o.id,
-                                },
-                              });
-                            }}
-                          >
-                            <MapPin size={16} />
-                            在地图查看
-                          </button>
-                        )}
-                      </ObjectActions>
-                    </div>
-                  </details>
+                    {o.payload.place && (
+                      <button
+                        className="text-button"
+                        onClick={(event) => {
+                          event.currentTarget.closest('details').open = false;
+                          j.setContext({
+                            page: 'map',
+                            map: {
+                              ...j.context.map,
+                              dayId: o.payload.dayId,
+                              selectedActivityId: o.id,
+                            },
+                          });
+                        }}
+                      >
+                        <MapPin size={16} />
+                        在地图查看
+                      </button>
+                    )}
+                  </ObjectActions>
                 </div>
-              </div>
+              </details>
             </div>
           </article>
         </React.Fragment>
@@ -1101,8 +1193,19 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
   }
 
   return (
-    <div className={`page itinerary-page${sorting ? ' is-sorting' : ''}`}>
+    <div ref={itineraryPage} className={`page itinerary-page${sorting ? ' is-sorting' : ''}`}>
       <h1 className="sr-only">行程</h1>
+      {swapSource && (
+        <SwapDays journey={j} source={swapSource} onClose={() => setSwapSource(null)} />
+      )}
+      {sorting && (
+        <div className="sorting-banner">
+          <span>按住 ⋮⋮ 拖动调整顺序；有具体时间的安排会按时间自动排列</span>
+          <button className="text-button" onClick={() => setSorting(false)}>
+            完成
+          </button>
+        </div>
+      )}
       <div className="itinerary-toolbar">
         {((todayDay && todayDay.id !== current?.id) || nextActivity) && (
           <nav className="day-browse-actions" aria-label="浏览行程">
@@ -1212,20 +1315,10 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
         )}
         <div className="day-heading">
           <div className="button-row">
-            {(list.length > 0 ||
-              outside.some((day) => orderedActivities(j.snapshot, day.id).length > 0)) && (
-              <button
-                className="text-button sort-toggle"
-                aria-pressed={sorting}
-                onClick={() => setSorting(!sorting)}
-              >
-                {sorting ? '完成排序' : '排序'}
-              </button>
-            )}
             <button
               className="primary small day-add"
               disabled={!current}
-              onClick={() => onEdit(null, { dayId: current.id })}
+              onClick={(event) => onEdit(null, { dayId: current.id }, event.currentTarget)}
             >
               <Plus size={16} />
               添加活动
@@ -1260,7 +1353,7 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
       {current && (
         <button
           className="primary itinerary-add-fab"
-          onClick={() => onEdit(null, { dayId: current.id })}
+          onClick={(event) => onEdit(null, { dayId: current.id }, event.currentTarget)}
         >
           <Plus size={18} />
           添加活动
@@ -1275,9 +1368,43 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                 {current.payload.date ? ` · ${current.payload.date}` : ''}
               </span>
               <div className="day-menu-actions">
-                <button className="text-button" onClick={onDates}>
+                <button
+                  className="text-button mobile-sort-entry"
+                  onClick={() => {
+                    setSorting(true);
+                    setDayMenuId(null);
+                  }}
+                >
+                  调整顺序
+                </button>
+                <button
+                  className="text-button"
+                  disabled={days.length < 2}
+                  onClick={() => {
+                    setSwapSource(current);
+                    setDayMenuId(null);
+                  }}
+                >
+                  与另一天交换
+                </button>
+                <button
+                  className="text-button pin-day-to-board-button"
+                  onClick={() => {
+                    setDayMenuId(null);
+                    pinWidgetToBoard(j, { kind: 'day', dayId: current.id }, 'M');
+                  }}
+                >
+                  贴到白板
+                </button>
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    setDayMenuId(null);
+                    onDates();
+                  }}
+                >
                   <CalendarDays size={16} />
-                  调整日期与天数…
+                  调整日期与天数
                 </button>
                 {j.snapshot.objects.some((o) => o.kind === 'day' && o.state === 'deleted') && (
                   <button className="text-button" onClick={onDeleted}>
@@ -1300,7 +1427,7 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                   <button
                     className="secondary"
                     disabled={!current}
-                    onClick={() => onEdit(null, { dayId: current.id })}
+                    onClick={(event) => onEdit(null, { dayId: current.id }, event.currentTarget)}
                   >
                     <Plus size={16} />
                     添加第一项安排
@@ -1324,7 +1451,11 @@ export default function Itinerary({ journey: j, onEdit, onDates, onDeleted, onVi
                   );
                 })
                 .map((o) => (
-                  <button className="continuation" key={o.id} onClick={() => onEdit(o)}>
+                  <button
+                    className="continuation"
+                    key={o.id}
+                    onClick={(event) => onEdit(o, {}, event.currentTarget)}
+                  >
                     <span>从前一天延续</span>
                     <strong>{o.payload.title}</strong>
                     <small>{timeLabel(o.payload)}</small>

@@ -20,12 +20,16 @@ export function usePageNavigation(journey) {
     previous.current = { tripId, page };
     if (!tripId || before?.tripId !== tripId || before.page === page || reducedMotion()) return;
     const content = document.querySelector(
-      page === 'map' ? '.main-content > .journey-map' : '.main-content > .page',
+      page === 'map'
+        ? '.main-content > .journey-map'
+        : page === 'board'
+          ? '.main-content > .board-container'
+          : '.main-content > .page',
     );
     if (!content) return;
-    // A transform on the map would change the containing block of its fixed canvas.
+    // A transform on the map or board canvas would change the containing block of its fixed canvas.
     const frames =
-      page === 'map'
+      page === 'map' || page === 'board'
         ? [{ opacity: 0 }, { opacity: 1 }]
         : [
             { opacity: 0, transform: 'translateY(6px)' },

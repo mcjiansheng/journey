@@ -19,4 +19,25 @@ for (const [name,palette] of Object.entries(palettes)) for (const mode of ['ligh
   assert.ok(contrast(c.selected,c.surface)>=1.2,`${name}/${mode} selected fill`);
   count+=2;
 }
+
+const skyGradients = [
+  ['night', '#232a5c', '#0a0e24'],
+  ['dawn', '#a16748', '#6d5aa8'],
+  ['morning', '#3a7ba4', '#2c6fbe'],
+  ['noon', '#2f7abc', '#1f5fb4'],
+  ['afternoon', '#3a77b3', '#9c6938'],
+  ['dusk', '#b45d40', '#5d438c'],
+  ['twilight', '#453f86', '#151a42']
+];
+for (const [key, a, b] of skyGradients) {
+  assert.ok(contrast('#ffffff', a) >= 4.5, `sky ${key} start on white >= 4.5`);
+  assert.ok(contrast('#ffffff', b) >= 4.5, `sky ${key} end on white >= 4.5`);
+  count += 2;
+}
+for (const [name, palette] of Object.entries(palettes)) {
+  const a = palette.light.widgetBrandA, b = palette.light.widgetBrandB;
+  assert.ok(contrast('#ffffff', a) >= 4.5, `${name} widget brand-a on white >= 4.5`);
+  assert.ok(contrast('#ffffff', b) >= 4.5, `${name} widget brand-b on white >= 4.5`);
+  count += 2;
+}
 console.log(`${count} palette contrast checks passed.`);

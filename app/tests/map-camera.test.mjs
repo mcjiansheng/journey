@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {destinationKey,validCenter,planMapCamera,resolveMapCamera,cameraContext} from '../src/map-camera.js';
+import {destinationKey,validCenter,planMapCamera,resolveMapCamera,cameraContext,currentCityFromAmap} from '../src/map-camera.js';
 const nanjing={name:'南京',lng:118.7969,lat:32.0603};
 const hangzhou={name:'杭州',lng:120.1551,lat:30.2741};
 const beijing=[116.4074,39.9042];
@@ -33,10 +33,11 @@ test('an explicit activity and a newer user selection override the saved viewpor
  const selected=planMapCamera({...input,userPlace:nanjing});
  assert.equal(selected.source,'place');assert.deepEqual(selected.center,[nanjing.lng,nanjing.lat]);
 });
-test('empty destinations use only known places and never a fabricated map center',async()=>{
+test('empty destinations fall back to the current city without geocoding',async()=>{
  const empty=planMapCamera({destination:'',saved:{center:beijing}});
  assert.equal(empty.source,'empty');assert.equal(empty.center,undefined);
- await assert.rejects(resolveMapCamera(empty,()=>assert.fail('must not geocode empty destination')),/填写旅程目的地/);
+ const fallback=await resolveMapCamera(empty,()=>assert.fail('must not geocode empty destination'),undefined,()=>nanjing);
+ assert.equal(fallback.source,'current-city');assert.deepEqual(fallback.center,[nanjing.lng,nanjing.lat]);assert.equal(fallback.zoom,12);
  assert.equal(planMapCamera({destination:'',favorites:[nanjing]}).source,'favorite');
  const saved={center:[118.8,32.1],zoom:14,cameraDestination:''};
  assert.equal(planMapCamera({destination:null,saved}).source,'viewport');
@@ -45,8 +46,10 @@ test('invalid coordinates cannot become a saved viewport or a geocoded destinati
  for(const point of [null,[118],['118',32],[181,32],[118,91],[NaN,32]])assert.equal(validCenter(point),false);
  const plan=planMapCamera({destination:'南京',saved:{center:[999,99],cameraDestination:'南京'}});
  assert.equal(plan.source,'destination');
- await assert.rejects(resolveMapCamera(plan,async()=>({lng:null,lat:null})),/未找到旅程目的地/);
- await assert.rejects(resolveMapCamera(plan,async()=>null),/未找到旅程目的地/);
+ for(const value of [{lng:null,lat:null},null]){
+  const fallback=await resolveMapCamera(plan,async()=>value,undefined,()=>hangzhou);
+  assert.equal(fallback.source,'current-city');assert.deepEqual(fallback.center,[hangzhou.lng,hangzhou.lat]);
+ }
  assert.throws(()=>cameraContext({center:beijing.slice(0,1)}),/坐标无效/);
  assert.equal(destinationKey(' 南京 '),'南京');
 });
@@ -58,6 +61,16 @@ test('a cancelled geocode result never supplies a late camera center',async()=>{
  const alreadyCancelled=new AbortController();alreadyCancelled.abort();
  await assert.rejects(resolveMapCamera(planMapCamera({destination:'南京'}),()=>assert.fail('cancelled lookup'),alreadyCancelled.signal),{name:'AbortError'});
 });
-test('provider failures remain actionable instead of silently falling back to another city',async()=>{
- await assert.rejects(resolveMapCamera(planMapCamera({destination:'南京'}),async()=>{throw new Error('地图查询超时，请重试')}),/南京.*地图查询超时/);
+test('geocoding failures fall back to the user current city and retry destination on next unmoved entry',async()=>{
+ const plan=planMapCamera({destination:'nju'});
+ const fallback=await resolveMapCamera(plan,async()=>{throw new Error('地图查询未完成，请重试')},undefined,()=>currentCityFromAmap({getConfig:()=>({defaultLocation:[118.36,31.22,119.24,32.61,nanjing.lng,nanjing.lat]})}));
+ assert.equal(fallback.source,'current-city');assert.deepEqual(fallback.center,[nanjing.lng,nanjing.lat]);assert.equal(fallback.zoom,12);
+ const savedFallback=cameraContext(fallback);
+ assert.equal(planMapCamera({destination:'nju',saved:savedFallback}).source,'destination');
+ const moved={...savedFallback,cameraSource:'viewport',zoom:15};
+ assert.equal(planMapCamera({destination:'nju',saved:moved}).source,'viewport');
+ for(const invalid of [[0,0],[0,0,0,0,0,0],null,undefined,[-190,0]]){
+  const zero=currentCityFromAmap({getConfig:()=>({defaultLocation:invalid})});
+  assert.equal(zero.name,'当前城市');assert.equal(zero.lng,116.397128);assert.equal(zero.lat,39.916527);
+ }
 });

@@ -57,17 +57,17 @@ for(const width of [1440,390])test(`completion remains right-aligned before blur
  await title.fill('');await page.keyboard.press('Escape');
  await expect(dialog).toHaveCount(0);await edit(page,savedTitle);await expect(title).toHaveValue('');
  expect(await position()).toEqual(before);
- await expect(complete(page)).toBeDisabled();await expect(dialog.getByRole('status')).toHaveText('填写名称后保存');
+ await expect(complete(page)).toBeDisabled();await expect(dialog.getByRole('status')).toHaveText('填写名称或选择地点');
  expect(await position()).toEqual(before);
  await title.fill(`恢复后完成${width}`);await expect(title).toBeFocused();await finish(page);
  await expect(page.getByRole('heading',{name:`恢复后完成${width}`,exact:true})).toBeVisible();
 });
 
 test('completion validates the entire draft and retains invalid input',async({page})=>{
- await setup(page);await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await expect(complete(page)).toBeDisabled();await expect(page.getByRole('dialog').getByRole('status')).toHaveText('填写名称后保存');
+ await setup(page);await page.getByRole('button',{name:'添加活动',exact:true}).first().click();await expect(complete(page)).toBeDisabled();await expect(page.getByRole('dialog').getByRole('status')).toHaveText('填写名称或选择地点');
  await page.getByLabel('活动名称').fill('校验活动');await page.getByRole('button',{name:'具体时间',exact:true}).click();await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('请填写开始时间');
  await page.getByLabel('开始时间',{exact:true}).fill('10:00');await page.getByLabel('结束时间 · 选填').fill('09:00');await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('结束时间早于开始时间');
- await page.getByLabel('结束时间 · 选填').fill('11:00');await page.getByText('备注与链接',{exact:true}).click();await page.getByLabel('链接',{exact:true}).fill('bad-link');await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('请输入完整链接。');
+ await page.getByLabel('结束时间 · 选填').fill('11:00');await page.getByText('备注与链接',{exact:true}).click();await page.getByLabel('链接',{exact:true}).fill('bad-link');await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toHaveText('链接格式不对，例如 ehall.nju.edu.cn');
  await page.getByLabel('链接',{exact:true}).fill('https://example.test/');await finish(page);
 });
 
@@ -151,7 +151,7 @@ test('reopening and completing leaves activity order and collaborator edits inta
  await setup(page);await add(page,'第一项');await add(page,'第二项');await expect(page.locator('.sync-status.synced')).toBeVisible();
  await page.getByRole('button',{name:'拖动排序：第二项',exact:true}).press('ArrowUp');await expect(page.locator('.activity-card h3')).toHaveText(['第二项','第一项']);
  await edit(page,'第一项');await finish(page);await expect(page.locator('.activity-card h3')).toHaveText(['第二项','第一项']);
- await edit(page,'第一项');const other=await page.context().newPage();await other.goto(base);await expect.poll(async()=>await other.getByRole('button',{name:/继续旅程/}).count()||await other.getByRole('heading',{name:'第一项',exact:true}).count()||await other.getByRole('dialog').count()).toBeGreaterThan(0);if(await other.getByRole('button',{name:/继续旅程/}).count())await other.getByRole('button',{name:/继续旅程/}).click();if(!await other.getByRole('dialog').count())await edit(other,'第一项');
+ await edit(page,'第一项');const other=await page.context().newPage();await other.goto(base);await expect.poll(async()=>await other.getByRole('button',{name:/继续旅程/}).count()||await other.getByRole('heading',{name:'第一项',exact:true}).count()||await other.getByRole('dialog').count()).toBeGreaterThan(0);if(await other.getByRole('button',{name:/继续旅程/}).count())await other.getByRole('button',{name:/继续旅程/}).click();await expect(other.getByRole('dialog')).toBeVisible();
  await other.getByText('备注与链接',{exact:true}).click();await other.getByLabel('备注',{exact:true}).fill('同伴刚修改的备注');await finish(other);await expect(other.locator('.sync-status.synced')).toBeVisible();
  await finish(page);await edit(page,'第一项');await expect(page.getByLabel('备注',{exact:true})).toHaveValue('同伴刚修改的备注');await other.close();
 });
@@ -179,7 +179,7 @@ test('WebKit touch completes new and existing activities with one real tap',asyn
  try{const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true});const page=await context.newPage();await setup(page);
   for(let n=0;n<2;n++){await page.getByRole('button',{name:'添加活动',exact:true}).first().tap();await page.getByLabel('活动名称').fill(`触屏活动${n}`);await expect(page.getByLabel('活动名称')).toBeFocused();await complete(page).tap();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.getByRole('heading',{name:`触屏活动${n}`,exact:true})).toBeVisible()}
   await page.getByRole('heading',{name:'触屏活动0',exact:true}).tap();await page.getByLabel('活动名称').fill('触屏修改后');await complete(page).tap();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.getByRole('heading',{name:'触屏修改后',exact:true})).toBeVisible();await page.getByRole('heading',{name:'触屏修改后',exact:true}).tap();await page.getByRole('combobox',{name:/地点/}).fill('南京站');await expect(page.locator('.activity-place-status').first()).toBeVisible();await complete(page).tap();await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.getByRole('heading',{name:'触屏修改后',exact:true}).tap();await page.getByLabel('活动名称').fill('');await expect(complete(page)).toBeDisabled();await expect(page.getByRole('dialog').getByRole('status')).toHaveText('填写名称后保存');
+  await page.getByRole('heading',{name:'触屏修改后',exact:true}).tap();await page.getByLabel('活动名称').fill('');await expect(page.getByLabel('活动名称')).toHaveValue('');await expect(page.getByLabel('活动名称')).toHaveAttribute('placeholder','南京站');await expect(complete(page)).toBeEnabled();
   await page.getByLabel('活动名称').fill('触屏校验后完成');await complete(page).tap();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.getByRole('heading',{name:'触屏校验后完成',exact:true})).toBeVisible();await context.close();
  }finally{await browser.close()}
 });
@@ -226,7 +226,7 @@ test('older unfinished input remains recoverable until explicitly restored or di
 test('a prefilled map activity still requires durable storage after closing and reopening',async({page})=>{
  await setup(page);await page.getByRole('tab',{name:/第1天/}).click();const nav=page.getByRole('navigation',{name:'主导航',exact:true});await nav.getByRole('button',{name:'地图',exact:true}).click();
  await page.getByRole('textbox',{name:'搜索地点',exact:true}).fill('地图预填活动');await page.getByRole('button',{name:'手动填写',exact:true}).click();await page.getByLabel('名称',{exact:true}).fill('地图预填活动');await page.locator('.map-panel').getByRole('button',{name:'完成',exact:true}).click();await page.getByRole('button',{name:'加入行程',exact:true}).click();
- await expect(page.getByLabel('活动名称')).toHaveValue('地图预填活动');await expect(page.getByLabel('活动名称')).toBeFocused();await expect(page.getByLabel('所在日')).not.toHaveValue('');
+ await expect(page.getByLabel('活动名称')).toHaveValue('');await expect(page.getByLabel('活动名称')).toHaveAttribute('placeholder','地图预填活动');await expect(page.getByLabel('活动名称')).toBeFocused();await expect(page.getByLabel('所在日')).not.toHaveValue('');
  await page.evaluate(()=>{window.originalPut=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(value,key){if(this.name==='kv'&&String(key).startsWith('account:'))throw new DOMException('Test quota exhausted','QuotaExceededError');return window.originalPut.call(this,value,key)}});
  await page.keyboard.press('Escape');await expect(page.locator('.global-notice')).toContainText('此设备未能保存修改');await nav.getByRole('button',{name:'行程',exact:true}).click();await edit(page,'地图预填活动');
  await complete(page).click();await expect(page.getByRole('dialog').getByRole('alert')).toContainText('此设备未能保存修改');

@@ -2,7 +2,7 @@ import { DatabaseSync, backup } from 'node:sqlite';
 import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
 import { constants, createReadStream, createWriteStream } from 'node:fs';
 import { access, chmod, copyFile, mkdir, mkdtemp, readFile, rename, rm, stat, readdir, writeFile } from 'node:fs/promises';
-import { join, resolve, dirname } from 'node:path';
+import { basename, join, resolve, dirname } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -40,7 +40,28 @@ async function decrypt(source, target, key, name, metadata) {
   cipher.setAAD(aad(name)); cipher.setAuthTag(Buffer.from(metadata.tag, 'hex'));
   await pipeline(createReadStream(source), cipher, createWriteStream(target, { mode: 0o600, flags: 'wx' }));
 }
-export async function createBackup({ mainPath, securityPath, keyPath, backupDir }) {
+async function hasEntries(path) {
+ try { if(!(await stat(path)).isDirectory())return false; return (await readdir(path)).length>0; }
+ catch(error){ if(error.code==='ENOENT')return false; throw error; }
+}
+async function packAssets(assetsPath, tarPath) {
+ execFileSync('tar',['-cf',tarPath,'-C',dirname(resolve(assetsPath)),basename(resolve(assetsPath))],{stdio:'ignore'});
+}
+async function prepareAssets(tarPath, work) {
+ const extract=join(work,'assets-extract'); await mkdir(extract,{recursive:true,mode:0o700});
+ execFileSync('tar',['-xf',tarPath,'-C',extract],{stdio:'ignore'}); return extract;
+}
+async function installAssets(preparedRoot, assetsPath) {
+ const parent=dirname(resolve(assetsPath)); await mkdir(parent,{recursive:true,mode:0o700});
+ const restored=join(preparedRoot,basename(resolve(assetsPath)));
+ try { await access(restored); } catch { throw new Error('BACKUP_ASSETS_MISSING: backup has no assets directory'); }
+ const rollback=`${assetsPath}.bak-${Date.now()}-${randomBytes(4).toString('hex')}`;
+ const exists=await stat(assetsPath).then(()=>true,(error)=>{if(error.code==='ENOENT')return false;throw error;});
+ if(exists)await rename(assetsPath,rollback);
+ try { await rename(restored,assetsPath); } catch(error){ if(exists)await rename(rollback,assetsPath); throw error; }
+ if(exists)await rm(rollback,{recursive:true,force:true});
+}
+export async function createBackup({ mainPath, securityPath, keyPath, backupDir, assetsPath }) {
   if (resolve(mainPath) === resolve(securityPath)) throw new Error('INDEPENDENT_LEDGER_REQUIRED');
   checkDatabase(securityPath, true);
   const key = await keyBytes(keyPath);
@@ -54,6 +75,12 @@ export async function createBackup({ mainPath, securityPath, keyPath, backupDir 
     await snapshot(securityPath, join(plain, 'security'));
     const metadata = { version: 1, createdAt: new Date().toISOString(), files: {} };
     for (const name of ['main','security']) metadata.files[name] = await encrypt(join(plain,name), join(work,`${name}.enc`),key,name);
+    // Whiteboard images/GIFs live outside SQLite; encrypt them in the same backup
+    // so restoring the database cannot leave assetId references without files.
+    if (assetsPath && (await hasEntries(assetsPath))) {
+     const tarPath = join(plain,'assets.tar'); await packAssets(assetsPath,tarPath);
+     metadata.files.assets = await encrypt(tarPath, join(work,'assets.enc'), key, 'assets');
+    }
     await writeFile(join(work,'manifest.json'), JSON.stringify(metadata,null,2)+'\n', { mode: 0o600 });
     const target = join(backupDir, `backup-${metadata.createdAt.replace(/[:.]/g,'-')}-${randomBytes(4).toString('hex')}`);
     await rename(work,target); return target;
@@ -102,7 +129,7 @@ export function verifyServiceStopMode(flag, exec = execFileSync) {
   if (!/^ActiveState=(inactive|failed)$/m.test(state) || !/^MainPID=0$/m.test(state)) throw new Error('SERVICE_STILL_RUNNING');
   return true;
 }
-export async function restoreBackup({ backupPath, mainPath, securityPath, keyPath, serviceStopped = false }) {
+export async function restoreBackup({ backupPath, mainPath, securityPath, keyPath, assetsPath, serviceStopped = false }) {
   if (!serviceStopped) throw new Error('SERVICE_STOP_REQUIRED: explicitly stop journey.service before restoring');
   if (resolve(mainPath) === resolve(securityPath)) throw new Error('INDEPENDENT_LEDGER_REQUIRED');
   try { await access(securityPath); } catch { throw new Error('LATEST_SECURITY_LEDGER_REQUIRED: restore refused'); }
@@ -116,6 +143,13 @@ export async function restoreBackup({ backupPath, mainPath, securityPath, keyPat
     // live security ledger can replay purges, removals, and revocations on boot.
     for (const name of ['main','security']) await decrypt(join(backupPath,`${name}.enc`),join(work,name),key,name,metadata.files?.[name]);
     checkDatabase(join(work,'main')); checkDatabase(join(work,'security'),true);
+    let preparedAssets = null;
+    if (metadata.files?.assets) {
+     if (!assetsPath) throw new Error('ASSETS_PATH_REQUIRED: backup contains assets but no assetsPath was provided');
+     const tarPath = join(work,'assets.tar');
+     await decrypt(join(backupPath,'assets.enc'), tarPath, key, 'assets', metadata.files.assets);
+     preparedAssets = await prepareAssets(tarPath, work);
+    }
     const rollback = `${mainPath}.bak-${Date.now()}-${randomBytes(4).toString('hex')}`;
     if (await stat(mainPath).catch(e=>{if(e.code==='ENOENT')return null;throw e;})) {
       // Preserve the current business database as a consistent SQLite snapshot.
@@ -127,7 +161,8 @@ export async function restoreBackup({ backupPath, mainPath, securityPath, keyPat
     }
     for (const suffix of ['-wal','-shm']) await rm(mainPath+suffix,{force:true});
     await rename(join(work,'main'),mainPath); await chmod(mainPath,0o600);
-    return { mainPath, rollback };
+    if (preparedAssets) await installAssets(preparedAssets, assetsPath);
+    return { mainPath, rollback, assets: preparedAssets ? assetsPath : null };
   } finally { await rm(work,{recursive:true,force:true}); }
 }
 export async function retainBackups(backupDir, days = 30, now = Date.now()) {
@@ -139,7 +174,7 @@ export async function retainBackups(backupDir, days = 30, now = Date.now()) {
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   process.umask(0o077);
-  const options = { mainPath:process.env.DATABASE_PATH||'/var/lib/journey/journey.sqlite', securityPath:process.env.SECURITY_DATABASE_PATH||'/var/lib/journey/security.sqlite', keyPath:process.env.BACKUP_KEY_PATH||'/etc/journey/backup.key', backupDir:process.env.BACKUP_DIR||'/var/backups/journey' };
+  const options = { mainPath:process.env.DATABASE_PATH||'/var/lib/journey/journey.sqlite', securityPath:process.env.SECURITY_DATABASE_PATH||'/var/lib/journey/security.sqlite', keyPath:process.env.BACKUP_KEY_PATH||'/etc/journey/backup.key', backupDir:process.env.BACKUP_DIR||'/var/backups/journey', assetsPath:process.env.ASSETS_PATH||'/var/lib/journey/assets' };
   try {
     if (process.argv[2]==='backup') { console.log(await createBackup(options)); await retainBackups(options.backupDir); }
     else if (process.argv[2]==='restore' && process.argv[3] && verifyServiceStopMode(process.argv[4])) {

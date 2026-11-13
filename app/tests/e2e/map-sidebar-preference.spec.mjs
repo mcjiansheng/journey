@@ -27,7 +27,7 @@ async function seed(page){
 async function openPreferences(page){
  await nav(page,'行程').click();await page.locator('.sidebar .profile-button').click();
  await page.getByRole('navigation',{name:'设置分类'}).getByRole('button',{name:/^地图/}).click();
- return page.getByRole('dialog',{name:'我的设置'}).getByRole('switch',{name:'地图自动收起侧栏',exact:true});
+ return page.getByRole('dialog',{name:'我的设置'}).getByRole('switch',{name:'地图和白板自动收起侧栏',exact:true});
 }
 async function expectSidebar(page,{width,height,compact=false}){
  const sidebar=page.locator('.sidebar');
@@ -49,12 +49,26 @@ async function checkPreference(page,viewport){
  await page.setViewportSize(viewport);await seed(page);
  const full={width:viewport.width<=1100?180:200,height:viewport.height-28};
  await expectSidebar(page,full);
- await nav(page,'地图').click();await expectSidebar(page,{width:72,height:viewport.height<=550?286:340,compact:true});
+  await nav(page, '地图').click();
+  await expectSidebar(page, {
+    width: 72,
+    height: viewport.height <= 550 ? 338 : 392,
+    compact: true,
+  });
+  // The board shares the immersive shell with the map (白板审查 问题 2).
+  await nav(page, '白板').click();
+  await expect(page.locator('.app-shell.immersive-shell.board-shell')).toBeVisible();
+  await expectSidebar(page, {
+    width: 72,
+    height: viewport.height <= 550 ? 338 : 392,
+    compact: true,
+  });
  const toggle=await openPreferences(page);await expect(toggle).toBeChecked();await toggle.uncheck();
  await expect(page.locator('html')).toHaveAttribute('data-map-sidebar-collapse','false');
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('journey.appearance')).autoCollapseMapSidebar)).toBe(false);
  await page.keyboard.press('Escape');await expectSidebar(page,full);
  await nav(page,'地图').click();await expectSidebar(page,full);
+ await nav(page,'白板').click();await expectSidebar(page,full);
  await nav(page,'费用').click();await expectSidebar(page,full);
  await nav(page,'旅程设置').click();await expectSidebar(page,full);
  await page.reload();await page.getByRole('button',{name:/继续旅程/}).click();
@@ -62,7 +76,12 @@ async function checkPreference(page,viewport){
  await page.keyboard.press('Escape');await nav(page,'地图').click();await expectSidebar(page,full);
  const restoredToggle=await openPreferences(page);await restoredToggle.check();
  await page.keyboard.press('Escape');await expectSidebar(page,full);
- await nav(page,'地图').click();await expectSidebar(page,{width:72,height:viewport.height<=550?286:340,compact:true});
+  await nav(page, '地图').click();
+  await expectSidebar(page, {
+    width: 72,
+    height: viewport.height <= 550 ? 338 : 392,
+    compact: true,
+  });
  await page.setViewportSize({width:390,height:844});
  await expect(page.locator('.sidebar')).toBeHidden();
  const mobileNav=page.getByRole('navigation',{name:'手机主导航',exact:true});await expect(mobileNav).toBeVisible();

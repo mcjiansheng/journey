@@ -378,12 +378,13 @@ struct JourneyTimeZonePicker: View {
   @Environment(\.journeyPalette) private var palette
   @Binding var selection: String
   var useAutomatic: (() -> Void)? = nil
+  var destination: String = ""
   @Environment(\.dismiss) private var dismiss
   @State private var query = ""
   var zones: [String] {
     guard !query.isEmpty else {
-      return JourneyTimeZone.common.contains(selection)
-        ? JourneyTimeZone.common : [selection] + JourneyTimeZone.common
+      let recommended = [DestinationTimezones.known(destination), TimeZone.current.identifier, selection].compactMap { $0 }
+      return Array(NSOrderedSet(array: recommended + TimeZone.knownTimeZoneIdentifiers.sorted())) as? [String] ?? []
     }
     return TimeZone.knownTimeZoneIdentifiers.filter {
       JourneyTimeZone.label($0).localizedCaseInsensitiveContains(query)
@@ -399,7 +400,7 @@ struct JourneyTimeZonePicker: View {
         }
         .accessibilityIdentifier("timezone.automatic")
       }
-      Section(query.isEmpty ? "常用时区" : "搜索结果") {
+      Section(query.isEmpty ? "目的地、本机与全部时区" : "搜索结果") {
         ForEach(zones, id: \.self) { identifier in
           Button {
             selection = identifier
@@ -472,10 +473,11 @@ struct WorkspaceView: View {
   @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
   @State private var tab = "itinerary"
+  @State private var focusedActivity: JSON?
   @State private var profile = false
   var body: some View {
     TabView(selection: $tab) {
-      NavigationStack { ItineraryView().toolbar { personalToolbar } }.toolbar(.hidden, for: .tabBar).tag("itinerary")
+      NavigationStack { ItineraryView(focusedActivity: focusedActivity).toolbar { personalToolbar } }.toolbar(.hidden, for: .tabBar).tag("itinerary")
       NavigationStack { TripMapView().toolbar { personalToolbar } }.toolbar(.hidden, for: .tabBar).tag("map")
       NavigationStack { ExpensesView().toolbar { personalToolbar } }.toolbar(.hidden, for: .tabBar).tag("ledger")
       NavigationStack { ManageView().toolbar { personalToolbar } }.toolbar(.hidden, for: .tabBar).tag("settings")
@@ -487,6 +489,9 @@ struct WorkspaceView: View {
         Label("\(store.cache.queue.count) 项修改等待同步", systemImage: "arrow.triangle.2.circlepath")
           .font(.caption).padding(7).frame(maxWidth: .infinity).background(palette.background)
       }
+    }
+    .onReceive(NotificationCenter.default.publisher(for: Notification.Name("journeyShowActivity"))) { note in
+      if let activity = note.object as? JSON { focusedActivity = activity; tab = "itinerary" }
     }
     .onChange(of: tab) { _, value in
       guard let id = store.selectedTrip else { return }

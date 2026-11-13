@@ -31,6 +31,54 @@ enum Money {
     return .number(NSDecimalNumber(decimal: minor).doubleValue)
   }
 }
+enum ExpensePresentation {
+  static func today(_ timezone: String) -> String {
+    TripCreationDate.string(Date(), timezone: TimeZone(identifier: timezone) ?? .current)
+  }
+  static func activity(_ expense: JSON, objects: [JSON]) -> JSON? {
+    guard let activity = objects.first(where: {
+      $0.id == expense["payload"]["activityId"].string && $0["kind"].string == "activity" && $0["state"].string == "active"
+    }), objects.contains(where: {
+      $0.id == activity["payload"]["dayId"].string && $0["kind"].string == "day" && $0["state"].string == "active"
+    }) else { return nil }
+    return activity
+  }
+  static func date(_ expense: JSON, objects: [JSON]) -> String {
+    let explicit = expense["payload"]["date"].string
+    if !explicit.isEmpty { return explicit }
+    guard let activity = activity(expense, objects: objects) else { return "" }
+    return objects.first { $0.id == activity["payload"]["dayId"].string }?["payload"]["date"].string ?? ""
+  }
+  static func title(_ expense: JSON, objects: [JSON]) -> String {
+    let title = expense["payload"]["title"].string
+    if !title.isEmpty { return title }
+    if let activity = activity(expense, objects: objects), !activity["payload"]["title"].string.isEmpty {
+      return activity["payload"]["title"].string
+    }
+    return expense["payload"]["payment"]["status"].string == "paid" ? "已支付" : "预计"
+  }
+  static func dateLabel(_ date: String, trip: JSON) -> String {
+    if date.isEmpty { return "未记录日期" }
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "zh_CN")
+    formatter.timeZone = TimeZone(secondsFromGMT: 0)
+    formatter.dateFormat = "MM/dd EEE"
+    let stamp = formatter.string(from: JourneyDate.date(date))
+    let start = trip["startDate"].string
+    if start.isEmpty { return stamp }
+    let ordinal = (JourneyDate.calendar.dateComponents([.day], from: JourneyDate.date(start), to: JourneyDate.date(date)).day ?? 0) + 1
+    if ordinal < 1 { return "行前支付 · \(stamp)" }
+    if ordinal > Int(trip["dayCount"].number) { return "行后支付 · \(stamp)" }
+    return "第 \(ordinal) 天 · \(stamp)"
+  }
+  static func activityLabel(_ activity: JSON) -> String {
+    let time = activity["payload"]["time"]
+    let period = time["period"].string
+    let label = time["mode"].string == "precise" ? time["start"].string :
+      (["morning": "上午", "afternoon": "下午", "evening": "晚上"][period] ?? period)
+    return [activity["payload"]["title"].string, label].filter { !$0.isEmpty }.joined(separator: " · ")
+  }
+}
 struct ExpensesView: View {
   @Environment(\.journeyPalette) private var palette
   @EnvironmentObject var store: JourneyStore
@@ -43,17 +91,9 @@ struct ExpensesView: View {
   var totals: [String] {
     Array(Set(expenses.map { $0["payload"]["payment"]["currency"].string })).sorted()
   }
-  func date(_ expense: JSON) -> String {
-    if !expense["payload"]["date"].string.isEmpty { return expense["payload"]["date"].string }
-    guard
-      let activity = store.objects.first(where: { $0.id == expense["payload"]["activityId"].string }
-      ),
-      let day = store.days.first(where: { $0.id == activity["payload"]["dayId"].string })
-    else { return "" }
-    return day["payload"]["date"].string
-  }
+  func date(_ expense: JSON) -> String { ExpensePresentation.date(expense, objects: store.objects) }
   var dateGroups: [String] {
-    let dates = Set(expenses.map(date)).filter { selectedDate.isEmpty || $0 == selectedDate }
+    let dates = Set(expenses.map(date)).filter { selectedDate.isEmpty || $0 == selectedDate || (selectedDate == "undated" && $0.isEmpty) }
     return dates.sorted { $0.isEmpty ? false : $1.isEmpty ? true : $0 < $1 }
   }
   var body: some View {
@@ -93,13 +133,18 @@ struct ExpensesView: View {
           HStack {
             dateButton("全部", date: "")
             ForEach(store.days.filter { !$0["payload"]["date"].string.isEmpty }) { day in
-              dateButton(dayTitle(day, trip: store.trip), date: day["payload"]["date"].string)
+              dateButton(ExpensePresentation.dateLabel(day["payload"]["date"].string, trip: store.trip), date: day["payload"]["date"].string)
+            }
+            ForEach(Array(Set(expenses.map(date))).filter { value in
+              !store.days.contains { $0["payload"]["date"].string == value }
+            }.sorted(), id: \.self) { value in
+              dateButton(ExpensePresentation.dateLabel(value, trip: store.trip), date: value.isEmpty ? "undated" : value)
             }
           }
         }
       }
       ForEach(dateGroups, id: \.self) { dateKey in
-        Section(dateKey.isEmpty ? "日期未记录" : dateKey) {
+        Section(ExpensePresentation.dateLabel(dateKey, trip: store.trip)) {
           ForEach(expenses.filter { date($0) == dateKey }) { item in
             VStack(alignment: .leading, spacing: 9) {
               Button {
@@ -108,8 +153,7 @@ struct ExpensesView: View {
                 HStack(alignment: .top) {
                   VStack(alignment: .leading, spacing: 6) {
                     Text(
-                      item["payload"]["title"].string.isEmpty
-                        ? "未命名费用" : item["payload"]["title"].string
+                      ExpensePresentation.title(item, objects: store.objects)
                     ).foregroundStyle(palette.text)
                     if item["payload"]["payment"]["status"].string == "estimated" {
                       Text("预计").font(.caption).foregroundStyle(palette.muted)
@@ -119,12 +163,7 @@ struct ExpensesView: View {
                         palette.muted
                       ).lineLimit(1)
                     }
-                    if let activity = store.objects.first(where: {
-                      $0.id == item["payload"]["activityId"].string
-                    }) {
-                      Text(activity["payload"]["title"].string).font(.caption).foregroundStyle(
-                        palette.muted)
-                    }
+
                   }
                   Spacer()
                   Text(
@@ -134,6 +173,15 @@ struct ExpensesView: View {
                   ).monospacedDigit().foregroundStyle(palette.accent)
                 }
               }.buttonStyle(.plain)
+              if !item["payload"]["activityId"].string.isEmpty {
+                if let activity = ExpensePresentation.activity(item, objects: store.objects) {
+                  Button {
+                    NotificationCenter.default.post(name: Notification.Name("journeyShowActivity"), object: activity)
+                  } label: {
+                    Label(ExpensePresentation.activityLabel(activity) + " ›", systemImage: "link")
+                  }.font(.caption).buttonStyle(.plain).foregroundStyle(palette.accent)
+                } else { Text("关联活动已删除").font(.caption).foregroundStyle(palette.muted) }
+              }
               LifecycleActions(object: item, edit: { editing = item })
             }.padding(.vertical, 7).contextMenu {
               LifecycleMenu(object: item, edit: { editing = item })
@@ -266,10 +314,31 @@ struct ExpenseEditor: View {
               })
           ) {
             Text("不关联").tag("")
-            ForEach(store.objects.filter { $0["kind"].string == "activity" }) {
+            ForEach(store.objects.filter { $0["kind"].string == "activity" && $0["state"].string == "active" }) {
               Text($0["payload"]["title"].string).tag($0.id)
             }
           }
+          let linked = ExpensePresentation.activity(.object(["payload": form]), objects: store.objects)
+          let effectiveDate = ExpensePresentation.date(.object(["payload": form]), objects: store.objects)
+          if !effectiveDate.isEmpty {
+          DatePicker("费用日期", selection: Binding(
+            get: { JourneyDate.date(effectiveDate) },
+            set: { form["date"] = .string(JourneyDate.string($0)); changed("date") }
+          ), displayedComponents: .date).environment(\.timeZone, JourneyDate.calendar.timeZone)
+          } else {
+            Button("设置费用日期") {
+              form["date"] = .string(ExpensePresentation.today(store.trip["timezone"].string)); changed("date")
+            }
+          }
+          if linked != nil && !effectiveDate.isEmpty && form["date"].string.isEmpty {
+            Text("已按活动所在日填写").font(.caption).foregroundStyle(palette.muted)
+            let today = ExpensePresentation.today(store.trip["timezone"].string)
+            Button("改为付款当天（" + String(today.suffix(5)).replacingOccurrences(of: "-", with: "/") + "）") {
+              form["date"] = .string(today); changed("date")
+            }
+          } else if !form["date"].string.isEmpty {
+            Button(linked == nil ? "清除日期" : "跟随活动日期") { form["date"] = .null; changed("date") }
+          } else { Text("未记录日期").font(.caption).foregroundStyle(palette.muted) }
           TextField("备注", text: field("notes"), axis: .vertical).lineLimit(3...8)
         }
       }.navigationTitle(object == nil ? "添加费用" : "编辑费用").toolbar {
