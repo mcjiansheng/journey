@@ -198,7 +198,12 @@ export function applyOperation(db,t,userId,op,now){const {trip,member}=membershi
  const favorites=db.prepare("SELECT * FROM objects WHERE tripId=? AND kind='favorite'").all(t);
  for(const row of favorites){const f={...row,payload:json(row.payload),clocks:json(row.clocks)};if(f.payload.mark?.icon===previousPayload.icon&&f.payload.mark?.color===previousPayload.color&&wins(f.clocks.mark,c)){f.payload.mark={icon:o.payload.icon,color:o.payload.color};f.clocks.mark=c;writeObject(db,f);}}
  }}
- else {if(op.generation!==o.generation)fail('STALE_GENERATION','其他同行成员刚刚更新了此内容，请刷新查看最新版本',409,{generation:o.generation});
+ else {if(op.generation!==o.generation){
+   // Any member deletes/restores board items directly. A stale request whose goal a peer already reached
+   // (two people erase the same stroke) is a no-op; answering 409 would block the sender's whole trip queue.
+   if(o.kind==='boardItem'&&((op.kind==='delete'&&o.state==='deleted')||(op.kind==='restore'&&o.state==='active')))return {changed:false,ignored:[]};
+   fail('STALE_GENERATION','其他同行成员刚刚更新了此内容，请刷新查看最新版本',409,{generation:o.generation});
+ }
  if(op.kind==='delete'){
    if(o.kind==='boardItem'){changed=life('deleted');}
    else{if(trip.ownerId!==userId&&!(trip.teamMode==='admin'&&member.isAdmin))fail('FORBIDDEN','你可以表达希望删除',403);changed=life('deleted');}

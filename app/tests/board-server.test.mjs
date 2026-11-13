@@ -772,3 +772,59 @@ test('board: sections, rotation, widget looks, auto-width text and saving a boar
   r = await f.req(`/api/trips/${tid}/assets/${randomUUID()}/to-stickers`, { actor: a, method: 'POST' });
   assert.equal(r.status, 404);
 });
+
+test('board: a stale delete or restore whose goal a peer already reached is a no-op, other stale requests still conflict', async t => {
+  const f = await fixture(t);
+  const a = await f.account('alice');
+  const b = await f.account('bob');
+  const tid = (await f.trip(a, 'equal')).trip.id;
+  await f.joinTrip(b, (await f.invite(a, tid)).code);
+  const itemId = randomUUID();
+  const created = await f.op(a, tid, {
+    objectId: itemId,
+    kind: 'create',
+    objectType: 'boardItem',
+    patch: {
+      boardId: 'default-board',
+      frame: { x: 0, y: 0, w: 40, h: 40, rotation: 0, scale: 1 },
+      z: 1,
+      content: { type: 'stroke', tool: 'pen', points: [[0, 0], [20, 20]] },
+      style: { color: 'default', size: 4 },
+    },
+  });
+  assert.equal(created.status, 200, JSON.stringify(created.data));
+  const item = async () =>
+    (await f.req(`/api/trips/${tid}/boards/default-board/items`, { actor: a })).data.items.find(i => i.id === itemId);
+
+  // Both members erase the same stroke from the same starting generation.
+  f.advance(1000);
+  assert.equal((await f.op(a, tid, { objectId: itemId, kind: 'delete', generation: 0 })).status, 200);
+  const cursorAfterFirst = (await f.req(`/api/trips/${tid}`, { actor: a })).data.cursor;
+  const second = await f.op(b, tid, { objectId: itemId, kind: 'delete', generation: 0 });
+  assert.equal(second.status, 200, JSON.stringify(second.data));
+  assert.equal(second.data.receipt.changed, false);
+  assert.equal((await f.req(`/api/trips/${tid}`, { actor: a })).data.cursor, cursorAfterFirst, 'a no-op does not advance the trip');
+  assert.deepEqual([(await item()).state, (await item()).generation], ['deleted', 1]);
+
+  // Same for restore: both undo the deletion.
+  f.advance(1000);
+  assert.equal((await f.op(a, tid, { objectId: itemId, kind: 'restore', generation: 1 })).status, 200);
+  const againRestore = await f.op(b, tid, { objectId: itemId, kind: 'restore', generation: 1 });
+  assert.equal(againRestore.status, 200, JSON.stringify(againRestore.data));
+  assert.equal(againRestore.data.receipt.changed, false);
+  assert.deepEqual([(await item()).state, (await item()).generation], ['active', 2]);
+
+  // A stale request that would still change the item stays a conflict.
+  f.advance(1000);
+  const stale = await f.op(b, tid, { objectId: itemId, kind: 'delete', generation: 0 });
+  assert.equal(stale.status, 409);
+  assert.equal(stale.data.error.code, 'STALE_GENERATION');
+  assert.equal((await item()).state, 'active');
+
+  // Other objects keep the strict generation check even when already in the target state.
+  const dayId = (await f.req(`/api/trips/${tid}`, { actor: a })).data.objects.find(o => o.kind === 'day').id;
+  assert.equal((await f.op(a, tid, { objectId: dayId, kind: 'delete', generation: 0 })).status, 200);
+  const staleDay = await f.op(a, tid, { objectId: dayId, kind: 'delete', generation: 0 });
+  assert.equal(staleDay.status, 409);
+  assert.equal(staleDay.data.error.code, 'STALE_GENERATION');
+});
