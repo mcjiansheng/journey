@@ -82,6 +82,10 @@ export function BoardContextMenu({ x, y, items, onClose, fixed = false, label = 
               preventScroll: true,
             });
           }}
+          onPointerMove={(e) => {
+            const btn = e.currentTarget.querySelector('[role="menuitem"]:not([disabled])');
+            if (btn && document.activeElement !== btn) btn.focus({ preventScroll: true });
+          }}
         >
           <button
             type="button"

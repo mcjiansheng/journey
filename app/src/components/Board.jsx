@@ -494,11 +494,15 @@ export function Board({
 
   const fitContent = () => {
     if (!stageRef.current) return;
+    initializedViewRef.current = true;
     const rect = stageRef.current.getBoundingClientRect();
-    setView(center(activeItems, { w: rect.width, h: rect.height }, insetsRef.current));
+    setView(
+      center(activeItems, { w: rect.width, h: rect.height }, insetsRef.current, DEFAULT_ZOOM),
+    );
   };
 
   const zoomAround = (factor, sx, sy) => {
+    initializedViewRef.current = true;
     const v = viewRef.current;
     const nextK = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v.k * factor));
     const w = toWorld({ x: sx, y: sy }, v);
@@ -531,6 +535,7 @@ export function Board({
       if (e.ctrlKey || e.metaKey) {
         zoomAround(Math.exp(-e.deltaY * 0.005), e.clientX - rect.left, e.clientY - rect.top);
       } else {
+        initializedViewRef.current = true;
         setView((v) => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }));
       }
     };
@@ -1500,6 +1505,7 @@ export function Board({
     }
 
     if (g.type === 'pan') {
+      initializedViewRef.current = true;
       setView({
         ...g.view0,
         x: g.view0.x + e.clientX - g.startX,
@@ -1649,7 +1655,7 @@ export function Board({
     const g = gestureRef.current;
     if (!g) return;
     gestureRef.current = null;
-    requestAnimationFrame(() => handlers.current.armTyping?.());
+    handlers.current.armTyping?.();
     cancelAnimationFrame(g.raf);
     stageRef.current?.classList.remove('panning');
     setGestureActive(false);
@@ -1948,9 +1954,8 @@ export function Board({
   };
   handlers.current.armTyping = armTyping;
   useEffect(() => {
-    const r = requestAnimationFrame(() => handlers.current.armTyping?.());
-    return () => cancelAnimationFrame(r);
-  }, [selectedIds, editingId]);
+    handlers.current.armTyping?.();
+  }, [selectedIds, editingId, panelOpen, deletionsOpen]);
 
   // ---------- Keyboard (N-3) ----------
   const modalOpenRef = useRef(modalOpen);
@@ -2287,6 +2292,7 @@ export function Board({
   return (
     <div
       className="board-container"
+      data-loading={loading ? 'true' : 'false'}
       data-panel={panelOpen ? 'open' : 'closed'}
       data-dock={narrow ? 'sheet' : dock}
     >

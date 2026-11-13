@@ -3431,6 +3431,9 @@
   box-shadow: none;
   background: var(--selected);
 }
+.context-menu:has(.cm-item:focus) .cm-item:hover:not(:focus) {
+  background: none;
+}
 
 /* Type to edit: the hidden field that receives keys for a selected note. */
 .type-catcher {
@@ -3503,8 +3506,8 @@
   box-shadow: 0 4px 14px #0003;
   animation: board-fade-in 0.1s ease-out 0.15s both;
 }
-#zoom [data-tip]:last-child:hover::after,
-#zoom [data-tip]:last-child:focus-visible::after {
+#zoom [data-tip]:nth-last-child(-n + 3):hover::after,
+#zoom [data-tip]:nth-last-child(-n + 3):focus-visible::after {
   left: auto;
   right: 0;
   translate: 0 0;

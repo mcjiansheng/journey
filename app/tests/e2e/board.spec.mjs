@@ -437,6 +437,7 @@ async function openBoardAtDefault(page) {
 }
 async function openBoard(page) {
   await openBoardAtDefault(page);
+  await expect(page.locator('.board-container')).toHaveAttribute('data-loading', 'false');
   // The label is there even where the number is hidden (narrow screens).
   const zoom = page.locator('#zoom .zoom-value');
   const at100 = async () => /当前缩放 100%/.test((await zoom.getAttribute('aria-label')) || '');
@@ -1720,6 +1721,13 @@ test('board: opens at 80%; text keeps its on-screen size when zoomed out; tool n
   await page.locator('#toolbar button[data-tool="image"]').hover();
   await expect(page.locator('.tool-tip')).toContainText('上传图片');
   await page.locator('#zoom .snap-toggle').hover();
+  const snapTipPos = await page.locator('#zoom .snap-toggle').evaluate((el) => {
+    const s = getComputedStyle(el, '::after');
+    return { right: s.right, left: parseFloat(s.left), btnRight: el.getBoundingClientRect().right };
+  });
+  expect(snapTipPos.right).toBe('0px');
+  expect(snapTipPos.left).toBeLessThan(0);
+  expect(snapTipPos.btnRight).toBeLessThanOrEqual(1280);
   await page.screenshot({ path: evidence('3c-tips.png') });
 });
 
@@ -1735,6 +1743,10 @@ test('board: typing on a selected note edits it; right-click menu has one highli
   await page.keyboard.type('第一行');
   await page.keyboard.press('Escape');
   await expect(note.locator('.note-text')).toContainText('第一行');
+  await page.keyboard.press('Shift+Digit1');
+  await expect(page.locator('#zoom .zoom-value')).toHaveText('80%');
+  await page.keyboard.press('Shift+Digit0');
+  await expect(page.locator('#zoom .zoom-value')).toHaveText('100%');
   await page.locator('#stage').click({ position: { x: 1000, y: 650 } });
 
   // One click selects; typing goes straight into the note (added at the end).
@@ -1774,6 +1786,15 @@ test('board: typing on a selected note edits it; right-click menu has one highli
       }).length,
   );
   expect(highlighted).toBe(1);
+  await page.keyboard.press('ArrowDown');
+  const highlightedAfterKey = await menu.getByRole('menuitem').evaluateAll(
+    (els) =>
+      els.filter((el) => {
+        const bg = getComputedStyle(el).backgroundColor;
+        return bg && !/rgba\(0, 0, 0, 0\)|transparent/.test(bg);
+      }).length,
+  );
+  expect(highlightedAfterKey).toBe(1);
   await page.screenshot({ path: evidence('3c-context-one-highlight.png') });
   await page.keyboard.press('Escape');
 
@@ -1792,9 +1813,7 @@ test('board: export the board as one PNG with a margin', async ({ page }) => {
   await addFromPanel(page, '便签', '.pick-note');
   await page.keyboard.type('导出我');
   await page.keyboard.press('Escape');
-  await page.locator('#toolbar button[data-tool="sticker"]').click();
-  await page.locator('#panel .gallery button:has-text("当地时间")').click();
-  await page.locator('#panel button[aria-label="关闭"]').click();
+  await addFromPanel(page, '小组件', '#panel .gallery button:has-text("当地时间")');
   // Push one object far away: the picture covers everything, not just the view.
   const w = page.locator('.board-item.item-widget');
   const wb = await w.boundingBox();
@@ -1919,6 +1938,12 @@ test('board: offline shows once, never as a returning banner, and notices stay o
   const tb = await page.locator('#toolbar').boundingBox();
   expect(nb.y + nb.height < tb.y || nb.y > tb.y + tb.height).toBe(true);
   await page.screenshot({ path: evidence('3d-offline-notice.png') });
+  // On narrow viewports (390px), the offline indicator must not overlap adjacent header buttons.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const syncBox = await page.locator('.sync-status.offline').boundingBox();
+  const memBox = await page.locator('.members-button').boundingBox();
+  expect(syncBox.x + syncBox.width).toBeLessThanOrEqual(memBox.x + 1);
+  await page.setViewportSize({ width: 1280, height: 800 });
   // Keep working offline for a while: no page-wide 连接中断 banner shows up.
   await noteAt(page, 800, 300, '再写一张');
   await page.waitForTimeout(3000);

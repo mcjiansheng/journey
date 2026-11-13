@@ -1751,6 +1751,8 @@
   --surface: #18212b;
   --text: #e6ecf1;
   --muted: #a1adb9;
+  --selected: #263844;
+  --accent: #8fcbb0;
   --optical-edge: #ffffff1f;
 }
 .map-look-dark :is(.static-map, .map-tiles img) {
