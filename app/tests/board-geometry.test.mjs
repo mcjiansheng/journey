@@ -21,10 +21,11 @@ import {
   overlapShare,
   inSection,
   strokeHit,
+  scaleStrokePoints,
   segmentDistance,
 } from '../src/board-geometry.js';
 import { exportFileName, exportScale } from '../src/board-export.js';
-import { simplify, pathD } from '../src/board.js';
+import { simplify, pathD, scaled } from '../src/board.js';
 
 const near = (a, b, eps = 0.01) => assert.ok(Math.abs(a - b) <= eps, `${a} ≈ ${b}`);
 
@@ -228,4 +229,40 @@ test('export scale stays sharp but bounded', () => {
   const big = exportScale(8000, 6000);
   assert.ok(big < 1 && 8000 * 6000 * big * big <= 24e6 + 1);
   assert.ok(exportScale(40000, 500) * 40000 <= 16000);
+});
+
+test('a resized stroke keeps its line inside its box', () => {
+  const stroke = {
+    frame: { x: 100, y: 100, w: 100, h: 50, rotation: 0, scale: 1 },
+    content: {
+      type: 'stroke',
+      tool: 'pen',
+      points: [
+        [0, 0],
+        [50, 50],
+        [100, 25],
+      ],
+    },
+    style: { color: 'default', size: 4 },
+  };
+  // The corner handle doubles the frame; the points double with it.
+  const frame = scaled(stroke, stroke.frame, { w: 100, h: 50 }, 2, 2, 'se');
+  assert.deepEqual([frame.w, frame.h], [200, 100]);
+  const points = scaleStrokePoints(stroke.content.points, stroke.frame, frame);
+  assert.deepEqual(points, [
+    [0, 0],
+    [100, 100],
+    [200, 50],
+  ]);
+  // Moving or turning (same size) leaves the very same array alone.
+  assert.equal(
+    scaleStrokePoints(stroke.content.points, stroke.frame, { ...stroke.frame, x: 5, rotation: 30 }),
+    stroke.content.points,
+  );
+  // A frame without a size never divides by zero.
+  assert.equal(scaleStrokePoints(stroke.content.points, { w: 0, h: 0 }, frame), stroke.content.points);
+  // The eraser follows the resized line: the old far end is now mid-line, the new one is hit too.
+  const resized = { ...stroke, frame, content: { ...stroke.content, points } };
+  assert.equal(strokeHit(resized, { x: 300, y: 150 }, { x: 300, y: 150 }, 3), true);
+  assert.equal(strokeHit(stroke, { x: 300, y: 150 }, { x: 300, y: 150 }, 3), false);
 });

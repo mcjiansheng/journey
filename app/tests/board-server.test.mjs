@@ -828,3 +828,42 @@ test('board: a stale delete or restore whose goal a peer already reached is a no
   assert.equal(staleDay.status, 409);
   assert.equal(staleDay.data.error.code, 'STALE_GENERATION');
 });
+
+test('board: note HTML is reduced to the toolbar subset before it is stored', async t => {
+  const f = await fixture(t);
+  const a = await f.account('alice');
+  const tid = (await f.trip(a)).trip.id;
+  const itemId = randomUUID();
+  const hostile = '<b onclick="alert(1)">买伞</b><script>alert(2)</script><img src=x onerror=alert(3)><a href="javascript:alert(4)">x</a><span data-color="red" style="position:fixed">红</span>';
+  const created = await f.op(a, tid, {
+    objectId: itemId,
+    kind: 'create',
+    objectType: 'boardItem',
+    patch: {
+      boardId: 'default-board',
+      frame: { x: 0, y: 0, w: 200, h: 160, rotation: 0, scale: 1 },
+      z: 1,
+      content: { type: 'note', text: '买伞', html: hostile },
+      style: { color: 'yellow' },
+    },
+  });
+  assert.equal(created.status, 200, JSON.stringify(created.data));
+  const stored = async () =>
+    (await f.req(`/api/trips/${tid}/boards/default-board/items`, { actor: a })).data.items.find(i => i.id === itemId).payload.content.html;
+  const clean = '<b>买伞</b>x<span data-color="red">红</span>';
+  assert.equal(await stored(), clean);
+
+  f.advance(1000);
+  const patched = await f.op(a, tid, {
+    objectId: itemId,
+    kind: 'patch',
+    patch: { content: { type: 'note', text: '改', html: '<i>改</i><iframe src="//x"></iframe><div style="text-align:center" onmouseover="x()">中</div>' } },
+  });
+  assert.equal(patched.status, 200, JSON.stringify(patched.data));
+  assert.equal(await stored(), '<i>改</i><div data-align="center">中</div>');
+
+  // Already-clean HTML is stored unchanged, so a client's own copy keeps matching.
+  f.advance(1000);
+  await f.op(a, tid, { objectId: itemId, kind: 'patch', patch: { content: { type: 'note', text: '买伞x红', html: clean } } });
+  assert.equal(await stored(), clean);
+});

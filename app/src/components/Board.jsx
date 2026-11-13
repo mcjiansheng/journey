@@ -51,6 +51,7 @@ import {
   rebaseBox,
   inSection,
   strokeHit,
+  scaleStrokePoints,
 } from '../board-geometry.js';
 import { renderBoardImage, downloadBlob, exportFileName } from '../board-export.js';
 
@@ -284,6 +285,8 @@ export function Board({
     setSelectedIds((prev) => (sameSet(prev, next) ? prev : next));
     return next;
   }, []);
+  // Pointer that was last pressed: 'mouse', 'touch' or 'pen' (null before any).
+  const lastPointerTypeRef = useRef(null);
   const menuTimer = useRef(0);
   const toggleMenuSoon = () => {
     clearTimeout(menuTimer.current);
@@ -299,6 +302,7 @@ export function Board({
   // style/color click and close the menus the user is still using.
   useEffect(() => {
     const cancelPendingToggle = (e) => {
+      lastPointerTypeRef.current = e.pointerType || null;
       if (e.target?.closest?.('.ui')) clearTimeout(menuTimer.current);
     };
     document.addEventListener('pointerdown', cancelPendingToggle, true);
@@ -418,8 +422,12 @@ export function Board({
 
   const runHistory = (entry, direction) => {
     if (entry.type === 'patch') {
+      // `before` holds the whole earlier style: undo puts it back as it was,
+      // which also drops a field the change had added (e.g. a first map look).
       for (const c of entry.changes)
-        patchBoardItem(c.id, direction === 'undo' ? c.before : c.after).catch(() => {});
+        patchBoardItem(c.id, direction === 'undo' ? c.before : c.after, {
+          replaceStyle: direction === 'undo',
+        }).catch(() => {});
     } else {
       const remove = (entry.type === 'add') === (direction === 'undo');
       for (const id of entry.ids)
@@ -1702,6 +1710,16 @@ export function Board({
       const changes = Object.entries(g.pending.frames).map(([id, frame]) => {
         const it = itemsByIdRef.current.get(id);
         const patch = { frame };
+        // The line follows its box: save the points at the new size too.
+        if (
+          it?.content?.type === 'stroke' &&
+          it.frame &&
+          (frame.w !== it.frame.w || frame.h !== it.frame.h)
+        )
+          patch.content = {
+            ...it.content,
+            points: scaleStrokePoints(it.content.points, it.frame, frame),
+          };
         let style = null;
         if (g.type === 'reshape') style = { ...(it?.style || {}), size: g.pending.sizes[id] };
         if (g.type === 'side' && it?.content?.type === 'text') {
@@ -1921,6 +1939,9 @@ export function Board({
   const armTyping = () => {
     const el = typeCatcherRef.current;
     if (!el || !typingTarget()) return;
+    // Finger or stylus: focusing the hidden field would bring up the on-screen
+    // keyboard on every tap that only meant to select. Double tap still edits.
+    if (lastPointerTypeRef.current && lastPointerTypeRef.current !== 'mouse') return;
     const a = document.activeElement;
     if (a && a !== document.body && a !== el && !stageRef.current?.contains(a)) return;
     if (a !== el) el.focus({ preventScroll: true });
@@ -2121,9 +2142,20 @@ export function Board({
     const key = `${it.id}`;
     const prev = displayCache.current.get(key);
     if (prev && prev.src === it && prev.f === f && prev.size === size) return prev.out;
+    // A stroke being resized (here or by a peer) shows its line at the new size.
+    const resizedStroke =
+      it.content?.type === 'stroke' && it.frame && (f.w !== it.frame.w || f.h !== it.frame.h);
     const out = {
       ...it,
       frame: f,
+      ...(resizedStroke
+        ? {
+            content: {
+              ...it.content,
+              points: scaleStrokePoints(it.content.points, it.frame, f),
+            },
+          }
+        : {}),
       ...(size ? { style: { ...(it.style || {}), size } } : {}),
     };
     displayCache.current.set(key, { src: it, f, size, out });

@@ -209,6 +209,19 @@ export function finalizeStroke(points, simplifyFn, limit = 1000) {
   };
 }
 
+/**
+ * Points of a stroke whose frame went from `from` to `to`. A stroke keeps its
+ * points relative to the frame origin, so resizing the frame has to resize the
+ * points with it or the line stays put while its box changes.
+ */
+export function scaleStrokePoints(points, from, to) {
+  if (!Array.isArray(points)) return points;
+  const sx = from?.w > 0 && to?.w > 0 ? to.w / from.w : 1;
+  const sy = from?.h > 0 && to?.h > 0 ? to.h / from.h : 1;
+  if (Math.abs(sx - 1) < 1e-6 && Math.abs(sy - 1) < 1e-6) return points;
+  return points.map(([x, y]) => [Math.round(x * sx * 100) / 100, Math.round(y * sy * 100) / 100]);
+}
+
 // ---------- Alignment ----------
 const edgesX = (b) => [b.x, b.x + b.w / 2, b.x + b.w];
 const edgesY = (b) => [b.y, b.y + b.h / 2, b.y + b.h];

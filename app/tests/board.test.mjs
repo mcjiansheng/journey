@@ -365,3 +365,29 @@ test('board: 外观与样式 opens styles, colours or nothing', () => {
   );
   assert.deepEqual(cleanBoardStylePatch({ mapStyle: 'dark', junk: 1 }), { mapStyle: 'dark' });
 });
+
+test('board: undo puts the earlier style back, including dropping a field the change added', async () => {
+  const { nextBoardStyle } = await import('../src/board.js');
+  const before = { locked: false, size: 'M' };
+  const current = { size: 'M', mapStyle: 'dark' };
+  // A normal patch adds to the style.
+  assert.deepEqual(nextBoardStyle({ size: 'M' }, { style: { mapStyle: 'dark' } }), current);
+  // Merging the earlier style cannot remove mapStyle; replacing does.
+  assert.deepEqual(nextBoardStyle(current, { style: before }), { size: 'M', mapStyle: 'dark', locked: false });
+  assert.deepEqual(nextBoardStyle(current, { style: before }, { replace: true }), before);
+  // Lock toggles never replace, and a patch without style leaves it alone.
+  assert.deepEqual(nextBoardStyle(current, { locked: true }, { replace: true }), { ...current, locked: true });
+  assert.equal(nextBoardStyle(current, { frame: { x: 1 } }), undefined);
+});
+
+test('board: an items response older than what is shown is dropped', async () => {
+  const { isStaleResponse } = await import('../src/board-pending.js');
+  assert.equal(isStaleResponse({ cursor: 6, epoch: 3 }, 7, 3), true);
+  assert.equal(isStaleResponse({ cursor: 7, epoch: 3 }, 7, 3), false);
+  assert.equal(isStaleResponse({ cursor: 8, epoch: 3 }, 7, 3), false);
+  // Another epoch (restart, restore) is refetched in full, not dropped.
+  assert.equal(isStaleResponse({ cursor: 2, epoch: 4 }, 7, 3), false);
+  // Nothing loaded yet: take whatever comes.
+  assert.equal(isStaleResponse({ cursor: 2, epoch: 3 }, 0, 3), false);
+  assert.equal(isStaleResponse({ cursor: 2, epoch: 3 }, 7, null), false);
+});

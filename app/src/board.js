@@ -576,6 +576,19 @@ export function cleanBoardStylePatch(stylePatch = {}) {
   }
   return out;
 }
+/**
+ * Style an item gets from `patch` ({ style?, locked? }). A patch normally adds
+ * to the current style; `replace` swaps the style for the one given, which is
+ * how undo removes a field the undone change had added.
+ */
+export function nextBoardStyle(current = {}, patch = {}, { replace = false } = {}) {
+  if (!patch.style && patch.locked === undefined) return undefined;
+  return {
+    ...(replace && patch.style ? {} : current || {}),
+    ...(patch.style || {}),
+    ...(patch.locked !== undefined ? { locked: Boolean(patch.locked) } : {}),
+  };
+}
 export function ratioValue(ratio = '1:1') {
   const [a, b] = String(ratio).split(':').map(Number);
   return a > 0 && b > 0 ? a / b : 1;

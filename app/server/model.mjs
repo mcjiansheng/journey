@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { markIcons, markColors } from '../src/marks.js';
+import { sanitizeRichText } from '../src/rich-text.js';
+// Note HTML is stored already reduced to the note toolbar's subset, so no reader has to trust a peer's markup.
+const cleanBoardPatch=p=>p&&p.content&&p.content.type==='note'&&typeof p.content.html==='string'?{...p,content:{...p.content,html:sanitizeRichText(p.content.html)}}:p;
 const mark=z.object({icon:z.enum(Object.keys(markIcons)),color:z.enum(Object.keys(markColors))}).strict();
 import { endpointSignature,routeSignature,planDayId } from '../src/domain.js';
 export function fail(code,message,status=422,details){const e=new Error(message);Object.assign(e,{code,status,details});throw e;}
@@ -165,7 +168,7 @@ export function applyOperation(db,t,userId,op,now){const {trip,member}=membershi
  if(op.objectId===t){if(op.kind==='patch'){const patch=parse(z.object({name:name.optional(),destination:text.optional(),timezone:tripSchema.shape.timezone.optional()}).strict(),op.patch);trip.clocks||={};for(const [k,v]of Object.entries(patch)){if(wins(trip.clocks[k],c)){trip[k]=v;trip.clocks[k]=c;changed=true;}else ignored.push(k);}db.prepare('UPDATE trips SET data=? WHERE id=?').run(stringify(trip),t);return {changed,ignored};}}
  let o;if(op.kind==='create'){
  if(!op.objectType)fail('VALIDATION','请选择内容类型');const existingObj=db.prepare('SELECT kind FROM objects WHERE tripId=? AND id=?').get(t,op.objectId);if(existingObj){if(existingObj.kind===op.objectType)return {changed:false,ignored:[],duplicate:true};fail('OBJECT_EXISTS','该日程或活动内容已存在，请勿重复添加',409);}
- const rawPatch=op.objectType==='boardItem'?{...op.patch,createdBy:userId}:op.patch;
+ const rawPatch=op.objectType==='boardItem'?{...cleanBoardPatch(op.patch),createdBy:userId}:op.patch;
  const payload=parse(schemas[op.objectType],rawPatch);
  if(op.objectType==='boardItem')validateBoardItem(payload);
  references(db,t,op.objectType,payload,op.objectId);
@@ -182,6 +185,7 @@ export function applyOperation(db,t,userId,op,now){const {trip,member}=membershi
      if(p.content.type&&p.content.type!==o.payload.content.type)fail('VALIDATION','元素内容类型不可变更');
      if(o.payload.content.type==='widget'&&p.content.kind&&p.content.kind!==o.payload.content.kind)fail('VALIDATION','小组件种类不可变更');
    }
+   p=cleanBoardPatch(p);
  }
  let proposed=parse(schemas[o.kind],{...o.payload,...p});
  if(o.kind==='boardItem')validateBoardItem(proposed);

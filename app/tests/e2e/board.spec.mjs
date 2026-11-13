@@ -1959,3 +1959,107 @@ test('board: offline shows once, never as a returning banner, and notices stay o
     )
     .toBe(2);
 });
+
+test('board: resizing a stroke resizes its line with the box', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await register(page);
+  await createTrip(page);
+  await openBoard(page);
+  await page.locator('#toolbar button[data-tool="pen"]').click();
+  await page.mouse.move(400, 300);
+  await page.mouse.down();
+  await page.mouse.move(500, 360, { steps: 8 });
+  await page.mouse.move(600, 300, { steps: 8 });
+  await page.mouse.up();
+  const stroke = page.locator('.board-item.item-stroke');
+  await expect(stroke).toHaveCount(1);
+  const saved = async () =>
+    (await boardItems(page)).items.find((i) => i.payload.content.type === 'stroke')?.payload;
+  await expect.poll(async () => Boolean(await saved())).toBe(true);
+  const before = await saved();
+  const extent = (p) => Math.max(...p.content.points.map(([x]) => x));
+
+  await page.locator('#toolbar button[data-tool="select"]').click();
+  await page.mouse.click(450, 330);
+  const se = stroke.locator('.handle.h-se');
+  await expect(se).toBeVisible();
+  const hb = await se.boundingBox();
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(hb.x + hb.width / 2 + 200, hb.y + hb.height / 2 + 60, { steps: 10 });
+  // While dragging, the painted line already reaches about as far as the box.
+  const live = await stroke.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    const path = el.querySelector('.stroke-paint').getBoundingClientRect();
+    return { box: box.width, path: path.width };
+  });
+  expect(live.box).toBeGreaterThan(before.frame.w * 1.5);
+  expect(live.path).toBeGreaterThan(live.box * 0.85);
+  await page.mouse.up();
+
+  await expect.poll(async () => (await saved()).frame.w).toBeGreaterThan(before.frame.w * 1.5);
+  const after = await saved();
+  const k = after.frame.w / before.frame.w;
+  expect(Math.abs(extent(after) - extent(before) * k)).toBeLessThan(2);
+
+  // Undo restores both the frame and the points.
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(async () => (await saved()).frame.w).toBe(before.frame.w);
+  expect(Math.abs(extent(await saved()) - extent(before))).toBeLessThan(0.02);
+});
+
+test('board: a tap selects a note without focusing the typing field (no on-screen keyboard)', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    hasTouch: true,
+    viewport: { width: 390, height: 844 },
+  });
+  const page = await context.newPage();
+  try {
+    await register(page);
+    await createTrip(page);
+    await openBoard(page);
+    // Seed a note through the API so the test does not depend on the narrow-screen panel.
+    await page.evaluate(async () => {
+      const tripId = (await (await fetch('/api/trips')).json()).trips[0].id;
+      const csrf = (await (await fetch('/api/session')).json()).csrfToken;
+      const lease = await (
+        await fetch('/api/clock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+          body: JSON.stringify({ deviceId: crypto.randomUUID() }),
+        })
+      ).json();
+      await fetch(`/api/trips/${tripId}/operations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+        body: JSON.stringify({
+          id: crypto.randomUUID(),
+          objectId: crypto.randomUUID(),
+          kind: 'create',
+          objectType: 'boardItem',
+          patch: {
+            boardId: 'default-board',
+            frame: { x: 60, y: 200, w: 200, h: 160, rotation: 0, scale: 1 },
+            z: 1,
+            content: { type: 'note', text: '点我' },
+            style: { color: 'yellow' },
+          },
+          clock: { leaseId: lease.leaseId, elapsedMs: 0, uncertaintyMs: 0 },
+        }),
+      });
+    });
+    const note = page.locator('.board-item.item-note', { hasText: '点我' });
+    await expect(note).toBeVisible();
+    const nb = await note.boundingBox();
+    await page.touchscreen.tap(nb.x + nb.width / 2, nb.y + nb.height / 2);
+    await expect(note).toHaveClass(/is-selected/);
+    await page.waitForTimeout(300);
+    const focused = await page.evaluate(() => document.activeElement?.className || '');
+    expect(focused).not.toContain('type-catcher');
+    await expect(note).not.toHaveClass(/editing/);
+  } finally {
+    await context.close();
+  }
+});

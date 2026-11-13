@@ -19,7 +19,7 @@ async function digest(path){const hash=createHash('sha256');for await(const chun
 try{
  execFileSync('npm',['run','build'],{cwd:app,stdio:'inherit',env:{...process.env,APP_BASE_PATH:'/'}});
  for(const name of ['package.json','package-lock.json','server','dist','ops'])await cp(join(app,name),join(stage,name),{recursive:true});
- await mkdir(join(stage,'src'));for(const file of ['domain.js','marks.js'])await cp(join(app,'src',file),join(stage,'src',file));
+ await mkdir(join(stage,'src'));for(const file of ['domain.js','marks.js','rich-text.js'])await cp(join(app,'src',file),join(stage,'src',file));
  execFileSync('npm',['ci','--omit=dev','--ignore-scripts','--cache',join(repo,'.local/npm-cache')],{cwd:stage,stdio:'inherit'});
  execFileSync(process.execPath,['ops/verify-release.mjs'],{cwd:stage,stdio:'inherit'});
  const files=[];

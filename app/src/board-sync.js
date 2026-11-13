@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { openDB } from 'idb';
 import { api, onPresence, onTripChange, getDeviceId } from './sync.js';
 import { WIDGET_SIZES } from './board-widgets.js';
-import { cleanBoardStylePatch } from './board.js';
-import { reconcilePending, mergeExpected } from './board-pending.js';
+import { cleanBoardStylePatch, nextBoardStyle } from './board.js';
+import { reconcilePending, mergeExpected, isStaleResponse } from './board-pending.js';
 
 let databasePromise = null;
 function getDb() {
@@ -383,6 +383,9 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
         const since = cursorRef.current || 0;
         let res = await api(itemsUrl(since));
         if (!res) return;
+        // Every change event starts its own request; an answer that arrives
+        // after a newer one must not put older copies back.
+        if (isStaleResponse(res, cursorRef.current, epochRef.current)) return;
 
         // An epoch change means the server was restarted/restored. The
         // incremental payload only contains changed items, never replace the
@@ -582,17 +585,11 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
   );
 
   const patchBoardItem = useCallback(
-    async (itemId, patch) => {
+    async (itemId, patch, { replaceStyle = false } = {}) => {
       const now = Date.now();
       const target = itemsRef.current.find((it) => it.id === itemId);
-      const styleWithLock =
-        patch.style || patch.locked !== undefined
-          ? {
-              ...(target?.style || {}),
-              ...(patch.style || {}),
-              ...(patch.locked !== undefined ? { locked: Boolean(patch.locked) } : {}),
-            }
-          : undefined;
+      const replace = replaceStyle && Boolean(patch.style);
+      const styleWithLock = nextBoardStyle(target?.style, patch, { replace });
       const patchToClean = {
         ...patch,
         ...(styleWithLock ? { style: styleWithLock } : {}),
@@ -605,7 +602,11 @@ export function useBoard(tripId, boardId, { mutate, currentUserId } = {}) {
             content: cleaned.content
               ? { ...(target.content || {}), ...cleaned.content }
               : target.content,
-            style: cleaned.style ? { ...(target.style || {}), ...cleaned.style } : target.style,
+            style: cleaned.style
+              ? replace
+                ? cleaned.style
+                : { ...(target.style || {}), ...cleaned.style }
+              : target.style,
             frame: cleaned.frame ? { ...(target.frame || {}), ...cleaned.frame } : target.frame,
             updatedAt: now,
           })

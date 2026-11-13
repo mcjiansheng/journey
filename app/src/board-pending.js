@@ -50,3 +50,12 @@ export function reconcilePending(serverItems, localItems, pending, now = Date.no
   }
   return out;
 }
+/**
+ * Whether an items response is older than what is already on screen: same
+ * server epoch, smaller cursor. (A different epoch is a restart or restore and
+ * is handled by a full refetch, never dropped.)
+ */
+export function isStaleResponse(res, cursor, epoch) {
+  if (!res || epoch == null || !cursor) return false;
+  return Number(res.epoch) === Number(epoch) && (res.cursor || 0) < cursor;
+}
