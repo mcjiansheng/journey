@@ -432,7 +432,7 @@ test('board: responsive screenshots across palettes and viewports', async ({ pag
 // The board opens at a comfortable 80%; most tests measure in board units at
 // 100%, so they switch to it with ⇧0 (the design-tool shortcut).
 async function openBoardAtDefault(page) {
-  await page.locator('nav button[aria-label="白板"]').first().click();
+  await page.locator('nav button[aria-label="白板"]:visible').first().click();
   await expect(page.locator('.board-container')).toBeVisible();
 }
 async function openBoard(page) {
