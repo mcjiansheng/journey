@@ -222,6 +222,7 @@
   position: absolute;
   right: 22px;
   bottom: 44px;
+  z-index: 4;
   display: grid;
   border-radius: var(--radius-xl);
   padding: 5px;
@@ -233,6 +234,7 @@
   position: absolute;
   top: 44%;
   left: 60%;
+  z-index: 3;
   transform: translate(-50%, -50%);
   border-radius: var(--radius-xl);
   padding: 20px;
@@ -741,6 +743,7 @@
   right: 32px;
   top: 104px;
   bottom: 30px;
+  z-index: 2;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
