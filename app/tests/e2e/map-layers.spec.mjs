@@ -207,6 +207,12 @@ for(const width of [320,390,1440])for(const theme of ['light','dark'])test(`inli
  await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
  await page.locator('.favorite-marker').click();
  const editor=page.getByRole('region',{name:'收藏标记',exact:true});
+ if(width<=760){
+  const toggle=editor.locator('.mark-mobile-toggle');
+  await expect(toggle).toHaveAttribute('aria-expanded','false');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded','true');
+ }
  await expect(editor.getByRole('group',{name:'图形',exact:true}).getByRole('button')).toHaveCount(8);
  await expect(editor.getByRole('group',{name:'颜色',exact:true}).getByRole('button')).toHaveCount(8);
  await editor.getByRole('button',{name:'三角',exact:true}).click();
@@ -234,6 +240,7 @@ for(const width of [390,1440])test(`triangle favorite keeps a 44px click target 
  await page.setViewportSize({width,height:900});await setup(page);
  await page.locator('.favorite-marker').click();
  const editor=page.getByRole('region',{name:'收藏标记',exact:true});
+ if(width<=760)await editor.locator('.mark-mobile-toggle').click();
  await editor.getByRole('button',{name:'三角',exact:true}).click();
  await expect(editor.getByRole('button',{name:'三角',exact:true})).toHaveAttribute('aria-pressed','true');
  await page.getByRole('button',{name:'关闭地点',exact:true}).click();
@@ -252,6 +259,7 @@ for(const width of [390,1440])test(`triangle favorite keeps a 44px click target 
  await marker.click({position});
  await expect(page.getByRole('heading',{name:'想去的咖啡馆',exact:true})).toBeVisible();
  await expect(page.locator('.selected-marker')).toHaveAttribute('aria-label','想去的咖啡馆');
+ if(width<=760)await editor.locator('.mark-mobile-toggle').click();
  await expect(editor.getByRole('button',{name:'三角',exact:true})).toHaveAttribute('aria-pressed','true');
 });
 

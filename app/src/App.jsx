@@ -70,9 +70,14 @@ export default function App() {
     return () => query.removeEventListener('change', update);
   }, []);
   const [expenseActivityId, setExpenseActivityId] = useState(null);
+  const [mapSubViewActive, setMapSubViewActive] = useState(false);
+  const mapBackRef = useRef(null);
   const tripId = j.snapshot?.trip?.id;
   useEffect(() => setNotice(null), [j.user?.id, tripId]);
   useEffect(() => setExpenseActivityId(null), [j.user?.id, tripId]);
+  useEffect(() => {
+    setMapSubViewActive(false);
+  }, [j.user?.id, tripId]);
   // Going offline is said once per visit, quietly; after that the header's
   // 连接中断 badge carries it (offline use should not keep interrupting).
   const offlineToldRef = useRef(false);
@@ -90,6 +95,7 @@ export default function App() {
     j.snapshot?.objects?.some((o) => o.id === editingDayId && o.state === 'deleted');
   const tripDeleted = j.snapshot?.trip?.state === 'deleted';
   const page = tripDeleted ? 'recovery' : j.context?.page || 'itinerary';
+  const mapNavHidden = page === 'map' && !tripDeleted && mapSubViewActive;
   // Map and board share the immersive shell: collapsed sidebar, floating header.
   const immersive = page === 'map' || page === 'board';
   const [panelDock, setPanelDock] = useState(() => boardDock(readAppearance()));
@@ -234,7 +240,7 @@ export default function App() {
         />
       ) : (
         <div
-          className={`app-shell ${immersive ? 'immersive-shell' : ''} ${page === 'map' ? 'map-shell' : ''} ${page === 'board' ? 'board-shell' : ''}`}
+          className={`app-shell ${immersive ? 'immersive-shell' : ''} ${page === 'map' ? 'map-shell' : ''} ${mapNavHidden ? 'map-nav-hidden' : ''} ${page === 'board' ? 'board-shell' : ''}`}
         >
           <aside className="sidebar">
             <button className="brand" onClick={home}>
@@ -285,7 +291,11 @@ export default function App() {
           </aside>
           <div className="workspace">
             <header className="trip-header">
-              <button className="header-home" onClick={home} aria-label="返回我的旅程">
+              <button
+                className="header-home"
+                onClick={mapNavHidden ? () => mapBackRef.current?.() : home}
+                aria-label={mapNavHidden ? '返回地图总览' : '返回我的旅程'}
+              >
                 <ArrowLeft size={20} />
               </button>
               {
@@ -384,6 +394,8 @@ export default function App() {
                     active={page === 'map'}
                     journey={j}
                     onEditActivity={onEdit}
+                    onMobileNavChange={setMapSubViewActive}
+                    exitSubViewRef={mapBackRef}
                   />
                 )}{' '}
                 {tripDeleted ? (

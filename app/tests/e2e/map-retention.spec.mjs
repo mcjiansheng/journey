@@ -13,6 +13,12 @@ test.afterAll(async()=>{if(server)await shutdownServer(server,app)});
 
 function navigation(page,mobile){return page.getByRole('navigation',{name:mobile?'手机主导航':'主导航',exact:true});}
 async function navigate(page,label,mobile){await navigation(page,mobile).getByRole('button',{name:label,exact:true}).click();}
+async function backToOverview(page){
+ await expect(page.getByRole('navigation',{name:'手机主导航',exact:true})).toBeHidden();
+ await page.getByRole('button',{name:'返回地图总览',exact:true}).click();
+ await expect(page.locator('.map-panel.mode-browse')).toBeVisible();
+ await expect(page.getByRole('navigation',{name:'手机主导航',exact:true})).toBeVisible();
+}
 async function home(page,mobile){
  await page.getByRole('button',{name:mobile?'返回我的旅程':'我的旅程',exact:true}).click();
  await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
@@ -110,7 +116,11 @@ async function expectInactive(page,mobile){
 }
 async function retention(page,mobile){
  let details=0;await page.route('**/_AMapService/v3/place/detail?**',route=>{details++;return fulfillDetail(route);});
- await setup(page,mobile);await select(page);const before=await camera(page);expect(details).toBe(1);
+ await setup(page,mobile);await select(page);
+ // Mobile map sub-views hide the bottom navigation (2026-11-22 decision, MOB-021):
+ // the top-left back returns to the map overview first, so only the map and viewport are retained.
+ if(mobile)await backToOverview(page);
+ const before=await camera(page);expect(details).toBe(1);
  await page.evaluate(()=>{
   window.__retentionLoading=[];
   const loading=node=>/正在定位地图…|正在载入地点…/.test(node.textContent||'');
@@ -119,9 +129,13 @@ async function retention(page,mobile){
  });
  for(const label of ['行程','费用','旅程设置','行程','费用','旅程设置']){
   await navigate(page,label,mobile);await expectInactive(page,mobile);await expectSameMap(page);
-  await navigate(page,'地图',mobile);await expect(page.getByRole('heading',{name:'保留的自定义地点',exact:true})).toBeVisible();
-  await expect(page.locator('.place-address')).toHaveText('北门长椅旁');
-  await expect(page.locator('.place-information-hours')).toContainText('09:00');
+  await navigate(page,'地图',mobile);
+  if(mobile)await expect(page.locator('.map-peek-bar')).toBeVisible();
+  else{
+   await expect(page.getByRole('heading',{name:'保留的自定义地点',exact:true})).toBeVisible();
+   await expect(page.locator('.place-address')).toHaveText('北门长椅旁');
+   await expect(page.locator('.place-information-hours')).toContainText('09:00');
+  }
   await settle(page);await expectSameMap(page);expect(await camera(page)).toEqual(before);expect(details).toBe(1);
  }
  await page.getByRole('button',{name:'地图路线日期',exact:true}).click();
@@ -154,7 +168,7 @@ test('WebKit mobile retains the real map across repeated tab switching',async()=
 test('activity navigation reuses the map and home releases it before another trip opens',async({page})=>{
  test.setTimeout(120000);await page.setViewportSize({width:390,height:844});
  let details=0;await page.route('**/_AMapService/v3/place/detail?**',route=>{details++;return fulfillDetail(route);});
- await setup(page,true);await select(page);await navigate(page,'行程',true);
+ await setup(page,true);await select(page);await backToOverview(page);await navigate(page,'行程',true);
  await selectSecondDay(page);
  await page.locator('.activity-card').filter({hasText:'第二天湖边集合'}).getByRole('button',{name:/^在地图查看：/}).click();
  await expect(page.getByRole('heading',{name:'我们约定的东门',exact:true})).toBeVisible();
@@ -163,7 +177,7 @@ test('activity navigation reuses the map and home releases it before another tri
  await expect(page.locator('.place-information-hours')).toContainText('09:00');
  await settle(page);await expectSameMap(page);expect(details).toBe(2);
  expect(await page.evaluate(()=>window.__retentionCameraCalls.length)).toBeGreaterThan(1);
- await home(page,true);await expect(page.locator('.journey-map')).toHaveCount(0);
+ await backToOverview(page);await home(page,true);await expect(page.locator('.journey-map')).toHaveCount(0);
  expect(await page.evaluate(()=>window.__retentionDestroyed)).toEqual([0]);
  await page.locator('.trip-card').filter({hasText:'另一段旅程'}).click();
  await expect(page.getByRole('combobox',{name:'当前计划日'})).toBeVisible();
@@ -196,20 +210,25 @@ test('an activity chosen before map initialization completes keeps its selection
 });
 
 
-test('a first activity map entry persists its selected place and route day across home',async({page})=>{
- test.setTimeout(90000);await page.setViewportSize({width:390,height:844});
+// Desktop keeps the place open across home. Mobile map sub-views hide the bottom navigation and the
+// top-left back returns to the overview first (2026-11-22 decision, MOB-021), so only the route day is kept.
+for(const width of [1440,390])test(`a first activity map entry persists its selected place and route day across home at ${width}px`,async({page})=>{
+ const mobile=width<=760;
+ test.setTimeout(90000);await page.setViewportSize({width,height:mobile?844:900});
  await page.route('**/_AMapService/v3/place/detail?**',fulfillDetail);
- await setup(page,true,{coldActivity:true});
- await selectSecondDay(page);
+ await setup(page,mobile,{coldActivity:true});
+ if(mobile)await selectSecondDay(page);else await page.getByRole('tab',{name:/第2天/}).click();
  await page.locator('.activity-card').filter({hasText:'第二天湖边集合'}).getByRole('button',{name:/^在地图查看：/}).click();
  await expect(page.getByRole('heading',{name:'我们约定的东门',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'地图路线日期',exact:true})).toContainText('第2天路线');
  await expect(page.locator('.place-information-hours')).toContainText('09:00');
  await expect(page.getByText('正在定位地图…',{exact:true})).toHaveCount(0);
- await home(page,true);await page.getByRole('button',{name:/继续旅程/}).click();
- await expect(page.getByRole('heading',{name:'我们约定的东门',exact:true})).toBeVisible();
- await expect(page.locator('.place-address')).toHaveText('东门售票亭旁集合');
+ if(mobile)await backToOverview(page);
+ await home(page,mobile);await page.getByRole('button',{name:/继续旅程/}).click();
  await expect(page.getByRole('button',{name:'地图路线日期',exact:true})).toContainText('第2天路线');
  await expect(page.getByText('正在定位地图…',{exact:true})).toHaveCount(0);
+ if(mobile){await expect(page.getByRole('heading',{name:'我们约定的东门',exact:true})).toHaveCount(0);return;}
+ await expect(page.getByRole('heading',{name:'我们约定的东门',exact:true})).toBeVisible();
+ await expect(page.locator('.place-address')).toHaveText('东门售票亭旁集合');
  await expect(page.locator('.place-information-hours')).toContainText('09:00');
 });
