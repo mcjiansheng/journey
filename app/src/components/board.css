@@ -1636,14 +1636,6 @@
   .board-container #actions button {
     height: 44px;
   }
-  /* Formatting bar: bigger targets, it wraps to a second row instead of shrinking (MOB-009). */
-  #note-format .fmt {
-    width: 40px;
-    height: 40px;
-  }
-  #note-format .fs-btn {
-    width: 34px;
-  }
   #drawer {
     left: 8px;
     right: 8px;
@@ -2497,6 +2489,16 @@
 #note-format .fmt-color-pop[data-placement='top'] {
   top: auto;
   bottom: calc(100% + 8px);
+}
+@media (max-width: 760px) {
+  /* Formatting bar: bigger targets after the base rules so they take effect (MOB-009). */
+  #note-format .fmt {
+    width: 40px;
+    height: 40px;
+  }
+  #note-format .fs-btn {
+    width: 34px;
+  }
 }
 
 /* ---------- Style pop (beside the action bar) ---------- */

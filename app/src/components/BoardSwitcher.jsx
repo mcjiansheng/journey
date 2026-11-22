@@ -43,11 +43,18 @@ export function BoardSwitcher({
     const pills = document.querySelector('.app-shell .header-right');
     if (!root || !pills || typeof ResizeObserver !== 'function') return undefined;
     const update = () =>
-      root.style.setProperty('--header-right-width', `${Math.ceil(pills.offsetWidth)}px`);
+      root.style.setProperty(
+        '--header-right-width',
+        `${Math.ceil(window.innerWidth - pills.getBoundingClientRect().left)}px`,
+      );
     update();
     const observer = new ResizeObserver(update);
     observer.observe(pills);
-    return () => observer.disconnect();
+    window.addEventListener('resize', update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+    };
   }, []);
 
   useEffect(() => {
