@@ -14,6 +14,7 @@ import {
   RefreshCw,
   ArrowLeft,
   List,
+  Tags,
 } from 'lucide-react';
 import {
   loadAmap,
@@ -69,7 +70,13 @@ const category = (p) =>
         : /交通|机场|车站/.test(p.category)
           ? '交通'
           : '其他';
-export default function MapView({ journey: j, onEditActivity, active = true }) {
+export default function MapView({
+  journey: j,
+  onEditActivity,
+  active = true,
+  onMobileNavChange,
+  exitSubViewRef,
+}) {
   const { snapshot, context } = j,
     trip = snapshot.trip,
     initial = context.map || {};
@@ -97,6 +104,11 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
     [filterDraft, setFilterDraft] = useState(filter),
     [manual, setManual] = useState({ name: '', address: '' }),
     [keyboardOpen, setKeyboardOpen] = useState(false),
+    [isMobile, setIsMobile] = useState(() =>
+      typeof window !== 'undefined' ? window.matchMedia('(max-width: 760px)').matches : false,
+    ),
+    [sheetExpanded, setSheetExpanded] = useState(false),
+    [legendOpen, setLegendOpen] = useState(false),
     [cameraChoice, setCameraChoice] = useState(null),
     [cameraLoading, setCameraLoading] = useState(false);
   const [markEditor, setMarkEditor] = useState(null),
@@ -134,7 +146,19 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
   if (active && destination !== trip.destination) setDestination(trip.destination);
   activeRef.current = active;
   const canvas = useRef(null),
+    mapRoot = useRef(null),
     panel = useRef(null),
+    topDock = useRef(null),
+    sheetSurface = useRef(null),
+    peekBar = useRef(null),
+    scrollRef = useRef(null),
+    legendPopover = useRef(null),
+    legendToggle = useRef(null),
+    dragState = useRef(null),
+    dragCleanup = useRef(null),
+    touchScrollDrag = useRef(null),
+    peekDragY = useRef(null),
+    justDragged = useRef(false),
     map = useRef(null),
     markers = useRef([]),
     lines = useRef([]),
@@ -179,10 +203,109 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
       (filter.category === '全部' || category(o.payload) === filter.category) &&
       (filter.arranged === '全部' || isArranged(o.payload) === (filter.arranged === '已安排')),
   );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 760px)');
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+  useEffect(() => {
+    if (!legendOpen) return;
+    const onPointerDown = (event) => {
+      if (
+        !legendPopover.current?.contains(event.target) &&
+        !legendToggle.current?.contains(event.target)
+      )
+        setLegendOpen(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setLegendOpen(false);
+        legendToggle.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [legendOpen]);
+  const hasSheet = mode !== 'browse' || expanded;
+  const hideMobileNav = active && isMobile && (mode !== 'browse' || expanded || keyboardOpen);
+  useEffect(() => {
+    onMobileNavChange?.(hideMobileNav);
+  }, [hideMobileNav, onMobileNavChange]);
+  useEffect(() => () => onMobileNavChange?.(false), [onMobileNavChange]);
+  useLayoutEffect(() => {
+    const root = mapRoot.current;
+    if (!root) return;
+    const updateClearance = () => {
+      if (window.innerWidth > 760) {
+        root.style.removeProperty('--map-top-clearance');
+        root.style.removeProperty('--map-bottom-clearance');
+        root.classList.remove('map-tools-hidden');
+        return;
+      }
+      const topRect = topDock.current?.getBoundingClientRect();
+      const topClearance = topRect ? Math.ceil(topRect.bottom) : 118;
+      const bottomNav = document.querySelector('.bottom-nav')?.getBoundingClientRect();
+      const navTop = bottomNav?.height ? bottomNav.top : window.innerHeight;
+      const sheetActive = hasSheet && mode !== 'search' && mode !== 'pick';
+      const panelRect = sheetActive ? panel.current?.getBoundingClientRect() : null;
+      const pickRect = mode === 'pick' ? panel.current?.getBoundingClientRect() : null;
+      const peekRect = !hasSheet ? peekBar.current?.getBoundingClientRect() : null;
+      const sheetTop =
+        panelRect && panelRect.height > 0
+          ? panelRect.top
+          : pickRect && pickRect.height > 0
+            ? pickRect.top
+            : peekRect && peekRect.height > 0
+              ? peekRect.top
+              : navTop;
+      const bottomClearance = Math.max(12, Math.ceil(window.innerHeight - sheetTop));
+      root.style.setProperty('--map-top-clearance', `${topClearance}px`);
+      root.style.setProperty('--map-bottom-clearance', `${bottomClearance}px`);
+      const hideTools =
+        keyboardOpen ||
+        mode === 'search' ||
+        mode === 'filter' ||
+        mode === 'manual' ||
+        (sheetActive && sheetTop < topClearance + 132);
+      root.classList.toggle('map-tools-hidden', hideTools);
+    };
+    updateClearance();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(updateClearance) : null;
+    if (topDock.current) ro?.observe(topDock.current);
+    if (panel.current) ro?.observe(panel.current);
+    if (peekBar.current) ro?.observe(peekBar.current);
+    window.addEventListener('resize', updateClearance);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', updateClearance);
+    };
+  }, [
+    active,
+    isMobile,
+    mode,
+    hasSheet,
+    hideMobileNav,
+    sheetExpanded,
+    expanded,
+    selected,
+    results.length,
+    suggestions.length,
+    keyboardOpen,
+    usedPresets.length,
+    guideDismissed,
+    placeInformation,
+    mapError,
+  ]);
   // Measure the new natural size, then continue from the currently visible height.
   useLayoutEffect(() => {
     const element = panel.current;
-    if (!active) {
+    if (!active || isMobile) {
       panelAnimation.current?.cancel();
       panelHeight.current = null;
       return;
@@ -199,7 +322,18 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
         [{ height: `${before}px` }, { height: `${after}px` }],
         { duration: 220, easing: 'cubic-bezier(.2,.7,.2,1)' },
       );
-  }, [active, mode, expanded, selected, results, suggestions, error, filter, favorites.length]);
+  }, [
+    active,
+    isMobile,
+    mode,
+    expanded,
+    selected,
+    results,
+    suggestions,
+    error,
+    filter,
+    favorites.length,
+  ]);
   useEffect(() => () => panelAnimation.current?.cancel(), []);
   useLayoutEffect(() => {
     if (active && (mode === 'filter' || mode === 'pick'))
@@ -703,14 +837,23 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
       pendingFit.current = null;
       if (fit.intent === cameraIntent.current && markers.current.length) {
         const bounds = panel.current.getBoundingClientRect(),
+          topBounds = (topDock.current || panel.current).getBoundingClientRect(),
           mobile = innerWidth <= 760;
         const bottom = document.querySelector('.bottom-nav')?.getBoundingClientRect();
+        const peek = peekBar.current?.getBoundingClientRect();
+        const sheetVisible = modeRef.current !== 'browse' && modeRef.current !== 'search';
+        const bottomPad =
+          mobile && sheetVisible
+            ? Math.max(40, innerHeight - bounds.top + 24)
+            : peek?.height
+              ? innerHeight - peek.top + 24
+              : bottom?.height
+                ? innerHeight - bottom.top + 30
+                : 40;
         m.setFitView(
           markers.current,
           reducedMotion(),
-          mobile
-            ? [bounds.bottom + 24, 30, bottom?.height ? innerHeight - bottom.top + 30 : 40, 30]
-            : [100, 40, 40, bounds.right + 40],
+          mobile ? [topBounds.bottom + 24, 34, bottomPad, 34] : [100, 40, 40, bounds.right + 40],
           15,
         );
       }
@@ -853,15 +996,20 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
       let offsetX = 0,
         offsetY = 0;
       if (innerWidth <= 760) {
+        const topBounds = (topDock.current || r).getBoundingClientRect();
+        const sheetVisible =
+          modeRef.current !== 'browse' && modeRef.current !== 'search' && r.height > 0;
         const viewport = window.visualViewport,
           viewportBottom = (viewport?.offsetTop || 0) + (viewport?.height || innerHeight);
         const navigation = document.querySelector('.bottom-nav')?.getBoundingClientRect();
-        const bottom = Math.min(
-          viewportBottom,
-          navigation?.height ? navigation.top : viewportBottom,
-        );
-        // Center the whole selected pin; its coordinate tip is 20px below its center.
-        offsetY = (r.bottom + bottom) / 2 - (canvasBounds.top + canvasBounds.height / 2) + 20;
+        const navTop = navigation?.height ? navigation.top : viewportBottom;
+        const peek = peekBar.current?.getBoundingClientRect();
+        const peekTop = peek?.height ? peek.top : Infinity;
+        const sheetTop = sheetVisible && r.top > topBounds.bottom + 48 ? r.top : Infinity;
+        const bottom = Math.min(viewportBottom, navTop, peekTop, sheetTop);
+        // Center the whole selected pin inside the open band between top bar and sheet.
+        offsetY =
+          (topBounds.bottom + bottom) / 2 - (canvasBounds.top + canvasBounds.height / 2) + 20;
       } else offsetX = (r.right - canvasBounds.left + 40) / 2;
       const point = targetMap.lngLatToPixel([p.lng, p.lat], zoom);
       const center = targetMap.pixelToLngLat(
@@ -882,15 +1030,25 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
     setBusy(false);
     setPlaceLoading(false);
     setError('');
+    setSheetExpanded(false);
+    setLegendOpen(false);
     modeRef.current = nextMode;
     setMode(nextMode);
   }
+  const dismissToBrowse = () => {
+    setSelected(null);
+    beginTask('browse');
+    setExpanded(false);
+    document.activeElement?.blur?.();
+  };
+  if (exitSubViewRef) exitSubViewRef.current = dismissToBrowse;
   function showPlace(p, moveCamera) {
     setSelected(p);
     setPlaceInformation(null);
     modeRef.current = 'detail';
     setMode('detail');
     setExpanded(false);
+    setSheetExpanded(false);
     document.activeElement?.blur?.();
     if (moveCamera) shiftCamera(p, true);
   }
@@ -1069,9 +1227,218 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
       { timeout: 12000, maximumAge: 30000 },
     );
   }
+  const mobileSheetDraggable =
+    isMobile && !keyboardOpen && ['detail', 'list', 'filter', 'manual'].includes(mode);
+  const currentDay = days.find((d) => d.id === routeDay);
+  const currentRouteDayLabel = currentDay ? dayLabel(currentDay, trip) : '';
+  const listRouteStops = routeDay
+    ? mapActivities.filter(({ activity }) => activity.payload.place?.name)
+    : [];
+  const arrangedLocationCount = mapActivities.filter(
+    ({ activity }) => activity.payload.place,
+  ).length;
+
+  function clearSheetDragStyles() {
+    const surface = sheetSurface.current;
+    const panelEl = panel.current;
+    if (surface) {
+      surface.classList.remove('is-dragging');
+      surface.style.removeProperty('--sheet-drag-y');
+    }
+    if (panelEl) {
+      panelEl.classList.remove('is-sheet-dragging');
+      panelEl.style.removeProperty('--sheet-drag-height');
+    }
+  }
+
+  function getSheetMetrics() {
+    const topClearance = topDock.current?.getBoundingClientRect().bottom || 118;
+    const vh = window.visualViewport?.height || window.innerHeight;
+    const maxHeight = Math.max(260, Math.round(vh - topClearance - 10));
+    const halfHeight = Math.min(Math.round(vh * 0.46), 380, maxHeight);
+    return { maxHeight, halfHeight };
+  }
+
+  function startSheetDrag(clientY, pointerId = null, source = 'header') {
+    const surface = sheetSurface.current;
+    if (!surface || !mobileSheetDraggable) return;
+    dragCleanup.current?.();
+    const rect = surface.getBoundingClientRect();
+    const { maxHeight, halfHeight } = getSheetMetrics();
+    dragState.current = {
+      active: true,
+      dragging: false,
+      pointerId,
+      source,
+      startY: clientY,
+      lastY: clientY,
+      startTime: performance.now(),
+      startHeight: rect.height,
+      maxHeight,
+      halfHeight,
+    };
+    if (pointerId != null) {
+      const onMove = (e) => {
+        if (e.pointerId === pointerId) moveSheetDrag(e.clientY, e);
+      };
+      const onUp = (e) => {
+        if (e.pointerId === pointerId) endSheetDrag(false);
+      };
+      const onCancel = (e) => {
+        if (e.pointerId === pointerId) endSheetDrag(true);
+      };
+      window.addEventListener('pointermove', onMove, { passive: false });
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onCancel);
+      dragCleanup.current = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
+        dragCleanup.current = null;
+      };
+    }
+  }
+
+  useEffect(() => () => dragCleanup.current?.(), []);
+
+  function moveSheetDrag(clientY, event) {
+    const d = dragState.current;
+    if (!d?.active) return;
+    const dy = clientY - d.startY;
+    d.lastY = clientY;
+    if (!d.dragging) {
+      if (Math.abs(dy) < 6) return;
+      if (
+        d.source === 'scroll' &&
+        (dy <= 0 || (scrollRef.current && scrollRef.current.scrollTop > 1))
+      ) {
+        dragCleanup.current?.();
+        dragState.current = null;
+        return;
+      }
+      d.dragging = true;
+      const surface = sheetSurface.current;
+      surface?.classList.add('is-dragging');
+      panel.current?.classList.add('is-sheet-dragging');
+    }
+    if (event?.cancelable) event.preventDefault();
+    const surface = sheetSurface.current;
+    const panelEl = panel.current;
+    if (!surface || !panelEl) return;
+    const targetHeight = d.startHeight - dy;
+    if (targetHeight >= d.halfHeight) {
+      const clamped = Math.min(d.maxHeight, targetHeight);
+      panelEl.style.setProperty('--sheet-drag-height', `${Math.round(clamped)}px`);
+      surface.style.setProperty('--sheet-drag-y', '0px');
+    } else {
+      const translateY = Math.max(0, Math.round(d.halfHeight - targetHeight));
+      panelEl.style.setProperty('--sheet-drag-height', `${Math.round(d.halfHeight)}px`);
+      surface.style.setProperty('--sheet-drag-y', `${translateY}px`);
+    }
+  }
+
+  function endSheetDrag(cancelled = false) {
+    dragCleanup.current?.();
+    const d = dragState.current;
+    if (!d) return;
+    dragState.current = null;
+    const wasDragging = d.dragging;
+    clearSheetDragStyles();
+    if (!wasDragging || cancelled) return;
+    justDragged.current = true;
+    setTimeout(() => {
+      justDragged.current = false;
+    }, 120);
+    const dy = d.lastY - d.startY;
+    const elapsed = Math.max(16, performance.now() - d.startTime);
+    const velocity = dy / elapsed;
+    const targetHeight = d.startHeight - dy;
+    const dismissFloor = d.halfHeight - 60;
+    if (sheetExpanded) {
+      if (targetHeight < d.halfHeight - 80) {
+        dismissToBrowse();
+        return;
+      }
+      if (dy > 48 || velocity > 0.35 || targetHeight < (d.halfHeight + d.maxHeight) / 2) {
+        setSheetExpanded(false);
+      }
+      return;
+    }
+    if (targetHeight < dismissFloor || dy > 64 || (velocity > 0.45 && dy > 24)) {
+      dismissToBrowse();
+      return;
+    }
+    if (targetHeight > (d.halfHeight + d.maxHeight) / 2 || (velocity < -0.35 && dy < -28)) {
+      setSheetExpanded(true);
+    }
+  }
+
+  const handleHeaderPointerDown = (e) => {
+    if (!mobileSheetDraggable) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.target.closest('button:not(.map-sheet-handle), a, input, select, textarea')) return;
+    startSheetDrag(e.clientY, e.pointerId, 'header');
+  };
+
+  const renderPlaceActions = () => (
+    <div className="map-actions">
+      <button
+        className="primary"
+        disabled={placeLoading && !located(selected)}
+        onClick={startActivity}
+      >
+        <Plus size={17} />
+        加入行程
+      </button>
+      <button
+        disabled={
+          busy || (placeLoading && !located(selected)) || selectedFavorite?.state === 'active'
+        }
+        onClick={favorite}
+      >
+        <Star size={17} />
+        {selectedFavorite?.state === 'active' ? '已收藏' : '收藏'}
+      </button>
+      {selectedFavorite?.state === 'active' && (
+        <button
+          className="pin-to-board-button"
+          onClick={() =>
+            pinWidgetToBoard(j, { kind: 'place', favoriteId: selectedFavorite.id }, 'S')
+          }
+        >
+          贴到白板
+        </button>
+      )}
+    </div>
+  );
+
+  const renderSheetHandle = () =>
+    isMobile && ['detail', 'list', 'filter', 'manual'].includes(mode) ? (
+      <button
+        type="button"
+        className="map-sheet-handle"
+        aria-label={
+          ['filter', 'manual'].includes(mode)
+            ? '下拉关闭面板'
+            : sheetExpanded
+              ? '收起底部面板'
+              : '展开底部面板'
+        }
+        aria-expanded={['filter', 'manual'].includes(mode) ? undefined : sheetExpanded}
+        onClick={() => {
+          if (justDragged.current) return;
+          if (['filter', 'manual'].includes(mode)) dismissToBrowse();
+          else setSheetExpanded((v) => !v);
+        }}
+      >
+        <span aria-hidden="true" />
+      </button>
+    ) : null;
+
   return (
     <section
-      className={`journey-map ${active && mode === 'search' ? 'map-searching' : ''} ${active && keyboardOpen ? 'map-keyboard-open' : ''} ${mapError ? 'map-unavailable' : ''}`}
+      ref={mapRoot}
+      className={`journey-map ${active && mode === 'search' ? 'map-searching' : ''} ${active && keyboardOpen ? 'map-keyboard-open' : ''} ${mapError ? 'map-unavailable' : ''} ${isMobile && hasSheet ? 'map-has-sheet' : ''}`}
       aria-label="地图与共享收藏"
       aria-hidden={!active}
       inert={!active}
@@ -1095,8 +1462,13 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
           ))}
         </Modal>
       )}
-      {usedPresets.length > 0 && (
-        <div className="map-legend" aria-label="标记图例">
+      {usedPresets.length > 0 && (!isMobile || legendOpen) && (
+        <div
+          ref={legendPopover}
+          id="map-legend-popover"
+          className="map-legend"
+          aria-label="标记图例"
+        >
           {usedPresets.map((preset) => {
             const key = markKey(preset.payload);
             const items = favorites.filter((o) => markKey(o.payload.mark) === key);
@@ -1104,7 +1476,10 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
               <button
                 key={key}
                 aria-pressed={markFilter === key}
-                onClick={() => setMarkFilter(markFilter === key ? null : key)}
+                onClick={() => {
+                  setMarkFilter(markFilter === key ? null : key);
+                  if (isMobile) setLegendOpen(false);
+                }}
               >
                 <MarkSymbol mark={effectiveMark(items[0].payload)} />
                 <span className="map-legend-name">{preset.payload.name}</span>
@@ -1210,193 +1585,76 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
             closeTask();
           }
         }}
-        className={`map-panel glass ${expanded || mode === 'search' || mode === 'filter' || mode === 'manual' ? 'expanded' : ''} mode-${mode}`}
+        className={`map-panel glass ${expanded || mode === 'search' || mode === 'filter' || mode === 'manual' ? 'expanded' : ''} ${sheetExpanded ? 'sheet-expanded' : ''} ${hasSheet ? 'has-sheet' : ''} mode-${mode}`}
       >
-        <div className="map-upper-controls">
-          <MapRoutePicker
-            value={routeDay}
-            options={[
-              { value: '', label: '全部地点' },
-              ...days.map((d) => ({
-                value: d.id,
-                label: `${dayLabel(d, trip)}路线`,
-                date: d.payload.date,
-                compactLabel: `${dayLabel(d, trip)}${d.payload.date ? ' · ' + d.payload.date.slice(5).replace('-', '/') : ''}`,
-              })),
-            ]}
-            onChange={setRouteDay}
-          />
-          <button
-            ref={filterButton}
-            className={`map-icon map-filter-toggle ${filter.layer !== '全部' || filter.category !== '全部' || filter.arranged !== '全部' ? 'has-filter' : ''}`}
-            aria-label="筛选地点"
-            aria-expanded={mode === 'filter'}
-            aria-controls="map-place-panel"
-            onClick={() => {
-              if (mode === 'filter') {
-                closeTask();
-                return;
-              }
-              setFilterDraft(filter);
-              beginTask('filter');
-              setExpanded(true);
-            }}
-          >
-            <SlidersHorizontal size={19} />
-          </button>
-        </div>
-        {mode === 'filter' ? (
-          <>
-            <div className="map-panel-title">
-              <h2>筛选地点</h2>
-              <button onClick={closeTask}>取消</button>
-            </div>
-            <fieldset>
-              <legend>显示</legend>
-              <SelectionTrack className="map-chips" activeKey={filterDraft.layer}>
-                {['全部', '行程', '收藏'].map((layer) => (
-                  <button
-                    key={layer}
-                    aria-pressed={filterDraft.layer === layer}
-                    onClick={() => setFilterDraft({ ...filterDraft, layer })}
-                  >
-                    {layer}
-                  </button>
-                ))}
-              </SelectionTrack>
-            </fieldset>
-            {usedPresets.length > 0 && (
-              <fieldset>
-                <legend>标记</legend>
-                <div className="map-chips">
-                  <button
-                    aria-pressed={!filterDraft.mark}
-                    onClick={() => setFilterDraft({ ...filterDraft, mark: null })}
-                  >
-                    全部
-                  </button>
-                  {usedPresets.map((preset) => {
-                    const key = markKey(preset.payload);
-                    return (
-                      <button
-                        key={key}
-                        aria-pressed={filterDraft.mark === key}
-                        onClick={() => setFilterDraft({ ...filterDraft, mark: key })}
-                      >
-                        <MarkSymbol mark={preset.payload} />
-                        {preset.payload.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
-            )}
-            <fieldset>
-              <legend>类别</legend>
-              <SelectionTrack className="map-chips" activeKey={filterDraft.category}>
-                {['全部', '餐饮', '景点', '住宿', '交通', '其他'].map((c) => (
-                  <button
-                    key={c}
-                    className={filterDraft.category === c ? 'selected' : ''}
-                    aria-pressed={filterDraft.category === c}
-                    onClick={() => setFilterDraft({ ...filterDraft, category: c })}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </SelectionTrack>
-            </fieldset>
-            <fieldset>
-              <legend>安排状态</legend>
-              <SelectionTrack className="map-chips" activeKey={filterDraft.arranged}>
-                {['全部', '已安排', '未安排'].map((c) => (
-                  <button
-                    key={c}
-                    className={filterDraft.arranged === c ? 'selected' : ''}
-                    aria-pressed={filterDraft.arranged === c}
-                    onClick={() => setFilterDraft({ ...filterDraft, arranged: c })}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </SelectionTrack>
-            </fieldset>
+        <div ref={topDock} className="map-top-dock">
+          <div className="map-upper-controls">
+            <MapRoutePicker
+              value={routeDay}
+              options={[
+                { value: '', label: '全部地点' },
+                ...days.map((d) => ({
+                  value: d.id,
+                  label: `${dayLabel(d, trip)}路线`,
+                  date: d.payload.date,
+                  compactLabel: `${dayLabel(d, trip)}${d.payload.date ? ' · ' + d.payload.date.slice(5).replace('-', '/') : ''}`,
+                })),
+              ]}
+              onChange={setRouteDay}
+            />
             <button
-              className="primary"
+              ref={filterButton}
+              className={`map-icon map-filter-toggle ${filter.layer !== '全部' || filter.category !== '全部' || filter.arranged !== '全部' || filter.mark ? 'has-filter' : ''}`}
+              aria-label="筛选地点"
+              aria-expanded={mode === 'filter'}
+              aria-controls="map-place-panel"
               onClick={() => {
-                setFilter(filterDraft);
-                closeTask();
+                if (mode === 'filter') {
+                  closeTask();
+                  return;
+                }
+                setFilterDraft(filter);
+                beginTask('filter');
+                setExpanded(true);
               }}
             >
-              完成
+              <SlidersHorizontal size={17} />
+              <span className="map-mobile-chip-text">筛选</span>
             </button>
-          </>
-        ) : mode === 'manual' ? (
-          <>
-            <div className="map-panel-title">
-              <h2>{selected ? '编辑地点' : '手动填写地点'}</h2>
-              <button onClick={closeTask}>取消</button>
-            </div>
-            <label>
-              名称
-              <input
-                value={manual.name}
-                onChange={(e) => setManual({ ...manual, name: e.target.value })}
-              />
-            </label>
-            <label>
-              地址
-              <input
-                value={manual.address}
-                onChange={(e) => setManual({ ...manual, address: e.target.value })}
-              />
-            </label>
-            <label>
-              类别
-              <select
-                value={manual.category || selected?.category || ''}
-                onChange={(e) => setManual({ ...manual, category: e.target.value })}
+            {isMobile && usedPresets.length > 0 && (
+              <button
+                ref={legendToggle}
+                type="button"
+                className={`map-legend-toggle ${markFilter ? 'has-filter' : ''}`}
+                aria-label="标记图例开关"
+                aria-expanded={legendOpen}
+                aria-controls="map-legend-popover"
+                onClick={() => setLegendOpen((open) => !open)}
               >
-                <option value="">未分类</option>
-                {['餐饮', '景点', '住宿', '交通', '其他'].map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              className="primary"
-              disabled={!manual.name.trim()}
-              onClick={async () => {
-                const p = {
-                  lng: null,
-                  lat: null,
-                  provider: null,
-                  providerPlaceId: null,
-                  sourceUrl: '',
-                  fetchedAt: null,
-                  coordSystem: 'GCJ-02',
-                  ...selected,
-                  ...manual,
-                };
-                if (selectedFavorite?.state === 'active')
-                  await j.mutate({ kind: 'patch', objectId: selectedFavorite.id, patch: manual });
-                setSelected(p);
-                setMode('detail');
-                setExpanded(false);
-              }}
-            >
-              完成
-            </button>
-          </>
-        ) : mode === 'pick' ? (
-          <div className="map-panel-title">
-            <h2>点击地图选择位置</h2>
-            <button onClick={closeTask}>取消</button>
+                <Tags size={15} />
+                <span>
+                  {markFilter
+                    ? presets.find((p) => markKey(p.payload) === markFilter)?.payload.name || '图例'
+                    : `图例 ${usedPresets.length}`}
+                </span>
+                <ChevronDown size={14} />
+              </button>
+            )}
           </div>
-        ) : (
-          <>
+          {!['filter', 'manual', 'pick'].includes(mode) && (
             <div className="map-search-row">
-              <Search size={20} />
+              {isMobile && mode === 'search' ? (
+                <button
+                  type="button"
+                  className="map-icon map-search-back"
+                  aria-label="取消"
+                  onClick={closeTask}
+                >
+                  <ArrowLeft size={19} />
+                </button>
+              ) : (
+                <Search size={19} />
+              )}
               <input
                 aria-label="搜索地点"
                 placeholder="搜索地点或地址"
@@ -1425,10 +1683,23 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                 }}
               />
               {mode === 'search' ? (
-                <button onClick={closeTask}>取消</button>
+                isMobile ? (
+                  query ? (
+                    <button
+                      type="button"
+                      className="map-icon map-search-clear"
+                      aria-label="清空搜索"
+                      onClick={() => updateQuery('')}
+                    >
+                      <X size={17} />
+                    </button>
+                  ) : null
+                ) : (
+                  <button onClick={closeTask}>取消</button>
+                )
               ) : (
                 <button
-                  className="map-icon"
+                  className={`map-icon ${mode === 'list' ? 'is-active' : ''}`}
                   aria-label="查看收藏列表"
                   aria-expanded={mode === 'list'}
                   onClick={() => {
@@ -1443,7 +1714,190 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                 </button>
               )}
             </div>
-            {mode === 'search' ? (
+          )}
+          {!hasSheet && !guideDismissed && activities.length === 0 && favorites.length === 0 && (
+            <div className="map-first-guide">
+              <p>搜索想去的地点，收藏后随时加入行程</p>
+              <button
+                className="map-icon"
+                aria-label="关闭地图提示"
+                onClick={() => {
+                  setGuideDismissed(true);
+                  saveMap({ guideDismissed: true });
+                }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+          )}
+          {!hasSheet && error && (
+            <p className="map-error map-error-inline" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+        {(hasSheet || (!isMobile && error)) && (
+          <div ref={sheetSurface} className="map-sheet-surface">
+            {mode === 'filter' ? (
+              <>
+                <div className="map-sheet-header" onPointerDown={handleHeaderPointerDown}>
+                  {renderSheetHandle()}
+                  <div className="map-panel-title">
+                    <h2>筛选地点</h2>
+                    <button onClick={closeTask}>取消</button>
+                  </div>
+                </div>
+                <fieldset>
+                  <legend>显示</legend>
+                  <SelectionTrack className="map-chips" activeKey={filterDraft.layer}>
+                    {['全部', '行程', '收藏'].map((layer) => (
+                      <button
+                        key={layer}
+                        className={filterDraft.layer === layer ? 'selected' : ''}
+                        aria-pressed={filterDraft.layer === layer}
+                        onClick={() => setFilterDraft({ ...filterDraft, layer })}
+                      >
+                        {layer}
+                      </button>
+                    ))}
+                  </SelectionTrack>
+                </fieldset>
+                {usedPresets.length > 0 && (
+                  <fieldset>
+                    <legend>标记</legend>
+                    <div className="map-chips">
+                      <button
+                        aria-pressed={!filterDraft.mark}
+                        onClick={() => setFilterDraft({ ...filterDraft, mark: null })}
+                      >
+                        全部
+                      </button>
+                      {usedPresets.map((preset) => {
+                        const key = markKey(preset.payload);
+                        return (
+                          <button
+                            key={key}
+                            aria-pressed={filterDraft.mark === key}
+                            onClick={() => setFilterDraft({ ...filterDraft, mark: key })}
+                          >
+                            <MarkSymbol mark={preset.payload} />
+                            {preset.payload.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                )}
+                <fieldset>
+                  <legend>类别</legend>
+                  <SelectionTrack className="map-chips" activeKey={filterDraft.category}>
+                    {['全部', '餐饮', '景点', '住宿', '交通', '其他'].map((c) => (
+                      <button
+                        key={c}
+                        className={filterDraft.category === c ? 'selected' : ''}
+                        aria-pressed={filterDraft.category === c}
+                        onClick={() => setFilterDraft({ ...filterDraft, category: c })}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </SelectionTrack>
+                </fieldset>
+                <fieldset>
+                  <legend>安排状态</legend>
+                  <SelectionTrack className="map-chips" activeKey={filterDraft.arranged}>
+                    {['全部', '已安排', '未安排'].map((c) => (
+                      <button
+                        key={c}
+                        className={filterDraft.arranged === c ? 'selected' : ''}
+                        aria-pressed={filterDraft.arranged === c}
+                        onClick={() => setFilterDraft({ ...filterDraft, arranged: c })}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </SelectionTrack>
+                </fieldset>
+                <button
+                  className="primary"
+                  onClick={() => {
+                    setFilter(filterDraft);
+                    closeTask();
+                  }}
+                >
+                  完成
+                </button>
+              </>
+            ) : mode === 'manual' ? (
+              <>
+                <div className="map-sheet-header" onPointerDown={handleHeaderPointerDown}>
+                  {renderSheetHandle()}
+                  <div className="map-panel-title">
+                    <h2>{selected ? '编辑地点' : '手动填写地点'}</h2>
+                    <button onClick={closeTask}>取消</button>
+                  </div>
+                </div>
+                <label>
+                  名称
+                  <input
+                    value={manual.name}
+                    onChange={(e) => setManual({ ...manual, name: e.target.value })}
+                  />
+                </label>
+                <label>
+                  地址
+                  <input
+                    value={manual.address}
+                    onChange={(e) => setManual({ ...manual, address: e.target.value })}
+                  />
+                </label>
+                <label>
+                  类别
+                  <select
+                    value={manual.category || selected?.category || ''}
+                    onChange={(e) => setManual({ ...manual, category: e.target.value })}
+                  >
+                    <option value="">未分类</option>
+                    {['餐饮', '景点', '住宿', '交通', '其他'].map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="primary"
+                  disabled={!manual.name.trim()}
+                  onClick={async () => {
+                    const p = {
+                      lng: null,
+                      lat: null,
+                      provider: null,
+                      providerPlaceId: null,
+                      sourceUrl: '',
+                      fetchedAt: null,
+                      coordSystem: 'GCJ-02',
+                      ...selected,
+                      ...manual,
+                    };
+                    if (selectedFavorite?.state === 'active')
+                      await j.mutate({
+                        kind: 'patch',
+                        objectId: selectedFavorite.id,
+                        patch: manual,
+                      });
+                    setSelected(p);
+                    setMode('detail');
+                    setExpanded(false);
+                  }}
+                >
+                  完成
+                </button>
+              </>
+            ) : mode === 'pick' ? (
+              <div className="map-panel-title">
+                <h2>点击地图选择位置</h2>
+                <button onClick={closeTask}>取消</button>
+              </div>
+            ) : mode === 'search' ? (
               <div className="map-panel-scroll">
                 <div className="map-small-actions">
                   <button
@@ -1513,186 +1967,314 @@ export default function MapView({ journey: j, onEditActivity, active = true }) {
                 ))}
               </div>
             ) : mode === 'detail' && selected ? (
-              <div className="map-panel-scroll">
-                <div className="map-panel-title">
-                  <h2>{selected.name}</h2>
-                  <button
-                    className="map-icon"
-                    aria-label="关闭地点"
-                    onClick={() => {
-                      setSelected(null);
-                      beginTask('browse');
-                    }}
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-                {selected.address && <p className="place-address">{selected.address}</p>}
-                <PlaceInformation
-                  place={{ ...selected, information: placeInformation }}
-                  expanded={expanded}
-                />
-                {placeLoading && <p role="status">正在载入地点…</p>}
-                <div className="map-actions">
-                  <button
-                    className="primary"
-                    disabled={placeLoading && !located(selected)}
-                    onClick={startActivity}
-                  >
-                    <Plus size={18} />
-                    加入行程
-                  </button>
-                  <button
-                    disabled={
-                      busy ||
-                      (placeLoading && !located(selected)) ||
-                      selectedFavorite?.state === 'active'
-                    }
-                    onClick={favorite}
-                  >
-                    <Star size={18} />
-                    {selectedFavorite?.state === 'active' ? '已收藏' : '收藏'}
-                  </button>
-                  {selectedFavorite?.state === 'active' && (
-                    <button
-                      className="pin-to-board-button"
-                      onClick={() =>
-                        pinWidgetToBoard(j, { kind: 'place', favoriteId: selectedFavorite.id }, 'S')
-                      }
-                    >
-                      贴到白板
-                    </button>
-                  )}
-                </div>
-                {selectedFavorite?.state === 'active' && (
-                  <FavoriteMarkEditor
-                    key={selectedFavorite.id}
-                    journey={j}
-                    favorite={selectedFavorite}
-                    onManage={() => setMarkEditor(true)}
-                  />
-                )}
-                {arranged.length > 0 && (
-                  <div className="place-visits">
-                    {arranged.map((a) => (
-                      <button key={a.id} onClick={() => onEditActivity(a)}>
-                        {snapshot.objects.find((d) => d.id === a.payload.dayId)?.payload.date ||
-                          dayLabel(
-                            snapshot.objects.find((d) => d.id === a.payload.dayId) || {
-                              payload: { ordinal: 1 },
-                            },
-                            trip,
-                          )}{' '}
-                        · {a.payload.title}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <button
-                  className="map-details-toggle"
-                  aria-expanded={expanded}
-                  onClick={() => setExpanded(!expanded)}
-                >
-                  {expanded ? '收起操作' : '更多操作'}
-                  {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </button>
-                {expanded && (
-                  <>
-                    <button
-                      className="map-text-action"
-                      onClick={() => {
-                        setManual({
-                          name: selected.name,
-                          address: selected.address,
-                          category: selected.category,
-                        });
-                        beginTask('manual');
-                      }}
-                    >
-                      编辑地点资料
-                    </button>
-                    {located(selected) && (
-                      <a
-                        className="map-text-action"
-                        target="_blank"
-                        rel="noreferrer"
-                        href={`https://uri.amap.com/navigation?to=${selected.lng},${selected.lat},${encodeURIComponent(selected.name)}&mode=car&coordinate=gaode&callnative=1`}
+              <>
+                <div className="map-sheet-header" onPointerDown={handleHeaderPointerDown}>
+                  {renderSheetHandle()}
+                  <div className="map-panel-title">
+                    <h2>{selected.name}</h2>
+                    <div className="map-title-actions">
+                      {isMobile && located(selected) && (
+                        <a
+                          className="map-icon map-quick-nav"
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`导航到${selected.name}`}
+                          title="外部地图导航"
+                          href={`https://uri.amap.com/navigation?to=${selected.lng},${selected.lat},${encodeURIComponent(selected.name)}&mode=car&coordinate=gaode&callnative=1`}
+                        >
+                          <Navigation size={17} />
+                        </a>
+                      )}
+                      <button
+                        className="map-icon"
+                        aria-label="关闭地点"
+                        onClick={() => {
+                          setSelected(null);
+                          beginTask('browse');
+                        }}
                       >
-                        <Navigation size={16} />
-                        导航到这里
-                      </a>
-                    )}
-                    {selectedFavorite?.state === 'active' && (
-                      <button className="map-text-action" onClick={removeFavorite}>
-                        {canDelete ? '取消团队收藏' : '希望删除此收藏'}
+                        <X size={18} />
                       </button>
-                    )}
-                  </>
-                )}
-              </div>
-            ) : mode === 'list' || expanded ? (
-              <div className="map-panel-scroll">
-                <div className="map-panel-title">
-                  <h2>共享收藏</h2>
-                  <button onClick={() => setMarkEditor(true)}>管理预设</button>
-                  <button
-                    onClick={() => {
-                      setSelected(null);
-                      setManual({ name: '', address: '' });
-                      beginTask('manual');
-                    }}
-                  >
-                    <Plus size={18} />
-                    添加
-                  </button>
+                    </div>
+                  </div>
+                  {selected.address && <p className="place-address">{selected.address}</p>}
+                  {isMobile && renderPlaceActions()}
                 </div>
-                {visibleFavorites.length === 0 ? (
-                  <p className="map-empty">
-                    {favorites.length ? '没有符合筛选的收藏' : '还没有收藏地点'}
-                  </p>
-                ) : (
-                  visibleFavorites.map((o) => (
-                    <button
-                      className="map-result"
-                      key={o.id}
-                      onClick={() => choose(o.payload, { preservePlace: true })}
-                    >
-                      <MarkSymbol mark={effectiveMark(o.payload)} />
-                      <span>
-                        <strong>{o.payload.name}</strong>
-                        {o.payload.address && <small>{o.payload.address}</small>}
-                        <small>
-                          {category(o.payload)}
-                          {isArranged(o.payload) ? ' · 已安排' : ''}
-                        </small>
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            ) : !guideDismissed && activities.length === 0 && favorites.length === 0 ? (
-              <div className="map-first-guide">
-                <p>搜索想去的地点，收藏后随时加入行程</p>
-                <button
-                  className="map-icon"
-                  aria-label="关闭地图提示"
-                  onClick={() => {
-                    setGuideDismissed(true);
-                    saveMap({ guideDismissed: true });
+                <div
+                  ref={scrollRef}
+                  className="map-panel-scroll"
+                  onTouchStart={(e) => {
+                    if (!mobileSheetDraggable || e.touches.length !== 1) return;
+                    if ((scrollRef.current?.scrollTop || 0) <= 1)
+                      touchScrollDrag.current = { startY: e.touches[0].clientY, active: false };
+                  }}
+                  onTouchMove={(e) => {
+                    const t = touchScrollDrag.current;
+                    if (!t || e.touches.length !== 1) return;
+                    const y = e.touches[0].clientY;
+                    if (!t.active) {
+                      if (y - t.startY > 8 && (scrollRef.current?.scrollTop || 0) <= 1) {
+                        t.active = true;
+                        startSheetDrag(t.startY, null, 'scroll');
+                      } else if (y - t.startY < -6) {
+                        touchScrollDrag.current = null;
+                        return;
+                      }
+                    }
+                    if (t.active) moveSheetDrag(y, e);
+                  }}
+                  onTouchEnd={() => {
+                    if (touchScrollDrag.current?.active) endSheetDrag(false);
+                    touchScrollDrag.current = null;
+                  }}
+                  onTouchCancel={() => {
+                    if (touchScrollDrag.current?.active) endSheetDrag(true);
+                    touchScrollDrag.current = null;
                   }}
                 >
-                  <X size={15} />
-                </button>
-              </div>
+                  <PlaceInformation
+                    place={{ ...selected, information: placeInformation }}
+                    expanded={expanded || (isMobile && sheetExpanded)}
+                  />
+                  {placeLoading && <p role="status">正在载入地点…</p>}
+                  {!isMobile && renderPlaceActions()}
+                  {selectedFavorite?.state === 'active' && (
+                    <FavoriteMarkEditor
+                      key={selectedFavorite.id}
+                      journey={j}
+                      favorite={selectedFavorite}
+                      collapsible={isMobile}
+                      onExpandRequest={() => setSheetExpanded(true)}
+                      onManage={() => setMarkEditor(true)}
+                    />
+                  )}
+                  {arranged.length > 0 && (
+                    <div className="place-visits">
+                      {arranged.map((a) => (
+                        <button key={a.id} onClick={() => onEditActivity(a)}>
+                          {snapshot.objects.find((d) => d.id === a.payload.dayId)?.payload.date ||
+                            dayLabel(
+                              snapshot.objects.find((d) => d.id === a.payload.dayId) || {
+                                payload: { ordinal: 1 },
+                              },
+                              trip,
+                            )}{' '}
+                          · {a.payload.title}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    className="map-details-toggle"
+                    aria-expanded={expanded}
+                    onClick={() => {
+                      const next = !expanded;
+                      setExpanded(next);
+                      if (isMobile && next) setSheetExpanded(true);
+                    }}
+                  >
+                    {expanded ? '收起操作' : '更多操作'}
+                    {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                  {expanded && (
+                    <>
+                      <button
+                        className="map-text-action"
+                        onClick={() => {
+                          setManual({
+                            name: selected.name,
+                            address: selected.address,
+                            category: selected.category,
+                          });
+                          beginTask('manual');
+                        }}
+                      >
+                        编辑地点资料
+                      </button>
+                      {located(selected) && (
+                        <a
+                          className="map-text-action"
+                          target="_blank"
+                          rel="noreferrer"
+                          href={`https://uri.amap.com/navigation?to=${selected.lng},${selected.lat},${encodeURIComponent(selected.name)}&mode=car&coordinate=gaode&callnative=1`}
+                        >
+                          <Navigation size={16} />
+                          导航到这里
+                        </a>
+                      )}
+                      {selectedFavorite?.state === 'active' && (
+                        <button className="map-text-action" onClick={removeFavorite}>
+                          {canDelete ? '取消团队收藏' : '希望删除此收藏'}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </>
+            ) : mode === 'list' || expanded ? (
+              <>
+                <div className="map-sheet-header" onPointerDown={handleHeaderPointerDown}>
+                  {renderSheetHandle()}
+                  <div className="map-panel-title">
+                    <h2>共享收藏</h2>
+                    <div className="map-title-actions">
+                      <button onClick={() => setMarkEditor(true)}>管理预设</button>
+                      <button
+                        onClick={() => {
+                          setSelected(null);
+                          setManual({ name: '', address: '' });
+                          beginTask('manual');
+                        }}
+                      >
+                        <Plus size={18} />
+                        添加
+                      </button>
+                      {isMobile && (
+                        <button
+                          className="map-icon"
+                          aria-label="关闭列表"
+                          onClick={dismissToBrowse}
+                        >
+                          <X size={18} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div
+                  ref={scrollRef}
+                  className="map-panel-scroll"
+                  onTouchStart={(e) => {
+                    if (!mobileSheetDraggable || e.touches.length !== 1) return;
+                    if ((scrollRef.current?.scrollTop || 0) <= 1)
+                      touchScrollDrag.current = { startY: e.touches[0].clientY, active: false };
+                  }}
+                  onTouchMove={(e) => {
+                    const t = touchScrollDrag.current;
+                    if (!t || e.touches.length !== 1) return;
+                    const y = e.touches[0].clientY;
+                    if (!t.active) {
+                      if (y - t.startY > 8 && (scrollRef.current?.scrollTop || 0) <= 1) {
+                        t.active = true;
+                        startSheetDrag(t.startY, null, 'scroll');
+                      } else if (y - t.startY < -6) {
+                        touchScrollDrag.current = null;
+                        return;
+                      }
+                    }
+                    if (t.active) moveSheetDrag(y, e);
+                  }}
+                  onTouchEnd={() => {
+                    if (touchScrollDrag.current?.active) endSheetDrag(false);
+                    touchScrollDrag.current = null;
+                  }}
+                  onTouchCancel={() => {
+                    if (touchScrollDrag.current?.active) endSheetDrag(true);
+                    touchScrollDrag.current = null;
+                  }}
+                >
+                  {isMobile && listRouteStops.length > 0 && (
+                    <div className="map-list-section">
+                      <h3 className="map-list-subheading">
+                        {currentRouteDayLabel}行程点 · {listRouteStops.length}
+                      </h3>
+                      {listRouteStops.map(({ activity, order }) => (
+                        <button
+                          key={activity.id}
+                          className="map-result map-route-stop"
+                          onClick={() => choose(activity.payload.place, { preservePlace: true })}
+                        >
+                          <span className="map-stop-badge">{order}</span>
+                          <span>
+                            <strong>{activity.payload.title || activity.payload.place.name}</strong>
+                            {activity.payload.place.name &&
+                              activity.payload.title &&
+                              activity.payload.title !== activity.payload.place.name && (
+                                <small>{activity.payload.place.name}</small>
+                              )}
+                            {activity.payload.place.address && (
+                              <small>{activity.payload.place.address}</small>
+                            )}
+                          </span>
+                        </button>
+                      ))}
+                      <h3 className="map-list-subheading">共享收藏 · {visibleFavorites.length}</h3>
+                    </div>
+                  )}
+                  {visibleFavorites.length === 0 ? (
+                    <p className="map-empty">
+                      {favorites.length ? '没有符合筛选的收藏' : '还没有收藏地点'}
+                    </p>
+                  ) : (
+                    visibleFavorites.map((o) => (
+                      <button
+                        className="map-result"
+                        key={o.id}
+                        onClick={() => choose(o.payload, { preservePlace: true })}
+                      >
+                        <MarkSymbol mark={effectiveMark(o.payload)} />
+                        <span>
+                          <strong>{o.payload.name}</strong>
+                          {o.payload.address && <small>{o.payload.address}</small>}
+                          <small>
+                            {category(o.payload)}
+                            {isArranged(o.payload) ? ' · 已安排' : ''}
+                          </small>
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
             ) : null}
-          </>
-        )}
-        {error && (
-          <p className="map-error" role="alert">
-            {error}
-          </p>
+            {error && (
+              <p className="map-error" role="alert">
+                {error}
+              </p>
+            )}
+          </div>
         )}
       </div>
+      {isMobile && !hasSheet && !mapError && (
+        <button
+          ref={peekBar}
+          type="button"
+          className="map-peek-bar glass"
+          aria-label="展开地点列表"
+          onClick={() => {
+            beginTask('list');
+            setExpanded(true);
+          }}
+          onPointerDown={(e) => {
+            peekDragY.current = e.clientY;
+          }}
+          onPointerUp={(e) => {
+            if (peekDragY.current === null) return;
+            const dy = e.clientY - peekDragY.current;
+            peekDragY.current = null;
+            if (dy < -24) {
+              e.preventDefault();
+              beginTask('list');
+              setExpanded(true);
+            }
+          }}
+        >
+          <span className="map-peek-grip" aria-hidden="true" />
+          <span className="map-peek-row">
+            <span className="map-peek-summary">
+              {activities.length === 0 && favorites.length === 0
+                ? '暂无收藏地点 · 点击查看列表'
+                : routeDay
+                  ? `${currentRouteDayLabel} · ${arrangedLocationCount} 个行程点 · ${visibleFavorites.length} 个收藏`
+                  : `${visibleFavorites.length} 个共享收藏 · ${arrangedLocationCount} 个行程点`}
+            </span>
+            <span className="map-peek-action" aria-hidden="true">
+              列表
+              <ChevronUp size={16} />
+            </span>
+          </span>
+        </button>
+      )}
     </section>
   );
 }

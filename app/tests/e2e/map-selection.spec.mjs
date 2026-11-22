@@ -71,16 +71,20 @@ async function cameraRequest(page){return page.evaluate(()=>window.__selectionCa
 
 async function visibleMapFooter(page){
  await expect.poll(()=>page.evaluate(()=>{
-  const panel=document.querySelector('.map-panel').getBoundingClientRect();
+  const panelEl=document.querySelector('.map-panel'),panel=panelEl.getBoundingClientRect();
+  const topDock=(document.querySelector('.map-top-dock')||panelEl).getBoundingClientRect();
   const nav=document.querySelector('.bottom-nav').getBoundingClientRect();
   const viewport=window.visualViewport,top=viewport?.offsetTop||0;
-  const bottom=Math.min(top+(viewport?.height||innerHeight),nav.height?nav.top:Infinity);
+  const isSearch=panelEl.classList.contains('mode-search');
+  const isSheet=panelEl.classList.contains('has-sheet')&&!isSearch;
+  const minTop=Math.max(top,isSearch?panel.bottom:topDock.bottom);
+  const bottom=Math.min(top+(viewport?.height||innerHeight),nav.height?nav.top:Infinity,isSheet?panel.top:Infinity);
   return ['.amap-logo','.amap-copyright','.amap-scalecontrol'].every(selector=>{
    const element=document.querySelector(selector);if(!element)return false;
    // The real SDK omits copyright text at 320px and hides its empty placeholder.
    if(selector==='.amap-copyright'&&element.style.display==='none'&&!element.textContent.trim())return true;
    const bounds=element.getBoundingClientRect();
-   return bounds.width>0&&bounds.height>0&&bounds.top>=Math.max(top,panel.bottom)&&bounds.bottom<=bottom&&bounds.left>=0&&bounds.right<=innerWidth;
+   return bounds.width>0&&bounds.height>0&&bounds.top>=minTop&&bounds.bottom<=bottom&&bounds.left>=0&&bounds.right<=innerWidth;
   });
  })).toBe(true);
 }
@@ -94,9 +98,11 @@ async function visibleSelectedMarker(page){
  await visibleMapFooter(page);
  await expect.poll(()=>page.evaluate(()=>{
   const marker=document.querySelector('.selected-marker').getBoundingClientRect();
-  const panel=document.querySelector('.map-panel').getBoundingClientRect();
+  const panelEl=document.querySelector('.map-panel'),panel=panelEl.getBoundingClientRect();
+  const topDock=(document.querySelector('.map-top-dock')||panelEl).getBoundingClientRect();
   const nav=document.querySelector('.bottom-nav').getBoundingClientRect();
-  return marker.top>=panel.bottom+12&&marker.bottom<=nav.top-12&&marker.left>=0&&marker.right<=innerWidth;
+  const bottom=Math.min(nav.height?nav.top:Infinity,panelEl.classList.contains('has-sheet')?panel.top:Infinity);
+  return marker.top>=topDock.bottom+12&&marker.bottom<=bottom-12&&marker.left>=0&&marker.right<=innerWidth;
  })).toBe(true);
 }
 
@@ -119,6 +125,7 @@ for(const width of [390,320])test(`real map selection and activity entry leave t
  expect(await viewport()).toEqual(beforeExpansion);await visibleMapFooter(page);
  await page.setViewportSize({width,height:640});
  expect(await viewport()).toEqual(beforeExpansion);await visibleMapFooter(page);
+ await page.getByRole('button',{name:'返回地图总览',exact:true}).click();
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();
  const activityRequest=await cameraRequest(page);
  await page.locator('.activity-card').getByRole('button',{name:/^在地图查看：/}).click();

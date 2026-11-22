@@ -3,12 +3,18 @@ import { api } from './sync';
 import { knownDestinationTimezone, timezoneFromGeocodes } from './destination-timezone.js';
 import { normalizePlaceInformation } from './place-information.js';
 
+import { getTempAmap } from './temp-amap.js';
+
 let promise;
 export async function loadAmap(config) {
   if (!promise)
     promise = (async () => {
       const c = config || (await api('/api/config'));
-      if (!c.amapKey) throw new Error('地图暂时无法载入，请稍后重试');
+      if (!c.amapKey) {
+        const TempAMap = getTempAmap();
+        if (typeof window !== 'undefined') window.AMap = TempAMap;
+        return TempAMap;
+      }
       window._AMapSecurityConfig = {
         serviceHost:
           location.origin + import.meta.env.BASE_URL.replace(/\/$/, '') + '/_AMapService',
