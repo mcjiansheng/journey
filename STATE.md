@@ -6,7 +6,7 @@
 ## 当前步骤
 
 - 移动端网页修复（`dev` 已推送 `origin/dev`）：MOB-001~015、017~019、021 已通过构建、E2E 与多视口截图复核；MOB-016 完成第一步；`main` 仍为 2026-11-13 发布版本，合并 `main` 前需取得用户明确确认。
-- 原生端功能对齐（N0 已完成、待构建验证）：iOS、Android 对齐网页 `main`（含白板原生重写），按 [11-原生端功能对齐](docs/设计文档/11-原生端功能对齐.md) 的 N0–N3、B1–B9 工作包推进。
+- 原生端功能对齐（N0 已完成并验证，待开 N1–N3、B1）：iOS、Android 对齐网页 `main`（含白板原生重写），按 [11-原生端功能对齐](docs/设计文档/11-原生端功能对齐.md) 的工作包推进。
 
 ## 已做决定及理由
 
@@ -25,13 +25,13 @@
 
 ## 风险
 
-- 8 项地图 E2E（`map-camera-motion` 3、`map-selection` 4、`place-information` 1）已在 `ac101ad` 适配新底部抽屉与 `.map-route-stop` 分组，尚未实跑（需 `AMAP_KEY`）；5 项既有设置页 E2E（`atlas-review` 4、`frontend-review-shell` 1）待适配日期/时区按钮改版。
+- 9 项 B 类过时 E2E 待适配：`map-selection`（4 项，`visibleMapFooter` 未适配 MOB-006 展开抽屉与全高搜索列表；`map-camera-motion` 7 项、`place-information` 4 项已通过）、`atlas-review`（4 项）、`frontend-review-shell`（1 项）。
 - 未处理：P2-3（白板操作被服务端拒绝后不回滚且阻塞队列）、P2-6（离线超过 15 秒重连后未同步修改短暂消失/闪回）、P2-7（白板操作触发全员拉取整份旅程快照），以及审查报告第五节全部 P3。
 - 浅色暖黄便签上的橙色文字对比度 3.69:1 低于 AA（需求只要求深色模式可读，暂只记录）。
 
 ## 下一步
 
-- 原生 N0 验证：Mac 上跑 Android `testDebugUnitTest lintDebug assembleDebug`、iOS 构建与 `JourneyTests`（含新的 `SharedFixturesTests`），通过后开 N1、N2、N3、B1。
+- 原生端按 [11-原生端功能对齐](docs/设计文档/11-原生端功能对齐.md) 并行推进 N1、N2、N3、B1。
 - 更新过时的地图/设置页 B 类 E2E 用例并完成 PR 合并 `main` 前确认。
 - MOB-016 余下：九段 760px 断点合并，需截图对比。
 - 真机确认：iOS Safari、Android Chrome 上点选便签不弹软键盘，以及旧旅程真实数据懒创建白板确认。
