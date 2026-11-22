@@ -130,6 +130,30 @@ export function Modal({
     </dialog>
   );
 }
+// In-app replacement for window.confirm (MOB-015): render `dialog`, then `await ask(message)`.
+export function useConfirm() {
+  const [request, setRequest] = useState(null);
+  const ask = (message, { title = '请确认', confirmLabel = '确定' } = {}) =>
+    new Promise((resolve) => setRequest({ message, title, confirmLabel, resolve }));
+  const finish = (value) => {
+    request?.resolve(value);
+    setRequest(null);
+  };
+  const dialog = request && (
+    <Modal title={request.title} className="confirm-dialog" onClose={() => finish(false)}>
+      <p>{request.message}</p>
+      <div className="modal-actions">
+        <button type="button" className="secondary" onClick={() => finish(false)}>
+          取消
+        </button>
+        <button type="button" className="primary" onClick={() => finish(true)}>
+          {request.confirmLabel}
+        </button>
+      </div>
+    </Modal>
+  );
+  return [dialog, ask];
+}
 export function ActionNotice({ notice, onClose }) {
   const [error, setError] = useState('');
   // Undo offers (e.g. 白板「已删除 · 撤销」) disappear on their own.

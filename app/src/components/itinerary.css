@@ -59,9 +59,11 @@
   border-radius: var(--radius-sm);
   color: var(--accent);
 }
-.itinerary-page .activity-navigation:hover,
-.itinerary-page .activity-place-icon:hover {
-  background: var(--accent-soft);
+@media (hover: hover) and (pointer: fine) {
+  .itinerary-page .activity-navigation:hover,
+  .itinerary-page .activity-place-icon:hover {
+    background: var(--accent-soft);
+  }
 }
 .activity-opinions {
   display: flex;
@@ -124,9 +126,13 @@
   opacity: 0;
   transition: opacity 0.15s;
 }
-.itinerary-page .route-slot:hover .route-add,
 .itinerary-page .route-add:focus-visible {
   opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .itinerary-page .route-slot:hover .route-add {
+    opacity: 1;
+  }
 }
 .itinerary-page .activity-list:has(> .activity-card:nth-of-type(2))::before {
   left: 34px;

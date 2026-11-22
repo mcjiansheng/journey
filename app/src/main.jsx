@@ -7,8 +7,14 @@ import './navigation.css';
 import './components/login.css';
 import './palette-atlas.css';
 import { installFeedback } from './feedback.js';
+import { installDetailsMenus } from './details-menus.js';
 const cleanupFeedback = installFeedback();
-if (import.meta.hot) import.meta.hot.dispose(cleanupFeedback);
+const cleanupDetailsMenus = installDetailsMenus();
+if (import.meta.hot)
+  import.meta.hot.dispose(() => {
+    cleanupFeedback();
+    cleanupDetailsMenus();
+  });
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

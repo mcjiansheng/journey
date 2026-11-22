@@ -565,9 +565,11 @@
   opacity: 0.35;
   cursor: default;
 }
-.board-container .iconbtn:hover:not(:disabled),
-.board-container .tool:hover:not(:disabled):not([aria-pressed='true']) {
-  background: var(--selected);
+@media (hover: hover) and (pointer: fine) {
+  .board-container .iconbtn:hover:not(:disabled),
+  .board-container .tool:hover:not(:disabled):not([aria-pressed='true']) {
+    background: var(--selected);
+  }
 }
 .board-container :is(button, input):focus-visible {
   outline: 2px solid var(--focus-ring);
@@ -623,8 +625,10 @@
   text-align: left;
   cursor: pointer;
 }
-.switcher-menu > button:hover:not(:disabled) {
-  background: var(--selected);
+@media (hover: hover) and (pointer: fine) {
+  .switcher-menu > button:hover:not(:disabled) {
+    background: var(--selected);
+  }
 }
 .switcher-menu > button:disabled {
   opacity: 0.45;
@@ -855,8 +859,10 @@
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
-#zoom .zoom-value:hover {
-  background: var(--selected);
+@media (hover: hover) and (pointer: fine) {
+  #zoom .zoom-value:hover {
+    background: var(--selected);
+  }
 }
 
 /* Empty board guidance */
@@ -911,8 +917,10 @@
   cursor: pointer;
   color: var(--text);
 }
-#actions button:hover {
-  background: var(--selected);
+@media (hover: hover) and (pointer: fine) {
+  #actions button:hover {
+    background: var(--selected);
+  }
 }
 #actions button.primary {
   background: var(--accent);
@@ -986,9 +994,11 @@
   fill: currentColor;
   stroke: none;
 }
-.dock-handle:hover {
-  background: var(--selected);
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .dock-handle:hover {
+    background: var(--selected);
+    color: var(--text);
+  }
 }
 #panel.dragging,
 #panel.dragging .dock-handle {
@@ -1018,8 +1028,10 @@
   color: var(--accent);
   font-weight: 650;
 }
-.dock-menu button:hover {
-  background: var(--selected);
+@media (hover: hover) and (pointer: fine) {
+  .dock-menu button:hover {
+    background: var(--selected);
+  }
 }
 .tabs {
   display: flex;
@@ -1263,11 +1275,15 @@
 .tile > span {
   max-width: 100%;
 }
-.tile:hover:not(.tile-empty) {
-  background: var(--selected);
+@media (hover: hover) and (pointer: fine) {
+  .tile:hover:not(.tile-empty) {
+    background: var(--selected);
+  }
 }
-.tile:hover:not(.tile-empty) .thumb {
-  transform: translateY(-2px);
+@media (hover: hover) and (pointer: fine) {
+  .tile:hover:not(.tile-empty) .thumb {
+    transform: translateY(-2px);
+  }
 }
 .thumb {
   position: relative;
@@ -1380,8 +1396,10 @@
   padding: 4px 4px 4px 8px;
   border-radius: var(--radius-sm);
 }
-.act-row:hover {
-  background: color-mix(in srgb, var(--selected) 60%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .act-row:hover {
+    background: color-mix(in srgb, var(--selected) 60%, transparent);
+  }
 }
 .act-title {
   flex: 1;
@@ -1417,9 +1435,11 @@
   cursor: grab;
   touch-action: none;
 }
-.chip-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
+@media (hover: hover) and (pointer: fine) {
+  .chip-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
 }
 .act-icon {
   width: 20px;
@@ -1479,8 +1499,10 @@
   place-items: center;
   touch-action: none;
 }
-.pick-emoji:hover {
-  background: var(--selected);
+@media (hover: hover) and (pointer: fine) {
+  .pick-emoji:hover {
+    background: var(--selected);
+  }
 }
 .image-tab {
   padding: 8px 0;
@@ -2027,9 +2049,17 @@
 .gallery-nav.next {
   right: 26px;
 }
-.board-item:hover .gallery-nav,
 .gallery-view:focus-within .gallery-nav,
 .gallery-view.is-editing .gallery-nav {
+  opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .board-item:hover .gallery-nav {
+    opacity: 1;
+  }
+}
+/* Touch screens cannot hover: show the arrows once the gallery is selected. */
+.board-item.is-selected .gallery-nav {
   opacity: 1;
 }
 .gallery-dots {
@@ -2109,8 +2139,10 @@
   margin: 0 3px;
   background: var(--line);
 }
-.gallery-tools button:hover {
-  background: var(--selected);
+@media (hover: hover) and (pointer: fine) {
+  .gallery-tools button:hover {
+    background: var(--selected);
+  }
 }
 .gallery-tools button.primary {
   background: var(--accent);
@@ -2294,9 +2326,11 @@
   font-size: 16px;
   cursor: pointer;
 }
-.todo-remove:hover {
-  color: var(--danger);
-  background: var(--selected);
+@media (hover: hover) and (pointer: fine) {
+  .todo-remove:hover {
+    color: var(--danger);
+    background: var(--selected);
+  }
 }
 .todo-empty {
   margin: 4px 0;
@@ -2359,8 +2393,10 @@
   font-size: 15px;
   cursor: pointer;
 }
-#note-format .fmt:hover {
-  background: var(--selected);
+@media (hover: hover) and (pointer: fine) {
+  #note-format .fmt:hover {
+    background: var(--selected);
+  }
 }
 #note-format .fmt[aria-pressed='true'] {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
@@ -2449,8 +2485,10 @@
   font-size: var(--fs-caption);
   cursor: pointer;
 }
-.style-chip:hover {
-  border-color: var(--accent);
+@media (hover: hover) and (pointer: fine) {
+  .style-chip:hover {
+    border-color: var(--accent);
+  }
 }
 .style-chip[aria-pressed='true'] {
   border-color: var(--accent);
@@ -2636,8 +2674,10 @@
   padding: 4px 4px 4px 6px;
   border-radius: var(--radius-sm);
 }
-.place-row:hover {
-  background: color-mix(in srgb, var(--selected) 60%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .place-row:hover {
+    background: color-mix(in srgb, var(--selected) 60%, transparent);
+  }
 }
 .place-dot {
   flex: none;
@@ -2683,8 +2723,10 @@
   border: 0;
   background: color-mix(in srgb, var(--text) 4%, transparent);
 }
-.my-sticker:hover {
-  background: var(--selected);
+@media (hover: hover) and (pointer: fine) {
+  .my-sticker:hover {
+    background: var(--selected);
+  }
 }
 .my-sticker img {
   max-width: 100%;
@@ -2743,9 +2785,11 @@
   cursor: pointer;
   opacity: 0.6;
 }
-.emoji-cats button:hover {
-  opacity: 1;
-  background: var(--selected);
+@media (hover: hover) and (pointer: fine) {
+  .emoji-cats button:hover {
+    opacity: 1;
+    background: var(--selected);
+  }
 }
 .emoji-cats button[aria-selected='true'] {
   opacity: 1;
@@ -3063,10 +3107,12 @@
   color: var(--text);
   cursor: pointer;
 }
-#actions .ib:hover,
-#arrange .ib:hover,
-.style-pop .ib:hover {
-  background: var(--selected);
+@media (hover: hover) and (pointer: fine) {
+  #actions .ib:hover,
+  #arrange .ib:hover,
+  .style-pop .ib:hover {
+    background: var(--selected);
+  }
 }
 #actions .ib[aria-pressed='true'],
 #actions .ib[aria-expanded='true'],
@@ -3175,11 +3221,16 @@
   text-align: left;
   cursor: pointer;
 }
-.cm-item:hover,
 .cm-item:focus-visible,
 .cm-item[aria-expanded='true'] {
   background: var(--selected);
   outline: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cm-item:hover {
+    background: var(--selected);
+    outline: none;
+  }
 }
 .cm-item:disabled {
   opacity: 0.4;
@@ -3431,8 +3482,10 @@
   box-shadow: none;
   background: var(--selected);
 }
-.context-menu:has(.cm-item:focus) .cm-item:hover:not(:focus) {
-  background: none;
+@media (hover: hover) and (pointer: fine) {
+  .context-menu:has(.cm-item:focus) .cm-item:hover:not(:focus) {
+    background: none;
+  }
 }
 
 /* Type to edit: the hidden field that receives keys for a selected note. */
@@ -3488,7 +3541,6 @@
 #zoom [data-tip] {
   position: relative;
 }
-#zoom [data-tip]:hover::after,
 #zoom [data-tip]:focus-visible::after {
   content: attr(data-tip);
   position: absolute;
@@ -3506,11 +3558,36 @@
   box-shadow: 0 4px 14px #0003;
   animation: board-fade-in 0.1s ease-out 0.15s both;
 }
-#zoom [data-tip]:nth-last-child(-n + 3):hover::after,
+@media (hover: hover) and (pointer: fine) {
+  #zoom [data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 12px);
+    left: 50%;
+    translate: -50% 0;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--text);
+    color: var(--surface);
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 4px 14px #0003;
+    animation: board-fade-in 0.1s ease-out 0.15s both;
+  }
+}
 #zoom [data-tip]:nth-last-child(-n + 3):focus-visible::after {
   left: auto;
   right: 0;
   translate: 0 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  #zoom [data-tip]:nth-last-child(-n + 3):hover::after {
+    left: auto;
+    right: 0;
+    translate: 0 0;
+  }
 }
 /* The tool color dot sits below the icon without moving it. */
 .tool .tool-dot {

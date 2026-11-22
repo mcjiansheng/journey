@@ -100,15 +100,19 @@ small {
   background: var(--accent);
   color: var(--on-accent);
 }
-.primary:hover {
-  background: color-mix(in srgb, var(--accent) 90%, var(--text));
+@media (hover: hover) and (pointer: fine) {
+  .primary:hover {
+    background: color-mix(in srgb, var(--accent) 90%, var(--text));
+  }
 }
 .secondary {
   background: var(--surface);
   border: 1px solid var(--line);
 }
-.secondary:hover {
-  background: var(--accent-soft);
+@media (hover: hover) and (pointer: fine) {
+  .secondary:hover {
+    background: var(--accent-soft);
+  }
 }
 .danger-button {
   background: var(--danger);
@@ -137,9 +141,13 @@ small {
   border-radius: 50%;
   flex-shrink: 0;
 }
-.icon-button:hover,
 .icon-button[aria-expanded='true'] {
   background: var(--accent-soft);
+}
+@media (hover: hover) and (pointer: fine) {
+  .icon-button:hover {
+    background: var(--accent-soft);
+  }
 }
 .icon-button[aria-expanded='true'] {
   color: var(--accent);
@@ -1995,10 +2003,12 @@ body {
     inset 0 1px 0 var(--button-highlight),
     0 4px 10px var(--optical-shadow);
 }
-.primary:hover {
-  box-shadow:
-    inset 0 1px 0 var(--button-highlight),
-    0 7px 16px var(--optical-shadow);
+@media (hover: hover) and (pointer: fine) {
+  .primary:hover {
+    box-shadow:
+      inset 0 1px 0 var(--button-highlight),
+      0 7px 16px var(--optical-shadow);
+  }
 }
 .secondary {
   box-shadow: 0 2px 8px var(--optical-shadow);
@@ -2102,8 +2112,10 @@ body {
     box-shadow 0.18s,
     border-color 0.18s;
 }
-.activity-card:hover {
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+@media (hover: hover) and (pointer: fine) {
+  .activity-card:hover {
+    border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+  }
 }
 .activity-content {
   padding-right: 26px;
@@ -2166,10 +2178,15 @@ body {
 .activity-more > summary::-webkit-details-marker {
   display: none;
 }
-.activity-more > summary:hover,
 .activity-more[open] > summary {
   background: var(--accent-soft);
   color: var(--accent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .activity-more > summary:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
 }
 .activity-more-panel {
   position: absolute;
@@ -2181,6 +2198,14 @@ body {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   box-shadow: 0 12px 36px var(--optical-shadow);
+}
+/* Opened upwards by details-menus.js when the space below is covered (MOB-003). */
+details[data-placement='top'] > :is(.activity-more-panel, .expense-more-panel, .member-more-panel) {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+.activity-card:has(.activity-more[open]) {
+  z-index: 3;
 }
 .activity-more-panel .object-actions {
   flex-direction: column;
@@ -2195,8 +2220,10 @@ body {
   border-radius: var(--radius-sm);
   white-space: nowrap;
 }
-.activity-more-panel .text-button:hover {
-  background: var(--accent-soft);
+@media (hover: hover) and (pointer: fine) {
+  .activity-more-panel .text-button:hover {
+    background: var(--accent-soft);
+  }
 }
 .activity-more-panel .object-actions small {
   padding: 7px 10px;
@@ -2214,8 +2241,10 @@ body {
   width: 15px;
   height: 15px;
 }
-.route-row:hover span {
-  color: var(--accent);
+@media (hover: hover) and (pointer: fine) {
+  .route-row:hover span {
+    color: var(--accent);
+  }
 }
 .timing-note {
   font-size: var(--fs-caption);
@@ -2819,12 +2848,16 @@ body:has(> .site-filing),
 .day-tabs button.selected small {
   color: var(--muted);
 }
-.day-tabs button:hover {
-  transform: none;
-  background: color-mix(in srgb, var(--optical-selected) 60%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .day-tabs button:hover {
+    transform: none;
+    background: color-mix(in srgb, var(--optical-selected) 60%, transparent);
+  }
 }
-.day-tabs button.selected:hover {
-  background: var(--optical-selected);
+@media (hover: hover) and (pointer: fine) {
+  .day-tabs button.selected:hover {
+    background: var(--optical-selected);
+  }
 }
 .activity-list {
   position: relative;
@@ -2852,11 +2885,13 @@ body:has(> .site-filing),
   border-color: var(--line);
   box-shadow: var(--card-shadow);
 }
-.activity-card:hover {
-  box-shadow:
-    inset 0 1px 0 var(--surface-highlight),
-    inset 0 -1px 0 var(--surface-highlight),
-    0 10px 30px var(--optical-shadow);
+@media (hover: hover) and (pointer: fine) {
+  .activity-card:hover {
+    box-shadow:
+      inset 0 1px 0 var(--surface-highlight),
+      inset 0 -1px 0 var(--surface-highlight),
+      0 10px 30px var(--optical-shadow);
+  }
 }
 .activity-number {
   background: color-mix(in srgb, var(--accent-soft) 90%, var(--surface));
@@ -3229,10 +3264,15 @@ html.has-modal body {
   cursor: grab;
   touch-action: none;
 }
-.drag-handle:hover,
 .drag-handle:focus-visible {
   background: var(--accent-soft);
   color: var(--accent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .drag-handle:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
 }
 .drag-handle:active {
   cursor: grabbing;

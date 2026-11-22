@@ -84,9 +84,13 @@
   text-align: left;
   border-radius: var(--radius-md);
 }
-.favorite-place-picker-list > li > button:hover,
 .favorite-place-picker-list > li > button:focus-visible {
   background: var(--accent-soft);
+}
+@media (hover: hover) and (pointer: fine) {
+  .favorite-place-picker-list > li > button:hover {
+    background: var(--accent-soft);
+  }
 }
 .favorite-place-picker-mark {
   display: grid;

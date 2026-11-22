@@ -44,9 +44,11 @@ body {
   text-underline-offset: 4px;
   border-radius: var(--radius-sm);
 }
-.site-filing a:hover {
-  color: var(--accent, #246b58);
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .site-filing a:hover {
+    color: var(--accent, #246b58);
+    text-decoration: underline;
+  }
 }
 .site-filing a:focus-visible {
   outline: 2px solid var(--accent, #246b58);

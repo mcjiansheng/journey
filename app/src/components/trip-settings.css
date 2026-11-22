@@ -3,10 +3,34 @@
 }
 .trip-inline-setting input {
   width: min(65%, 420px);
+  min-height: 40px;
+  padding: 8px 10px;
   text-align: right;
-  border: 0;
-  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--control-surface);
   box-shadow: none;
+}
+/* An editable field should look editable (MOB-017). */
+.trip-inline-setting input:focus {
+  border-color: var(--accent);
+  text-align: left;
+}
+@media (hover: hover) and (pointer: fine) {
+  .trip-inline-setting input:hover {
+    border-color: var(--line);
+  }
+}
+@media (max-width: 760px) {
+  .trip-inline-setting {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .trip-inline-setting input {
+    width: 100%;
+    text-align: left;
+  }
 }
 .trip-setting-help {
   display: block;

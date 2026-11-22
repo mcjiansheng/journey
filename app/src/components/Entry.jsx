@@ -307,6 +307,11 @@ export function JoinTrip({ journey: j, onClose, initialCode = '' }) {
     [error, setError] = useState(''),
     [scan, setScan] = useState(false);
   const video = useRef(null);
+  // iOS Safari, Firefox and most in-app browsers lack BarcodeDetector (MOB-015).
+  const canScan =
+    typeof window !== 'undefined' &&
+    'BarcodeDetector' in window &&
+    !!navigator.mediaDevices?.getUserMedia;
   useEffect(() => {
     if (!scan) return;
     let stream,
@@ -366,16 +371,23 @@ export function JoinTrip({ journey: j, onClose, initialCode = '' }) {
           autoComplete="off"
         />
       </Field>
-      <button
-        className="secondary full"
-        onClick={() => {
-          setError('');
-          setScan(!scan);
-        }}
-      >
-        <ScanLine size={18} />
-        {scan ? '停止扫码' : '扫描二维码'}
-      </button>
+      {canScan ? (
+        <button
+          className="secondary full"
+          onClick={() => {
+            setError('');
+            setScan(!scan);
+          }}
+        >
+          <ScanLine size={18} />
+          {scan ? '停止扫码' : '扫描二维码'}
+        </button>
+      ) : (
+        <p className="muted scan-unsupported">
+          <ScanLine size={16} />
+          这个浏览器不能直接扫码。可以用系统相机扫描二维码并打开链接，或把链接粘贴到上面。
+        </p>
+      )}
       {scan && <video className="scanner" ref={video} playsInline muted />}
       {preview && (
         <div className="invite-preview">

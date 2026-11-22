@@ -57,9 +57,11 @@
   background: transparent;
   font: inherit;
 }
-.map-panel button:hover,
-.map-tools button:hover {
-  background: #6b928820;
+@media (hover: hover) and (pointer: fine) {
+  .map-panel button:hover,
+  .map-tools button:hover {
+    background: #6b928820;
+  }
 }
 .map-panel button:disabled {
   opacity: 0.6;
@@ -69,8 +71,10 @@
   background: var(--accent);
   color: white;
 }
-.map-panel .primary:hover {
-  background: color-mix(in srgb, var(--accent) 90%, var(--text));
+@media (hover: hover) and (pointer: fine) {
+  .map-panel .primary:hover {
+    background: color-mix(in srgb, var(--accent) 90%, var(--text));
+  }
 }
 .map-panel input,
 .map-panel select {
@@ -441,10 +445,14 @@
   font-size: var(--fs-meta);
   color: var(--muted);
 }
-.map-upper-controls button:hover,
 .map-route-trigger[aria-expanded='true'],
 .map-filter-toggle[aria-expanded='true'] {
   background: var(--accent-soft);
+}
+@media (hover: hover) and (pointer: fine) {
+  .map-upper-controls button:hover {
+    background: var(--accent-soft);
+  }
 }
 .map-filter-toggle {
   flex: 0 0 42px;

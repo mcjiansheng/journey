@@ -34,19 +34,28 @@
 }
 .app-shell .sidebar nav.selection-track > button.selected,
 .app-shell .bottom-nav button.selected,
-:root .day-tabs.selection-track button.selected,
-:root .day-tabs.selection-track button.selected:hover {
+:root .day-tabs.selection-track button.selected {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
   color: var(--accent);
 }
+@media (hover: hover) and (pointer: fine) {
+  :root .day-tabs.selection-track button.selected:hover {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--accent);
+  }
+}
 .app-shell .sidebar nav button,
 .day-tabs.selection-track button {
   transition: color 150ms ease;
 }
-.day-tabs.selection-track button:hover {
-  background: transparent;
+@media (hover: hover) and (pointer: fine) {
+  .day-tabs.selection-track button:hover {
+    background: transparent;
+  }
 }
 :root .day-tabs.selection-track > button {
   background: transparent;
@@ -126,8 +135,10 @@
     border-radius: var(--radius-md);
     font-size: var(--fs-meta);
   }
-  .app-shell .sidebar .back-home:hover {
-    background: var(--accent-soft);
+  @media (hover: hover) and (pointer: fine) {
+    .app-shell .sidebar .back-home:hover {
+      background: var(--accent-soft);
+    }
   }
   .app-shell .sidebar nav button:last-child {
     margin-top: 28px;
@@ -277,8 +288,10 @@
   border-radius: var(--radius-md);
   transition: background 160ms ease;
 }
-.app-shell .header-right > button:hover {
-  background: var(--accent-soft);
+@media (hover: hover) and (pointer: fine) {
+  .app-shell .header-right > button:hover {
+    background: var(--accent-soft);
+  }
 }
 .app-shell .sync-status {
   justify-content: center;
@@ -356,8 +369,10 @@
   .immersive-shell .header-home {
     background: var(--glass);
   }
-  .app-shell .header-home:hover {
-    background: var(--accent-soft);
+  @media (hover: hover) and (pointer: fine) {
+    .app-shell .header-home:hover {
+      background: var(--accent-soft);
+    }
   }
   .app-shell .trip-title {
     padding: 0;

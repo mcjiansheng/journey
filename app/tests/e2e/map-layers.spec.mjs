@@ -140,8 +140,9 @@ test('favorite names, palette tokens and shared mark preset edit/delete',async({
  await page.locator('.map-panel').getByRole('button',{name:'管理预设',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/必吃/}).click();
  await page.getByRole('dialog').getByRole('button',{name:'圆',exact:true}).click();
- page.once('dialog',dialog=>dialog.accept());
- await page.getByRole('dialog').getByRole('button',{name:'完成',exact:true}).click();
+ await page.getByRole('dialog',{name:'管理预设'}).getByRole('button',{name:'完成',exact:true}).click();
+ // The in-app confirmation replaced window.confirm (MOB-015).
+ await page.getByRole('dialog',{name:'修改预设'}).getByRole('button',{name:'一起修改',exact:true}).click();
  await expect(page.locator('.favorite-marker .marker-graphic [data-mark-icon="circle"]')).toHaveCount(1);
  await page.locator('.map-panel').getByRole('button',{name:'管理预设',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'删除',exact:true}).click();

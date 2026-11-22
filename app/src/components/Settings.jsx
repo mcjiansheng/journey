@@ -10,7 +10,7 @@ import {
   ChevronRight,
   MoreHorizontal,
 } from 'lucide-react';
-import { Modal, Field, AsyncButton, Section, Empty, errorMessage } from './ui.jsx';
+import { Modal, Field, AsyncButton, Section, Empty, errorMessage, useConfirm } from './ui.jsx';
 import { ObjectActions } from './Itinerary.jsx';
 import { dateAdd } from '../domain.js';
 import './trip-settings.css';
@@ -31,6 +31,7 @@ export function Team({ journey: j, onClose }) {
     [qr, setQr] = useState(''),
     [hours, setHours] = useState('24'),
     [copied, setCopied] = useState('');
+  const [confirmDialog, confirm] = useConfirm();
   async function reload() {
     if (!manage) return;
     try {
@@ -136,8 +137,14 @@ export function Team({ journey: j, onClose }) {
                 <div className="member-more-panel">
                   <button
                     className="text-button danger"
-                    onClick={() => {
-                      if (confirm(`将 ${m.displayName} 移出旅程？`))
+                    onClick={async (event) => {
+                      event.currentTarget.closest('details')?.removeAttribute('open');
+                      if (
+                        await confirm(`将 ${m.displayName} 移出旅程？`, {
+                          title: '移除成员',
+                          confirmLabel: '移出',
+                        })
+                      )
                         change(`/api/trips/${trip.id}/members/${m.userId}`, 'DELETE');
                     }}
                   >
@@ -234,6 +241,7 @@ export function Team({ journey: j, onClose }) {
           {error}
         </p>
       )}
+      {confirmDialog}
     </Modal>
   );
 }
@@ -323,6 +331,7 @@ export function TripRecovery({ journey: j, onHome, onTeam, onDeleted }) {
 }
 export default function Settings({ journey: j, onTeam, onDeleted, onDates, onPersonal }) {
   const trip = j.snapshot.trip;
+  const [confirmDialog, confirm] = useConfirm();
   const [error, setError] = useState('');
   const [timezoneOpen, setTimezoneOpen] = useState(false),
     [timezoneSearch, setTimezoneSearch] = useState('');
@@ -472,7 +481,14 @@ export default function Settings({ journey: j, onTeam, onDeleted, onDates, onPer
           className="settings-link"
           onClick={async () => {
             const archived = j.trips.find((t) => t.id === trip.id)?.archived;
-            if (!archived && !confirm('归档旅程？将从我的旅程列表收起，可随时取消。')) return;
+            if (
+              !archived &&
+              !(await confirm('将从我的旅程列表收起，可随时取消归档。', {
+                title: '归档旅程',
+                confirmLabel: '归档',
+              }))
+            )
+              return;
             try {
               await j.api(`/api/trips/${trip.id}/archive`, {
                 method: 'POST',
@@ -586,6 +602,7 @@ export default function Settings({ journey: j, onTeam, onDeleted, onDates, onPer
           </AsyncButton>
         </Modal>
       )}
+      {confirmDialog}
     </div>
   );
 }

@@ -356,8 +356,10 @@
   width: 20px;
   height: 20px;
 }
-.mark-choice-row .mark-choice:hover {
-  background: var(--optical-selected);
+@media (hover: hover) and (pointer: fine) {
+  .mark-choice-row .mark-choice:hover {
+    background: var(--optical-selected);
+  }
 }
 .mark-choice-row .mark-choice[aria-pressed='true'] {
   border-color: var(--accent);
@@ -404,9 +406,11 @@
   font-size: var(--fs-caption);
   white-space: nowrap;
 }
-.favorite-mark-editor .mark-text-button:hover {
-  color: var(--text);
-  background: var(--optical-selected);
+@media (hover: hover) and (pointer: fine) {
+  .favorite-mark-editor .mark-text-button:hover {
+    color: var(--text);
+    background: var(--optical-selected);
+  }
 }
 .mark-preset-chips {
   display: flex;

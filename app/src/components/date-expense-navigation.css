@@ -97,8 +97,10 @@
   color: var(--accent);
   font-size: var(--fs-caption);
 }
-.activity-expense-link:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .activity-expense-link:hover {
+    text-decoration: underline;
+  }
 }
 .ledger-activity-filter {
   display: flex;
