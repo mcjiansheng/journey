@@ -1318,7 +1318,6 @@ details[open] > summary {
     padding: 0 20px;
   }
   .trip-title {
-    font-size: var(--fs-meta);
     max-width: 61%;
   }
   .mobile-logo,
@@ -1343,7 +1342,6 @@ details[open] > summary {
   .avatar-stack .avatar {
     width: 25px;
     height: 25px;
-    font-size: var(--fs-caption);
   }
   .members-button {
     gap: 5px;
@@ -1356,12 +1354,10 @@ details[open] > summary {
   }
   .page-heading {
     align-items: flex-start;
-    margin-bottom: 28px;
     gap: 12px;
   }
   .page-heading h1 {
     font-size: var(--fs-section);
-    letter-spacing: -0.9px;
     margin: 8px 0;
   }
   .page-heading .eyebrow {
@@ -1382,58 +1378,16 @@ details[open] > summary {
   .page-heading .muted {
     font-size: var(--fs-caption);
   }
-  .day-tabs {
-    gap: 7px;
-    margin-bottom: 19px;
-  }
-  .day-tabs button {
-    min-width: 78px;
-    padding: 12px 14px;
-  }
-  .day-heading {
-    margin-bottom: 18px;
-  }
+
   .day-heading h2 {
-    font-size: var(--fs-title);
     gap: 7px;
   }
-  .day-heading h2 small {
-    font-size: var(--fs-caption);
-  }
+
   .day-heading .primary {
     font-size: var(--fs-caption);
     padding: 8px 12px;
   }
-  .activity-card {
-    padding: 18px 16px;
-    gap: 11px;
-    border-radius: var(--radius-lg);
-  }
-  .activity-number {
-    height: 24px;
-    width: 24px;
-    font-size: var(--fs-caption);
-  }
-  .activity-main h3 {
-    font-size: var(--fs-body);
-  }
-  .activity-main {
-    gap: 6px;
-  }
-  .activity-time {
-    font-size: var(--fs-caption);
-  }
-  .activity-place {
-    font-size: var(--fs-caption);
-  }
-  .activity-toolbar {
-    gap: 12px;
-  }
-  .route-row {
-    margin-left: 21px;
-    padding: 12px 18px;
-    font-size: var(--fs-caption);
-  }
+
   .object-actions {
     gap: 10px;
   }
@@ -1453,14 +1407,8 @@ details[open] > summary {
     gap: 4px;
     z-index: 10;
     border-radius: var(--radius-xl);
-    background: var(--glass);
-    border: 1px solid #ffffffc4;
-    box-shadow: 0 9px 35px var(--optical-shadow);
-    -webkit-backdrop-filter: blur(24px);
-    backdrop-filter: blur(24px);
   }
   .bottom-nav button {
-    font-size: var(--fs-caption);
     gap: 5px;
     min-height: 47px;
   }
@@ -1527,7 +1475,6 @@ details[open] > summary {
   .home-actions button {
     flex: 1;
     padding: 11px 12px;
-    font-size: var(--fs-caption);
   }
   .trip-grid {
     grid-template-columns: 1fr;
@@ -1546,12 +1493,7 @@ details[open] > summary {
   .empty {
     padding: 40px 16px;
   }
-  .empty h3 {
-    font-size: var(--fs-meta);
-  }
-  .empty p {
-    font-size: var(--fs-caption);
-  }
+
   .modal {
     width: calc(100vw - 20px);
     max-height: calc(100dvh - 24px - env(safe-area-inset-bottom));
@@ -1566,9 +1508,7 @@ details[open] > summary {
   .modal-body {
     padding: 14px 20px calc(24px + env(safe-area-inset-bottom));
   }
-  .modal-head h2 {
-    font-size: var(--fs-title);
-  }
+
   .modal-actions {
     position: sticky;
     bottom: -25px;
@@ -1581,9 +1521,7 @@ details[open] > summary {
     gap: 0 12px;
   }
   .field {
-    font-size: var(--fs-caption);
     margin: 14px 0;
-    gap: 8px;
   }
   input:not([type='checkbox']),
   select,
@@ -1592,9 +1530,7 @@ details[open] > summary {
     padding: 10px;
     min-height: 45px;
   }
-  .field small {
-    font-size: var(--fs-caption);
-  }
+
   .ledger-total {
     padding: 25px;
     border-radius: var(--radius-lg);
@@ -1606,22 +1542,12 @@ details[open] > summary {
     gap: 11px;
     padding: 18px 0;
   }
-  .expense-title {
-    font-size: var(--fs-meta);
-  }
-  .expense-amount {
-    font-size: var(--fs-meta);
-  }
-  .expense-amount small {
-    font-size: var(--fs-caption);
-  }
+
   .expense-icon {
     width: 34px;
     height: 34px;
   }
-  .expense-info > p {
-    font-size: var(--fs-caption);
-  }
+
   .settings-page .section {
     padding: 21px 0;
   }
@@ -1631,12 +1557,7 @@ details[open] > summary {
   .setting-row {
     gap: 12px;
   }
-  .setting-row strong {
-    font-size: var(--fs-caption);
-  }
-  .setting-row p {
-    font-size: var(--fs-caption);
-  }
+
   .global-notice {
     bottom: calc(90px + env(safe-area-inset-bottom));
     width: calc(100vw - 28px);
@@ -1663,12 +1584,7 @@ details[open] > summary {
     height: 55px;
     margin-bottom: 23px;
   }
-  .login-form .field {
-    font-size: var(--fs-caption);
-  }
-  .login-wrap > .muted {
-    font-size: var(--fs-caption);
-  }
+
   .immersive-shell .trip-header {
     top: calc(12px + env(safe-area-inset-top));
     left: 12px;
@@ -1687,12 +1603,7 @@ details[open] > summary {
   .member-info strong {
     font-size: var(--fs-caption);
   }
-  .member-row > .text-button {
-    font-size: var(--fs-caption);
-  }
-  .member-controls {
-    font-size: var(--fs-caption);
-  }
+
   .invite-controls {
     gap: 12px;
   }
@@ -2444,15 +2355,7 @@ details[data-placement='top'] > :is(.activity-more-panel, .expense-more-panel, .
   .page-heading .muted {
     font-size: var(--fs-meta);
   }
-  .day-tabs {
-    margin-bottom: 20px;
-    gap: 9px;
-  }
-  .day-tabs button {
-    min-width: 87px;
-    padding: 14px 16px;
-    border-radius: var(--radius-lg);
-  }
+
   .day-tabs button strong {
     font-size: var(--fs-meta);
   }
