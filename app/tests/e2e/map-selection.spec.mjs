@@ -116,7 +116,7 @@ for(const width of [390,320])test(`real map selection and activity entry leave t
  await expect.poll(()=>page.evaluate(()=>window.__selectionMap.lngLatToContainer([118.7975,32.0739]).y)).toBeCloseTo(before+80,0);
  await page.getByRole('button',{name:'查看收藏列表',exact:true}).click();
  const selectionRequest=await cameraRequest(page);
- await page.locator('.map-result').filter({hasText:'玄武湖选点验收'}).click();
+ await page.locator('.map-result:not(.map-route-stop)').filter({hasText:'玄武湖选点验收'}).click();
  await settledCamera(page,selectionRequest);await visibleSelectedMarker(page);
  const viewport=()=>page.evaluate(()=>{const map=window.__selectionMap,center=map.getCenter();return[center.lng,center.lat,map.getZoom()].map(n=>Number(n.toFixed(6)));});
  const beforeExpansion=await viewport();
@@ -138,7 +138,8 @@ for(const width of [390,320])test(`real SDK footer stays visible beside long lis
  await expect.poll(()=>page.evaluate(()=>!!window.__selectionMap&&document.querySelectorAll('.place-marker').length>0),{timeout:30000}).toBe(true);
  await settledCamera(page);
  await page.getByRole('button',{name:'查看收藏列表',exact:true}).click();
- await expect(page.locator('.map-result')).toHaveCount(16);await visibleMapFooter(page);
+ // The mobile list also shows the day's route stop; count the 16 favorites.
+ await expect(page.locator('.map-result:not(.map-route-stop)')).toHaveCount(16);await visibleMapFooter(page);
  await page.locator('.map-result').last().scrollIntoViewIfNeeded();await visibleMapFooter(page);
  const results=Array.from({length:20},(_,index)=>({id:`footer-poi-${index}`,name:`长搜索地点${index}`,address:'南京市玄武区',type:'风景名胜',location:'118.7975,32.0739'}));
  for(const [path,data] of [['place/text',{status:'1',info:'OK',infocode:'10000',count:'20',pois:results}],['assistant/inputtips',{status:'1',info:'OK',infocode:'10000',count:'0',tips:[]}]]){

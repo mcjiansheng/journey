@@ -65,11 +65,16 @@ test('real AMap all-details displays compact photos, category and hours on mobil
  await expect.poll(()=>photo.evaluate(img=>img.complete&&img.naturalWidth>0),{timeout:25000}).toBe(true);
  await expect(photo).toHaveCSS('width','88px');await expect(photo).toHaveCSS('height','72px');
  await expect(page.locator('.place-information-contact')).toBeHidden();
- // Keep the selected pin in the exposed map area below the compact panel.
+ // Keep the selected pin in the exposed band between the top dock and the bottom sheet (MOB-006).
  await page.evaluate(location=>{
   const map=window.__informationMap,zoom=15;
+  const canvas=document.querySelector('.map-canvas').getBoundingClientRect();
+  const dock=document.querySelector('.map-top-dock').getBoundingClientRect();
+  const sheet=document.querySelector('.map-panel').getBoundingClientRect();
+  // The pin's coordinate tip sits about 20px below the middle of the pin.
+  const offset=(dock.bottom+sheet.top)/2+20-(canvas.top+canvas.height/2);
   const point=map.lngLatToPixel(location.split(',').map(Number),zoom);
-  const center=map.pixelToLngLat(new window.AMap.Pixel(point.x,point.y-180),zoom);
+  const center=map.pixelToLngLat(new window.AMap.Pixel(point.x,point.y-offset),zoom);
   map.setZoomAndCenter(zoom,center,true);
  },payload.pois[0].location);
  const marker=page.locator('.selected-marker');
