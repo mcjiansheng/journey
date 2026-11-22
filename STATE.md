@@ -25,14 +25,14 @@
 
 ## 风险
 
-- 9 项 B 类过时 E2E 待适配：`map-selection`（4 项，`visibleMapFooter` 未适配 MOB-006 展开抽屉与全高搜索列表；`map-camera-motion` 7 项、`place-information` 4 项已通过）、`atlas-review`（4 项）、`frontend-review-shell`（1 项）。
+- `map-selection` 4 项失败实为署名被面板遮挡（实现问题），已在 `d52b077` 修复，待实跑；`atlas-review` 4 项、`frontend-review-shell` 1 项为设置页改版后未更新的测试；`product.spec` 9 项需预先启动 4177 服务。
 - 未处理：P2-3（白板操作被服务端拒绝后不回滚且阻塞队列）、P2-6（离线超过 15 秒重连后未同步修改短暂消失/闪回）、P2-7（白板操作触发全员拉取整份旅程快照），以及审查报告第五节全部 P3。
 - 浅色暖黄便签上的橙色文字对比度 3.69:1 低于 AA（需求只要求深色模式可读，暂只记录）。
 
 ## 下一步
 
 - 原生端按 [11-原生端功能对齐](docs/设计文档/11-原生端功能对齐.md) 并行推进 N1、N2、N3、B1。
-- 更新过时的地图/设置页 B 类 E2E 用例并完成 PR 合并 `main` 前确认。
+- 实跑地图 E2E 验证 `d52b077`；更新设置页 5 项过时测试；合并 `main` 前取得确认。
 - MOB-016 余下：九段 760px 断点合并，需截图对比。
 - 真机确认：iOS Safari、Android Chrome 上点选便签不弹软键盘，以及旧旅程真实数据懒创建白板确认。
 - P2-3、P2-6、P2-7 与 P3 另行安排；CI 尚未接入 Playwright 端到端测试。
