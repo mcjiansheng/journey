@@ -625,8 +625,15 @@
   .app-shell:has(.map-keyboard-open) .bottom-nav {
     display: none;
   }
-  .app-shell.map-nav-hidden .global-notice {
-    bottom: calc(16px + env(safe-area-inset-bottom));
+  /* Notices live outside .app-shell; move them above the sheet when bottom-nav is hidden (MOB-021). */
+  body:has(.app-shell.map-nav-hidden) :is(.global-notice, .action-notice) {
+    top: calc(158px + env(safe-area-inset-top));
+    bottom: auto;
+    z-index: 1100;
+  }
+  body:has(.app-shell.map-nav-hidden) .global-notice ~ .action-notice {
+    top: calc(222px + env(safe-area-inset-top));
+    bottom: auto;
   }
   .journey-map:is(.map-searching, .map-keyboard-open) .amap-logo {
     bottom: calc(

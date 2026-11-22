@@ -224,7 +224,7 @@ test('detail actions stay visible and 320px manual edit returns to the selected 
  await expect(page.locator('.journey-map')).toBeVisible();
  await expect(page.locator('.map-shell .bottom-nav')).toBeVisible();
  await expect(page.getByRole('button',{name:'返回我的旅程',exact:true})).toBeVisible();
- await expect(page.locator('.map-peek-bar')).toBeVisible();
+ await expect(page.locator('.map-offline-places')).toBeVisible();
 });
 
 test('filter apply remains clickable at 800x500 and filter content scrolls on narrow mobile',async({page})=>{
@@ -291,6 +291,10 @@ for(const width of [1440,1024,390,320])test(`sync and return controls retain the
 });
 
 test('mobile peek bar opens flush sheet, swipe down dismisses, and top-left back returns to browse nav',async({page})=>{
+ const prevKey=app.locals.config.amapKey;app.locals.config.amapKey='map-controls-peek-fixture';
+ const sdk=`class Pixel{constructor(x,y){this.x=x;this.y=y}}class MapFixture{constructor(c,o){this.c=c;this.center=o.center;this.zoom=o.zoom;this.h={};setTimeout(()=>this.h.complete?.(),10)}on(n,fn){this.h[n]=fn}getCenter(){return{lng:this.center[0],lat:this.center[1]}}getZoom(){return this.zoom}add(){}remove(){}addControl(){}stopMove(){}setFitView(){}destroy(){this.c.replaceChildren()}}class S{search(_a,_b,cb){(cb||_b)('no_data',null)}}class G{getLocation(_n,cb){cb('complete',{geocodes:[{location:{lng:118.8,lat:32.07}}]})}}window.AMap={Map:MapFixture,Marker:class{constructor(o){this.options=o;this.content=o.content}on(){}},Pixel,LabelMarker:class{},LabelsLayer:class{constructor(){this.content=document.createElement('div')}add(){}},Polyline:class{},Scale:class{},Geocoder:G,PlaceSearch:S,AutoComplete:S,Walking:S,Driving:S,Riding:S,Transfer:S,plugin(_p,d){d()}};window.___onAPILoaded?.();`;
+ try{
+ await page.route('https://webapi.amap.com/maps?**',route=>route.fulfill({status:200,contentType:'application/javascript',body:sdk}));
  await page.setViewportSize({width:390,height:844});await register(page);await createTrip(page);await openMap(page,{mobile:true});
  await expect(page.locator('.map-shell .bottom-nav')).toBeVisible();
  const peek=page.locator('.map-peek-bar');await expect(peek).toBeVisible();
@@ -324,4 +328,5 @@ test('mobile peek bar opens flush sheet, swipe down dismisses, and top-left back
  await backSub.click();
  await expect(page.locator('.map-panel.mode-search')).toHaveCount(0);
  await expect(page.locator('.map-shell .bottom-nav')).toBeVisible();
+ }finally{app.locals.config.amapKey=prevKey;}
 });
