@@ -85,6 +85,25 @@ export function BoardToolbar({
   const showOptions = activeTool === 'pen' || activeTool === 'highlighter';
   const toolRefs = useRef({});
   const wrapRef = useRef(null);
+  const toolbarRef = useRef(null);
+  // On phones the tool row scrolls sideways; fade the edge that has more tools behind it (MOB-010).
+  useEffect(() => {
+    const bar = toolbarRef.current;
+    if (!bar) return undefined;
+    const update = () => {
+      const max = bar.scrollWidth - bar.clientWidth;
+      bar.dataset.moreStart = String(bar.scrollLeft > 2);
+      bar.dataset.moreEnd = String(max - bar.scrollLeft > 2);
+    };
+    update();
+    bar.addEventListener('scroll', update, { passive: true });
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null;
+    observer?.observe(bar);
+    return () => {
+      bar.removeEventListener('scroll', update);
+      observer?.disconnect();
+    };
+  }, []);
   const optionsRef = useRef(null);
   const [optionsLeft, setOptionsLeft] = useState(null);
   // Hover names above the toolbar (the bar scrolls sideways, so they live
@@ -200,6 +219,7 @@ export function BoardToolbar({
       )}
       <div
         id="toolbar"
+        ref={toolbarRef}
         className="glass"
         role="toolbar"
         aria-label="白板工具"

@@ -1574,7 +1574,7 @@
   }
   .board-switcher .chip {
     height: 40px;
-    max-width: calc(100vw - 72px - 176px);
+    max-width: calc(100vw - 72px - var(--header-right-width, 176px) - 8px);
   }
   .switcher-menu {
     position: fixed;
@@ -1594,8 +1594,24 @@
     bottom: calc(84px + env(safe-area-inset-bottom));
   }
   .tool {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
+  }
+  /* More tools hidden off one edge: fade that edge (data set by BoardToolbar). */
+  #toolbar[data-more-end='true'] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  }
+  #toolbar[data-more-start='true'] {
+    mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent);
+  }
+  #toolbar[data-more-start='true'][data-more-end='true'] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 32px,
+      #000 calc(100% - 32px),
+      transparent
+    );
   }
   .board-container .sep {
     margin: 0 1px;
@@ -1606,9 +1622,27 @@
     flex-direction: column;
     padding: 3px;
   }
-  #zoom .zoom-value,
-  #zoom .iconbtn:last-child {
-    display: none;
+  /* Keep 100% / fit-board reachable on phones (MOB-010). */
+  #zoom .zoom-value {
+    min-width: 36px;
+    height: 32px;
+    padding: 0;
+    font-size: var(--fs-caption);
+  }
+  .sheet-grabber {
+    width: 96px;
+    height: 36px;
+  }
+  .board-container #actions button {
+    height: 44px;
+  }
+  /* Formatting bar: bigger targets, it wraps to a second row instead of shrinking (MOB-009). */
+  #note-format .fmt {
+    width: 40px;
+    height: 40px;
+  }
+  #note-format .fs-btn {
+    width: 34px;
   }
   #drawer {
     left: 8px;
@@ -2459,6 +2493,10 @@
   gap: 2px;
   padding: 4px;
   border-radius: 12px;
+}
+#note-format .fmt-color-pop[data-placement='top'] {
+  top: auto;
+  bottom: calc(100% + 8px);
 }
 
 /* ---------- Style pop (beside the action bar) ---------- */
