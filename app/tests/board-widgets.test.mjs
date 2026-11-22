@@ -397,3 +397,21 @@ test('board-widgets: widget scale is kept relative to the form base size', () =>
   assert.equal(widgetScale(item), 1.3);
   assert.equal(widgetScale({ ...item, frame: { w: 10 } }), 0.75);
 });
+
+test('board-widgets: a source missing from the snapshot shows as removed instead of throwing', () => {
+  const snapshot = createMockSnapshot();
+  const empty = { ...snapshot, objects: [] };
+  for (const snap of [snapshot, empty])
+    for (const content of [
+      { kind: 'activity', activityId: 'missing' },
+      { kind: 'day', dayId: 'missing' },
+      { kind: 'day' },
+      { kind: 'route', dayId: 'missing' },
+      { kind: 'route' },
+      { kind: 'place', favoriteId: 'missing' },
+    ]) {
+      const m = widgetModel(snap, { content, style: { size: 'M' } });
+      assert.equal(m.gone, true, JSON.stringify(content));
+      assert.ok(widgetDeps(snap, { content, style: { size: 'M' } }));
+    }
+});

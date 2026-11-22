@@ -287,7 +287,9 @@ export function widgetModel(snapshot, item, { now = Date.now(), deviceTimeZone }
       size,
       gone,
       title: p.title,
-      dayLabel: dayLabel(day, trip),
+      // The source can be missing from the snapshot (not synced yet, or purged):
+      // show the removed state instead of failing the whole board.
+      dayLabel: day ? dayLabel(day, trip) : '',
       dateLabel: day?.payload?.date ? formatMd(day.payload.date) : '',
       index,
       time: timeObj,
@@ -340,7 +342,7 @@ export function widgetModel(snapshot, item, { now = Date.now(), deviceTimeZone }
       gone,
       dateNumber,
       weekday,
-      dayLabel: dayLabel(target, trip),
+      dayLabel: target ? dayLabel(target, trip) : '',
       count: acts.length,
       items,
     };
@@ -466,7 +468,7 @@ export function widgetModel(snapshot, item, { now = Date.now(), deviceTimeZone }
       kind: 'route',
       size,
       gone,
-      dayLabel: dayLabel(day, trip),
+      dayLabel: day ? dayLabel(day, trip) : '',
       dateLabel: day?.payload?.date ? formatMd(day.payload.date) : '',
       stops,
       legs,
