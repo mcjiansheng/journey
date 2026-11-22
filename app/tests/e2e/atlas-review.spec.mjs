@@ -225,10 +225,12 @@ for (const width of [1440, 768, 390, 320])
     await nav(page, '旅程设置').click();
     await expect(page.getByLabel('旅程名称')).toBeVisible();
     await capture('settings');
-    await page.getByRole('button', { name: '日期与计划天数', exact: false }).click();
+    // Settings rows read 「日期 12/01 – 12/03 · 3 天」 and 「已删除的内容 0」 since the
+    // 2026-11-03 settings regrouping (9b30021).
+    await page.getByRole('button', { name: /^日期/ }).click();
     await capture('dates');
     await close();
-    await page.getByRole('button', { name: '已删除的内容', exact: true }).click();
+    await page.getByRole('button', { name: /^已删除的内容/ }).click();
     await capture('deleted');
     await close();
     await page.locator(width > 760 ? '.back-home' : '.header-home').click();

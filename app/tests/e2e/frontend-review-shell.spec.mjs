@@ -68,7 +68,9 @@ test('trip creation proceeds during a pending destination lookup using device ti
  const started=Date.now();await page.getByRole('dialog').getByRole('button',{name:'创建旅程',exact:true}).click();
  await expect(page.getByRole('dialog')).toHaveCount(0);expect(Date.now()-started).toBeLessThan(3000);
  const trip=await page.evaluate(async()=>(await fetch('/api/trips').then(r=>r.json())).trips[0]);expect(trip.timezone).toBe(zone);
- await nav(page,'旅程设置').click();await page.getByLabel('旅程时区').selectOption('Asia/Tokyo');await expect(page.locator('.sync-status.synced')).toBeVisible();
+ // Since 9b30021 the trip timezone is a searchable dialog instead of a <select>.
+ await nav(page,'旅程设置').click();await page.getByRole('button',{name:/^时区/}).click();await page.getByLabel('搜索时区').fill('Tokyo');
+ await page.getByRole('dialog').getByRole('button',{name:/Asia\/Tokyo/}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.locator('.sync-status.synced')).toBeVisible();
  await expect.poll(()=>page.evaluate(async()=>(await fetch('/api/trips').then(r=>r.json())).trips[0].timezone)).toBe('Asia/Tokyo');
 });
 
