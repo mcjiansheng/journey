@@ -137,8 +137,12 @@ small {
   border-radius: 50%;
   flex-shrink: 0;
 }
-.icon-button:hover {
+.icon-button:hover,
+.icon-button[aria-expanded='true'] {
   background: var(--accent-soft);
+}
+.icon-button[aria-expanded='true'] {
+  color: var(--accent);
 }
 .button-row {
   display: flex;
@@ -3504,9 +3508,11 @@ details[open] > summary:not(:has(svg))::before {
   border: 0;
   box-shadow: none;
 }
-.itinerary-toolbar {
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 12px;
+@media (width > 760px) {
+  .itinerary-toolbar {
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 12px;
+  }
 }
 .settings-page > .muted {
   margin-bottom: 16px;
@@ -3544,4 +3550,32 @@ details[open] > summary:not(:has(svg))::before {
   .settings-page .form-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Action sheets: one full-width action per row (mobile menus opened from ··· buttons). */
+.action-sheet-list {
+  display: grid;
+  gap: 2px;
+}
+.action-sheet-list .text-button,
+.action-sheet-list .object-actions .text-button {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 0 4px;
+  color: var(--text);
+  font-size: var(--fs-body);
+  text-align: left;
+}
+.action-sheet-list .text-button > svg:last-child:not(:first-child) {
+  margin-left: auto;
+}
+.action-sheet-list .object-actions {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
 }

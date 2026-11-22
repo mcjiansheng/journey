@@ -8,6 +8,45 @@ export function IconButton({ icon: Icon, label, ...props }) {
     </button>
   );
 }
+// Mobile layout breakpoint shared with the `@media (max-width: 760px)` rules.
+export const MOBILE_QUERY = '(max-width: 760px)';
+export function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() =>
+    typeof window === 'undefined' ? false : window.matchMedia(query).matches,
+  );
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const update = () => setMatches(list.matches);
+    update();
+    list.addEventListener('change', update);
+    return () => list.removeEventListener('change', update);
+  }, [query]);
+  return matches;
+}
+// Closes a popover on outside pointer-down or Escape; `ignore` lists elements that count as inside.
+export function useDismiss(open, onDismiss, ...ignore) {
+  const dismiss = useRef(onDismiss);
+  dismiss.current = onDismiss;
+  useEffect(() => {
+    if (!open) return undefined;
+    const inside = (target) => ignore.some((ref) => ref.current?.contains(target));
+    const onPointerDown = (event) => {
+      if (!inside(event.target)) dismiss.current('outside');
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape' && !document.querySelector('dialog[open]')) {
+        event.preventDefault();
+        dismiss.current('escape');
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+}
 let modalDepth = 0;
 export function Modal({
   title,

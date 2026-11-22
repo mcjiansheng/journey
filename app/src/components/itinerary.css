@@ -138,126 +138,6 @@
   display: none;
 }
 
-@media (max-width: 760px) {
-  .itinerary-page .day-tabs {
-    display: none;
-  }
-  .itinerary-page .mobile-day-bar {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    margin: 0;
-    padding: 3px 4px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-lg);
-    background: var(--glass);
-    -webkit-backdrop-filter: blur(20px);
-    backdrop-filter: blur(20px);
-    box-shadow: 0 3px 15px var(--optical-shadow);
-  }
-  .mobile-day-bar select {
-    min-width: 0;
-    flex: 1;
-    border: 0;
-    background: transparent;
-    font-size: var(--fs-meta);
-    color: var(--text);
-    height: 44px;
-    padding: 0 5px;
-    font-weight: 600;
-  }
-  .mobile-day-bar .icon-button {
-    min-width: 40px;
-    min-height: 44px;
-  }
-  .itinerary-page .day-heading {
-    gap: 5px;
-    margin-bottom: 14px;
-  }
-  .itinerary-page .day-heading > .button-row {
-    gap: 3px;
-    flex-wrap: nowrap;
-  }
-  .itinerary-page .day-add {
-    display: none;
-  }
-  .itinerary-page .activity-card {
-    grid-template-columns: 25px minmax(0, 1fr);
-    align-content: start;
-    padding: 15px 13px;
-    column-gap: 10px;
-    border-radius: var(--radius-lg);
-  }
-  .itinerary-page .activity-main {
-    padding-right: 40px;
-    gap: 3px;
-  }
-  .itinerary-page .activity-main h3 {
-    font-size: var(--fs-title);
-    line-height: 1.5;
-  }
-  .itinerary-page .activity-time {
-    margin-bottom: 3px;
-    padding-right: 40px;
-    font-size: var(--fs-caption);
-  }
-  .itinerary-page .activity-number {
-    grid-row: span 2;
-    width: 25px;
-    height: 25px;
-    font-size: var(--fs-caption);
-  }
-  .itinerary-page .activity-place-row {
-    padding-right: 0;
-    margin-top: 2px;
-    gap: 2px;
-  }
-  .itinerary-page .activity-place {
-    font-size: var(--fs-caption);
-    line-height: 1.5;
-    min-height: 34px;
-  }
-  .itinerary-page .activity-navigation,
-  .itinerary-page .activity-place-icon {
-    width: 40px;
-    height: 40px;
-  }
-  .itinerary-page .activity-controls {
-    position: absolute;
-    grid-area: auto;
-    top: 7px;
-    right: 5px;
-  }
-  .itinerary-page .route-slot {
-    margin-left: 28px;
-    min-height: 22px;
-  }
-  .itinerary-page .route-add {
-    min-height: 28px;
-    padding: 2px 8px;
-  }
-  .itinerary-page .route-add span {
-    font-size: var(--fs-caption);
-  }
-  .itinerary-page .route-row {
-    font-size: var(--fs-caption);
-    min-height: 28px;
-    padding: 4px 8px;
-  }
-  .itinerary-page .activity-list:has(> .activity-card:nth-of-type(2))::before {
-    left: 26px;
-    top: 45px;
-    bottom: 45px;
-  }
-  .itinerary-page .timing-note {
-    font-size: var(--fs-caption);
-  }
-  .activity-opinions {
-    font-size: var(--fs-caption);
-    gap: 8px;
-  }
-}
-
 .itinerary-toolbar {
   display: flex;
   align-items: center;
@@ -313,67 +193,6 @@
 }
 .itinerary-page .activity-more-panel .text-button > svg {
   flex-shrink: 0;
-}
-@media (max-width: 760px) {
-  .itinerary-page {
-    padding-bottom: 100px;
-  }
-  .itinerary-toolbar {
-    position: sticky;
-    top: 0;
-    z-index: 5;
-    gap: 4px;
-    margin-bottom: 16px;
-    background: var(--surface);
-    padding: 4px;
-    border-radius: var(--radius-md);
-  }
-  .itinerary-page .mobile-day-bar {
-    flex: 1;
-    min-width: 0;
-    background: transparent;
-    box-shadow: none;
-    border: 0;
-    padding: 0;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-  .itinerary-page .itinerary-toolbar .day-heading > .button-row {
-    gap: 0;
-  }
-  .itinerary-page .sort-toggle {
-    padding: 8px;
-    min-height: 44px;
-    font-size: var(--fs-meta);
-  }
-  .itinerary-page .itinerary-add-fab {
-    display: inline-flex;
-    position: fixed;
-    right: 20px;
-    bottom: calc(100px + env(safe-area-inset-bottom));
-    z-index: 8;
-    border-radius: var(--radius-xl);
-    box-shadow: 0 4px 16px var(--optical-shadow);
-    min-height: 48px;
-  }
-  .itinerary-page .route-slot:not(.has-route) .route-add {
-    opacity: 0;
-    visibility: hidden;
-  }
-  .itinerary-page .day-lifecycle {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .itinerary-page .day-menu-actions {
-    gap: 4px;
-  }
-  .itinerary-page .activity-content {
-    grid-column: 2;
-    grid-row: 2;
-  }
-  .itinerary-page .activity-card:not(:has(> .activity-time)) .activity-content {
-    grid-row: 1;
-  }
 }
 
 .itinerary-page .drag-handle {
@@ -443,7 +262,219 @@
     opacity: 1;
   }
 }
+
+/* All phone rules live here, after the base rules they override. */
 @media (max-width: 760px) {
+  .itinerary-page .day-tabs {
+    display: none;
+  }
+  /* The toolbar draws the pill; the day bar itself is a plain row inside it. */
+  .itinerary-page .mobile-day-bar {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    margin: 0;
+  }
+  .mobile-day-select {
+    position: relative;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    height: 44px;
+    border-radius: var(--radius-md);
+  }
+  .mobile-day-select:has(select:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .mobile-day-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    color: var(--text);
+    font-size: var(--fs-meta);
+    font-weight: 600;
+    pointer-events: none;
+  }
+  .mobile-day-label > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-day-label > svg {
+    flex-shrink: 0;
+    color: var(--muted);
+  }
+  .mobile-day-select select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    appearance: none;
+    -webkit-appearance: none;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .mobile-day-bar .icon-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .itinerary-page .day-heading {
+    gap: 5px;
+    margin-bottom: 14px;
+  }
+  .itinerary-page .day-heading > .button-row {
+    gap: 3px;
+    flex-wrap: nowrap;
+  }
+  .itinerary-page .day-add {
+    display: none;
+  }
+  .itinerary-page .activity-card {
+    grid-template-columns: 25px minmax(0, 1fr);
+    align-content: start;
+    padding: 15px 13px;
+    column-gap: 10px;
+    border-radius: var(--radius-lg);
+  }
+  .itinerary-page .activity-main {
+    padding-right: 40px;
+    gap: 3px;
+  }
+  .itinerary-page .activity-main h3 {
+    font-size: var(--fs-title);
+    line-height: 1.5;
+  }
+  .itinerary-page .activity-time {
+    margin-bottom: 3px;
+    padding-right: 40px;
+    font-size: var(--fs-caption);
+  }
+  .itinerary-page .activity-number {
+    grid-row: span 2;
+    width: 25px;
+    height: 25px;
+    font-size: var(--fs-caption);
+  }
+  .itinerary-page .activity-place-row {
+    padding-right: 0;
+    margin-top: 2px;
+    gap: 2px;
+  }
+  .itinerary-page .activity-place {
+    font-size: var(--fs-caption);
+    line-height: 1.5;
+    min-height: 34px;
+  }
+  .itinerary-page .activity-navigation,
+  .itinerary-page .activity-place-icon {
+    position: relative;
+    width: 40px;
+    height: 40px;
+  }
+  /* Keep the 40px icon, extend the touch target to 44px. */
+  .itinerary-page .activity-navigation::after,
+  .itinerary-page .activity-place-icon::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+  }
+  .itinerary-page .activity-controls {
+    position: absolute;
+    grid-area: auto;
+    top: 7px;
+    right: 5px;
+  }
+  .itinerary-page .route-slot {
+    margin-left: 28px;
+    min-height: 22px;
+  }
+  .itinerary-page .route-add {
+    min-height: 44px;
+    padding: 2px 8px;
+    opacity: 1;
+    visibility: visible;
+  }
+  .itinerary-page .route-add span {
+    font-size: var(--fs-caption);
+  }
+  .itinerary-page .route-row {
+    font-size: var(--fs-caption);
+    min-height: 44px;
+    padding: 4px 8px;
+  }
+  .itinerary-page .activity-list:has(> .activity-card:nth-of-type(2))::before {
+    left: 26px;
+    top: 45px;
+    bottom: 45px;
+  }
+  .itinerary-page .timing-note {
+    font-size: var(--fs-caption);
+  }
+  .activity-opinions {
+    font-size: var(--fs-caption);
+    gap: 8px;
+  }
+
+  /* Toolbar, day menu and add button. */
+  .itinerary-page {
+    padding-bottom: 100px;
+  }
+  .itinerary-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    gap: 4px;
+    margin-bottom: 16px;
+    background: var(--surface);
+    padding: 4px;
+    border-radius: var(--radius-md);
+  }
+  .itinerary-page .itinerary-toolbar .day-heading > .button-row {
+    gap: 0;
+  }
+  .itinerary-page .sort-toggle {
+    padding: 8px;
+    min-height: 44px;
+    font-size: var(--fs-meta);
+  }
+  .itinerary-page .itinerary-add-fab {
+    display: inline-flex;
+    position: fixed;
+    right: 20px;
+    bottom: calc(100px + env(safe-area-inset-bottom));
+    z-index: 8;
+    border-radius: var(--radius-xl);
+    box-shadow: 0 4px 16px var(--optical-shadow);
+    min-height: 48px;
+  }
+  .itinerary-page .day-lifecycle {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .itinerary-page .day-menu-actions {
+    gap: 4px;
+  }
+  .itinerary-page .activity-content {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .itinerary-page .activity-card:not(:has(> .activity-time)) .activity-content {
+    grid-row: 1;
+  }
+
+  /* Sorting mode. */
   .itinerary-page .mobile-sort-entry {
     display: inline-flex;
   }
@@ -498,10 +529,6 @@
   .itinerary-page.is-sorting .activity-more {
     display: none;
   }
-  .itinerary-page .route-slot:not(.has-route) .route-add {
-    opacity: 1;
-    visibility: visible;
-  }
   .itinerary-page.is-sorting .activity-main > small {
     display: none;
   }
@@ -510,5 +537,15 @@
     max-width: 36vw;
     margin: 0;
     padding: 0;
+  }
+}
+
+/* Touch screens wider than the phone layout cannot hover to reveal these controls. */
+@media (width > 760px) and (hover: none) {
+  .itinerary-page .route-add {
+    opacity: 1;
+  }
+  .itinerary-page .drag-handle {
+    display: inline-flex;
   }
 }

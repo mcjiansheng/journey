@@ -13,6 +13,10 @@ import {
   Route,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ListOrdered,
+  ArrowLeftRight,
+  StickyNote,
   MoreHorizontal,
   GripVertical,
   RotateCcw,
@@ -23,7 +27,19 @@ import {
   LockKeyhole,
   Link,
 } from 'lucide-react';
-import { Field, Modal, Empty, AsyncButton, active, id, errorMessage, money } from './ui.jsx';
+import {
+  Field,
+  Modal,
+  Empty,
+  AsyncButton,
+  active,
+  id,
+  errorMessage,
+  money,
+  useMediaQuery,
+  useDismiss,
+  MOBILE_QUERY,
+} from './ui.jsx';
 import { pinWidgetToBoard } from '../board-sync.js';
 import {
   visibleDays,
@@ -710,6 +726,81 @@ export default function Itinerary({
   }, [j.context.focusActivityId, current?.id]);
 
   const dayMenu = !!current && dayMenuId === current.id;
+  const mobile = useMediaQuery(MOBILE_QUERY);
+  const dayMenuButton = useRef(null),
+    dayMenuPanel = useRef(null);
+  const closeDayMenu = () => setDayMenuId(null);
+  // Desktop panel: close on outside pointer-down or Escape (mobile uses a modal action sheet).
+  useDismiss(
+    dayMenu && !mobile,
+    (reason) => {
+      closeDayMenu();
+      if (reason === 'escape') dayMenuButton.current?.focus();
+    },
+    dayMenuButton,
+    dayMenuPanel,
+  );
+  const dayMenuActions = () => (
+    <>
+      <button
+        className="text-button mobile-sort-entry"
+        onClick={() => {
+          setSorting(true);
+          closeDayMenu();
+        }}
+      >
+        <ListOrdered size={16} />
+        调整顺序
+      </button>
+      <button
+        className="text-button"
+        disabled={days.length < 2}
+        onClick={() => {
+          setSwapSource(current);
+          closeDayMenu();
+        }}
+      >
+        <ArrowLeftRight size={16} />
+        与另一天交换
+      </button>
+      <button
+        className="text-button pin-day-to-board-button"
+        onClick={() => {
+          closeDayMenu();
+          pinWidgetToBoard(j, { kind: 'day', dayId: current.id }, 'M');
+        }}
+      >
+        <StickyNote size={16} />
+        贴到白板
+      </button>
+      <button
+        className="text-button"
+        onClick={() => {
+          closeDayMenu();
+          onDates();
+        }}
+      >
+        <CalendarDays size={16} />
+        调整日期与天数
+      </button>
+      {j.snapshot.objects.some((o) => o.kind === 'day' && o.state === 'deleted') && (
+        <button
+          className="text-button"
+          onClick={() => {
+            closeDayMenu();
+            onDeleted();
+          }}
+        >
+          <RotateCcw size={16} />
+          已删除的计划日
+          <ChevronRight size={14} />
+        </button>
+      )}
+      <ObjectActions journey={j} object={current} />
+    </>
+  );
+  const dayOptionLabel = (d) =>
+    `${dayLabel(d, j.snapshot.trip)}${d.payload.date ? ` ${d.payload.date.slice(5).replace('-', '/')}` : ''}${d.payload.date === today ? ' · 今天' : ''}`;
   useEffect(() => {
     setDayMenuId(null);
     setSorting(false);
@@ -1278,22 +1369,29 @@ export default function Itinerary({
             >
               <ChevronLeft size={18} />
             </button>
-            <select
-              aria-label="当前计划日"
-              value={current.id}
-              onChange={(e) =>
-                j.setContext({ dayId: e.target.value === 'today' ? todayDay.id : e.target.value })
-              }
-            >
-              {todayDay && todayDay.id !== current.id && <option value="today">回到今天</option>}
-              {days.map((d) => (
-                <option value={d.id} key={d.id}>
-                  {dayLabel(d, j.snapshot.trip)}
-                  {d.payload.date ? ` ${d.payload.date.slice(5).replace('-', '/')}` : ''}
-                  {d.payload.date === today ? ' · 今天' : ''}
-                </option>
-              ))}
-            </select>
+            {/* The visible label keeps the chevron next to the date; the native select sits on top. */}
+            <div className="mobile-day-select">
+              <span className="mobile-day-label" aria-hidden="true">
+                <span>{dayOptionLabel(current)}</span>
+                <ChevronDown size={16} />
+              </span>
+              <select
+                aria-label="当前计划日"
+                value={current.id}
+                onChange={(e) =>
+                  j.setContext({
+                    dayId: e.target.value === 'today' ? todayDay.id : e.target.value,
+                  })
+                }
+              >
+                {todayDay && todayDay.id !== current.id && <option value="today">回到今天</option>}
+                {days.map((d) => (
+                  <option value={d.id} key={d.id}>
+                    {dayOptionLabel(d)}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button
               className="icon-button"
               aria-label="后一天"
@@ -1325,8 +1423,10 @@ export default function Itinerary({
             </button>
             {current && (
               <button
+                ref={dayMenuButton}
                 className="icon-button compact"
                 aria-label="当天操作"
+                aria-haspopup={mobile ? 'dialog' : undefined}
                 aria-expanded={dayMenu}
                 onClick={() => setDayMenuId(dayMenu ? null : current.id)}
               >
@@ -1336,6 +1436,17 @@ export default function Itinerary({
           </div>
         </div>
       </div>
+      {current && dayMenu && mobile && (
+        <Modal
+          title={`${dayLabel(current, j.snapshot.trip)}${current.payload.date ? ` · ${current.payload.date}` : ''}`}
+          className="action-sheet day-action-sheet"
+          dismissOnBackdrop
+          returnFocus={dayMenuButton.current}
+          onClose={closeDayMenu}
+        >
+          <div className="action-sheet-list">{dayMenuActions()}</div>
+        </Modal>
+      )}
       {nextActivity && (
         <nav className="mobile-next-activity" aria-label="浏览行程">
           <button className="secondary day-jump" onClick={showNext}>
@@ -1361,59 +1472,13 @@ export default function Itinerary({
       )}
       <div className="day-content-stage" ref={dayStage}>
         <div className="day-content" ref={dayContent}>
-          {current && dayMenu && (
-            <div className="day-lifecycle">
+          {current && dayMenu && !mobile && (
+            <div className="day-lifecycle" ref={dayMenuPanel}>
               <span>
                 {dayLabel(current, j.snapshot.trip)}
                 {current.payload.date ? ` · ${current.payload.date}` : ''}
               </span>
-              <div className="day-menu-actions">
-                <button
-                  className="text-button mobile-sort-entry"
-                  onClick={() => {
-                    setSorting(true);
-                    setDayMenuId(null);
-                  }}
-                >
-                  调整顺序
-                </button>
-                <button
-                  className="text-button"
-                  disabled={days.length < 2}
-                  onClick={() => {
-                    setSwapSource(current);
-                    setDayMenuId(null);
-                  }}
-                >
-                  与另一天交换
-                </button>
-                <button
-                  className="text-button pin-day-to-board-button"
-                  onClick={() => {
-                    setDayMenuId(null);
-                    pinWidgetToBoard(j, { kind: 'day', dayId: current.id }, 'M');
-                  }}
-                >
-                  贴到白板
-                </button>
-                <button
-                  className="text-button"
-                  onClick={() => {
-                    setDayMenuId(null);
-                    onDates();
-                  }}
-                >
-                  <CalendarDays size={16} />
-                  调整日期与天数
-                </button>
-                {j.snapshot.objects.some((o) => o.kind === 'day' && o.state === 'deleted') && (
-                  <button className="text-button" onClick={onDeleted}>
-                    已删除的计划日
-                    <ChevronRight size={14} />
-                  </button>
-                )}
-                <ObjectActions journey={j} object={current} />
-              </div>
+              <div className="day-menu-actions">{dayMenuActions()}</div>
             </div>
           )}
           <div className="activity-list">
