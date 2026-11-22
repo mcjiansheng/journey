@@ -1,6 +1,9 @@
 .journey-map {
   --map-top-clearance: 156px;
   --map-bottom-clearance: 82px;
+  /* Map strip every phone panel leaves free for the AMap logo, copyright and scale
+     (02-交互与界面设计稿: 供应商署名与比例尺不能被面板遮挡). Read by MapView too. */
+  --map-footer-reserve: 96px;
   position: fixed;
   inset: 0;
   isolation: isolate;
@@ -854,11 +857,17 @@
   .journey-map .map-panel.has-sheet.sheet-expanded {
     max-height: var(
       --sheet-drag-height,
-      calc(var(--visual-height, 100dvh) - var(--map-top-clearance, 118px) - 10px)
+      calc(
+        var(--visual-height, 100dvh) - var(--map-top-clearance, 118px) -
+          var(--map-footer-reserve, 96px)
+      )
     );
   }
   .journey-map .map-panel:is(.mode-filter, .mode-manual) {
-    max-height: calc(var(--visual-height, 100dvh) - var(--map-top-clearance, 118px) - 18px);
+    max-height: calc(
+      var(--visual-height, 100dvh) - var(--map-top-clearance, 118px) -
+        var(--map-footer-reserve, 96px)
+    );
     padding: 0;
     overflow: visible;
   }
@@ -875,14 +884,20 @@
     right: 10px;
     top: calc(var(--map-top-clearance, 118px) + 6px);
     bottom: auto;
-    max-height: calc(var(--visual-height, 100dvh) - var(--map-top-clearance, 118px) - 16px);
+    max-height: calc(
+      var(--visual-height, 100dvh) - var(--map-top-clearance, 118px) - 6px -
+        var(--map-footer-reserve, 96px)
+    );
   }
   .journey-map .map-panel.mode-search {
     left: 12px;
     right: 12px;
     top: calc(var(--map-controls-top) + 52px);
     bottom: auto;
-    max-height: calc(var(--visual-height, 100dvh) - var(--map-controls-top) - 62px);
+    max-height: calc(
+      var(--visual-height, 100dvh) - var(--map-controls-top) - 52px -
+        var(--map-footer-reserve, 96px)
+    );
   }
   .journey-map .map-top-dock {
     display: flex;
@@ -1061,7 +1076,10 @@
       transform 220ms var(--navigation-ease);
   }
   .journey-map .map-panel.has-sheet:is(.mode-detail, .mode-list).sheet-expanded .map-sheet-surface {
-    min-height: calc(var(--visual-height, 100dvh) - var(--map-top-clearance, 118px) - 10px);
+    min-height: calc(
+      var(--visual-height, 100dvh) - var(--map-top-clearance, 118px) -
+        var(--map-footer-reserve, 96px)
+    );
   }
   .journey-map .map-panel.is-sheet-dragging .map-sheet-surface,
   .journey-map .map-sheet-surface.is-dragging {
@@ -1271,8 +1289,7 @@
     font-size: 18px;
     line-height: 1;
   }
-  .journey-map.map-tools-hidden .map-tools,
-  .journey-map.map-tools-hidden .amap-scalecontrol {
+  .journey-map.map-tools-hidden .map-tools {
     opacity: 0;
     pointer-events: none;
   }

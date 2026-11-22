@@ -1256,7 +1256,12 @@ export default function MapView({
   function getSheetMetrics() {
     const topClearance = topDock.current?.getBoundingClientRect().bottom || 118;
     const vh = window.visualViewport?.height || window.innerHeight;
-    const maxHeight = Math.max(260, Math.round(vh - topClearance - 10));
+    // Leave the map strip that holds the AMap logo, copyright and scale (map.css).
+    const reserve =
+      parseFloat(
+        getComputedStyle(mapRoot.current || document.body).getPropertyValue('--map-footer-reserve'),
+      ) || 96;
+    const maxHeight = Math.max(260, Math.round(vh - topClearance - reserve));
     const halfHeight = Math.min(Math.round(vh * 0.46), 380, maxHeight);
     return { maxHeight, halfHeight };
   }
