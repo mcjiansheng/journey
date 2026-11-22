@@ -6,7 +6,7 @@
 ## 当前步骤
 
 - 移动端网页修复（`dev` 已推送 `origin/dev`）：MOB-001~015、017~019、021 已通过构建、E2E 与多视口截图复核；MOB-016 完成第一步；`main` 仍为 2026-11-13 发布版本，合并 `main` 前需取得用户明确确认。
-- 原生端功能对齐（计划已定，未开工）：iOS、Android 对齐网页 `main`（含白板原生重写），按 [11-原生端功能对齐](docs/设计文档/11-原生端功能对齐.md) 的 N0–N3、B1–B9 工作包推进。
+- 原生端功能对齐（N0 已完成、待构建验证）：iOS、Android 对齐网页 `main`（含白板原生重写），按 [11-原生端功能对齐](docs/设计文档/11-原生端功能对齐.md) 的 N0–N3、B1–B9 工作包推进。
 
 ## 已做决定及理由
 
@@ -31,7 +31,7 @@
 
 ## 下一步
 
-- 原生 N0：已删除列表按类型过滤（快照含 `board` 对象，原生会误列）、共享用例脚本、补全 CONTRACT 的 boardItem 类型。
+- 原生 N0 验证：Mac 上跑 Android `testDebugUnitTest lintDebug assembleDebug`、iOS 构建与 `JourneyTests`（含新的 `SharedFixturesTests`），通过后开 N1、N2、N3、B1。
 - 更新过时的地图/设置页 B 类 E2E 用例并完成 PR 合并 `main` 前确认。
 - MOB-016 余下：九段 760px 断点合并，需截图对比。
 - 真机确认：iOS Safari、Android Chrome 上点选便签不弹软键盘，以及旧旅程真实数据懒创建白板确认。
