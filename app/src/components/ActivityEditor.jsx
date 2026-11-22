@@ -391,9 +391,9 @@ export default function ActivityEditor({
         <button
           className="primary small editor-done"
           disabled={completing || !draft.title.trim()}
-          // Keep focus in the field for mouse and touch alike, so 完成 is not preceded by a
-          // separate blur save that can move the layout under the finger (MOB-014).
-          onPointerDown={(e) => {
+          // Prevent focus leaving the active field before click runs, without blocking
+          // synthesized clicks on WebKit touch (MOB-014).
+          onMouseDown={(e) => {
             if (e.button === 0) e.preventDefault();
           }}
           onClick={complete}
@@ -419,9 +419,9 @@ export default function ActivityEditor({
         </p>
         <button
           className="text-button editor-later"
-          // Keep focus in the field for mouse and touch alike, so 完成 is not preceded by a
-          // separate blur save that can move the layout under the finger (MOB-014).
-          onPointerDown={(e) => {
+          // Prevent focus leaving the active field before click runs, without blocking
+          // synthesized clicks on WebKit touch (MOB-014).
+          onMouseDown={(e) => {
             if (e.button === 0) e.preventDefault();
           }}
           onClick={requestClose}
