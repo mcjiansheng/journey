@@ -12,10 +12,11 @@
     "start": "node server/index.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:e2e": "node scripts/run-browser-tests.mjs",
-    "check": "npm run tokens:check && npm run contrast:check && npm run timezones:check && npm run test && npm run build",
+    "check": "npm run tokens:check && npm run contrast:check && npm run timezones:check && npm run fixtures:check && npm run test && npm run build",
     "test:browser": "node scripts/run-browser-tests.mjs --script",
     "tokens:check": "node ../scripts/generate-design-tokens.mjs --check && node ../scripts/check-css-vars.mjs",
     "timezones:check": "node ../scripts/generate-destination-timezones.mjs --check",
+    "fixtures:check": "node ../mobile/tools/generate-fixtures.mjs --check",
     "format": "prettier --write \"src/**/*.{js,jsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{js,jsx,css}\"",
     "contrast:check": "node ../scripts/check-design-contrast.mjs"

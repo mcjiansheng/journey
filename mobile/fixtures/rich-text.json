@@ -1,0 +1,495 @@
+{
+  "$comment": "由 mobile/tools/generate-fixtures.mjs 从网页端代码生成，不要手改。网页端函数改动后重新运行该脚本。",
+  "sources": [
+    "app/src/rich-text.js"
+  ],
+  "noteTextColors": [
+    {
+      "id": "ink",
+      "name": "默认",
+      "value": "var(--text)"
+    },
+    {
+      "id": "red",
+      "name": "红",
+      "value": "var(--ink-red)"
+    },
+    {
+      "id": "orange",
+      "name": "橙",
+      "value": "var(--ink-orange)"
+    },
+    {
+      "id": "blue",
+      "name": "蓝",
+      "value": "var(--ink-blue)"
+    },
+    {
+      "id": "purple",
+      "name": "紫",
+      "value": "var(--ink-purple)"
+    },
+    {
+      "id": "accent",
+      "name": "主题色",
+      "value": "var(--ink-accent)"
+    }
+  ],
+  "cases": [
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        ""
+      ],
+      "result": ""
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "纯文本"
+      ],
+      "result": "纯文本"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<b>粗</b><i>斜</i><u>下划线</u><s>删除线</s>"
+      ],
+      "result": "<b>粗</b><i>斜</i><u>下划线</u><s>删除线</s>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<strong>粗</strong><em>斜</em><strike>删</strike>"
+      ],
+      "result": "<b>粗</b><i>斜</i><s>删</s>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<B>大写标签</B><I>斜</I>"
+      ],
+      "result": "<b>大写标签</b><i>斜</i>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<p>段落</p><div>块</div>"
+      ],
+      "result": "<div>段落</div><div>块</div>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "第一行<br>第二行<br/>第三行<br />"
+      ],
+      "result": "第一行<br>第二行<br>第三行<br>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<div style=\"text-align: center\">居中</div><div data-align=\"right\">靠右</div>"
+      ],
+      "result": "<div data-align=\"center\">居中</div><div data-align=\"right\">靠右</div>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<li style=\"text-align:left\">列表对齐</li><span style=\"text-align:center\">不保留</span>"
+      ],
+      "result": "<li data-align=\"left\">列表对齐</li><span>不保留</span>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<ul><li>一</li><li>二</li></ul><ol><li>甲</li></ol>"
+      ],
+      "result": "<ul><li>一</li><li>二</li></ul><ol><li>甲</li></ol>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<ul data-list=\"check\"><li data-checked=\"true\">已完成</li><li>未完成</li></ul>"
+      ],
+      "result": "<ul data-list=\"check\"><li data-checked=\"true\">已完成</li><li>未完成</li></ul>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<ul data-list=\"other\"><li data-checked=\"yes\">非法值</li></ul>"
+      ],
+      "result": "<ul><li>非法值</li></ul>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<span data-color=\"red\">红</span><span data-color=\"accent\">主题色</span>"
+      ],
+      "result": "<span data-color=\"red\">红</span><span data-color=\"accent\">主题色</span>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<span data-color=\"green\">不在调色板</span><span style=\"color:red\">自由颜色</span>"
+      ],
+      "result": "<span>不在调色板</span><span>自由颜色</span>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<font color=\"#000001\" data-color=\"blue\">font 改成 span</font>"
+      ],
+      "result": "<span data-color=\"blue\">font 改成 span</span>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<span onclick=\"alert(1)\" class=\"x\" id=\"y\">去掉事件和类名</span>"
+      ],
+      "result": "<span>去掉事件和类名</span>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<script>alert(1)</script>保留"
+      ],
+      "result": "保留"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<style>b{color:red}</style><iframe src=\"x\"></iframe><template><b>x</b></template>后面"
+      ],
+      "result": "后面"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<a href=\"javascript:alert(1)\">链接文字</a>"
+      ],
+      "result": "链接文字"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<img src=\"x\" onerror=\"alert(1)\">图片之后"
+      ],
+      "result": "图片之后"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<table><tr><td>表格</td></tr></table>"
+      ],
+      "result": "表格"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "a < b && c > d"
+      ],
+      "result": "a &lt; b &amp;&amp; c &gt; d"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "&lt;已转义&gt; &amp; &nbsp; &#39; &#x27; &copy"
+      ],
+      "result": "&lt;已转义&gt; &amp; &nbsp; &#39; &#x27; &amp;copy"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<!-- 注释 -->注释之后"
+      ],
+      "result": "注释之后"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<b><i>交叉</b>嵌套</i>"
+      ],
+      "result": "<b><i>交叉</i></b>嵌套"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<div>未闭合<b>粗"
+      ],
+      "result": "<div>未闭合<b>粗</b></div>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "</b>多余的结束标签"
+      ],
+      "result": "多余的结束标签"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<b>表情 🎉 与中文 混排</b>"
+      ],
+      "result": "<b>表情 🎉 与中文 混排</b>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<div><br></div><div>空行之后</div>"
+      ],
+      "result": "<div><br></div><div>空行之后</div>"
+    },
+    {
+      "fn": "sanitizeRichText",
+      "args": [
+        "<span data-color=\"purple\"><b>颜色里加粗</b></span>"
+      ],
+      "result": "<span data-color=\"purple\"><b>颜色里加粗</b></span>"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        ""
+      ],
+      "result": ""
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "纯文本"
+      ],
+      "result": "纯文本"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<b>粗</b><i>斜</i><u>下划线</u><s>删除线</s>"
+      ],
+      "result": "粗斜下划线删除线"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<strong>粗</strong><em>斜</em><strike>删</strike>"
+      ],
+      "result": "粗斜删"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<B>大写标签</B><I>斜</I>"
+      ],
+      "result": "大写标签斜"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<p>段落</p><div>块</div>"
+      ],
+      "result": "段落\n块"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "第一行<br>第二行<br/>第三行<br />"
+      ],
+      "result": "第一行\n第二行\n第三行"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<div style=\"text-align: center\">居中</div><div data-align=\"right\">靠右</div>"
+      ],
+      "result": "居中\n靠右"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<li style=\"text-align:left\">列表对齐</li><span style=\"text-align:center\">不保留</span>"
+      ],
+      "result": "列表对齐\n不保留"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<ul><li>一</li><li>二</li></ul><ol><li>甲</li></ol>"
+      ],
+      "result": "一\n二\n甲"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<ul data-list=\"check\"><li data-checked=\"true\">已完成</li><li>未完成</li></ul>"
+      ],
+      "result": "已完成\n未完成"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<ul data-list=\"other\"><li data-checked=\"yes\">非法值</li></ul>"
+      ],
+      "result": "非法值"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<span data-color=\"red\">红</span><span data-color=\"accent\">主题色</span>"
+      ],
+      "result": "红主题色"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<span data-color=\"green\">不在调色板</span><span style=\"color:red\">自由颜色</span>"
+      ],
+      "result": "不在调色板自由颜色"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<font color=\"#000001\" data-color=\"blue\">font 改成 span</font>"
+      ],
+      "result": "font 改成 span"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<span onclick=\"alert(1)\" class=\"x\" id=\"y\">去掉事件和类名</span>"
+      ],
+      "result": "去掉事件和类名"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<script>alert(1)</script>保留"
+      ],
+      "result": "保留"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<style>b{color:red}</style><iframe src=\"x\"></iframe><template><b>x</b></template>后面"
+      ],
+      "result": "后面"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<a href=\"javascript:alert(1)\">链接文字</a>"
+      ],
+      "result": "链接文字"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<img src=\"x\" onerror=\"alert(1)\">图片之后"
+      ],
+      "result": "图片之后"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<table><tr><td>表格</td></tr></table>"
+      ],
+      "result": "表格"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "a < b && c > d"
+      ],
+      "result": "a < b && c > d"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "&lt;已转义&gt; &amp; &nbsp; &#39; &#x27; &copy"
+      ],
+      "result": "<已转义> &   &#39; &#x27; &copy"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<!-- 注释 -->注释之后"
+      ],
+      "result": "注释之后"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<b><i>交叉</b>嵌套</i>"
+      ],
+      "result": "交叉嵌套"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<div>未闭合<b>粗"
+      ],
+      "result": "未闭合粗"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "</b>多余的结束标签"
+      ],
+      "result": "多余的结束标签"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<b>表情 🎉 与中文 混排</b>"
+      ],
+      "result": "表情 🎉 与中文 混排"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<div><br></div><div>空行之后</div>"
+      ],
+      "result": "空行之后"
+    },
+    {
+      "fn": "richTextToPlain",
+      "args": [
+        "<span data-color=\"purple\"><b>颜色里加粗</b></span>"
+      ],
+      "result": "颜色里加粗"
+    },
+    {
+      "fn": "plainToRichText",
+      "args": [
+        ""
+      ],
+      "result": ""
+    },
+    {
+      "fn": "plainToRichText",
+      "args": [
+        "一行"
+      ],
+      "result": "一行"
+    },
+    {
+      "fn": "plainToRichText",
+      "args": [
+        "两行\n第二行"
+      ],
+      "result": "两行<br>第二行"
+    },
+    {
+      "fn": "plainToRichText",
+      "args": [
+        "<标签> & \"引号\""
+      ],
+      "result": "&lt;标签&gt; &amp; \"引号\""
+    },
+    {
+      "fn": "plainToRichText",
+      "args": [
+        "多个\n\n\n\n空行"
+      ],
+      "result": "多个<br><br><br><br>空行"
+    }
+  ]
+}

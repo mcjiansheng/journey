@@ -208,6 +208,16 @@ enum ActivityLink {
   }
 }
 
+/// Deleted objects the 「已删除的内容」 list can restore; the same kinds as the web client
+/// (Settings.jsx). Snapshots also carry kinds this client does not show (deleted boards,
+/// newer types); those are left out instead of listed as 「计划内容」.
+enum DeletedContent {
+  static let kinds: Set<String> = ["activity", "favorite", "expense", "day", "route"]
+  static func items(_ objects: [JSON]) -> [JSON] {
+    objects.filter { $0["state"].string == "deleted" && kinds.contains($0["kind"].string) }
+  }
+}
+
 enum ActivityOrder {
   static func ordered(_ objects: [JSON], dayID: String) -> [JSON] {
     let rows = objects.filter {

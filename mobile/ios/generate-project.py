@@ -21,16 +21,27 @@ testref=add('testref','isa = PBXFileReference; lastKnownFileType = sourcecode.sw
 testbuild=add('testbuild',f'isa = PBXBuildFile; fileRef = {testref};')
 routefixture=add('routefixture','isa = PBXFileReference; lastKnownFileType = text.json; path = ../fixtures/routes.json; sourceTree = SOURCE_ROOT;')
 routefixturebuild=add('routefixturebuild',f'isa = PBXBuildFile; fileRef = {routefixture};')
+# Further unit test files and the shared web fixtures (mobile/tools/generate-fixtures.mjs).
+extratestrefs=[]; extratestbuilds=[]
+for p in sorted((root/'JourneyTests').glob('*.swift')):
+ if p.name=='JourneyTests.swift': continue
+ r=add('testref'+p.name,f'isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = {p.name}; sourceTree = "<group>";')
+ extratestrefs.append(r); extratestbuilds.append(add('testbuild'+p.name,f'isa = PBXBuildFile; fileRef = {r};'))
+fixturerefs=[]; fixturebuilds=[]
+for p in sorted((root.parent/'fixtures').glob('*.json')):
+ if p.name=='routes.json': continue
+ r=add('fixture'+p.name,f'isa = PBXFileReference; lastKnownFileType = text.json; path = ../fixtures/{p.name}; sourceTree = SOURCE_ROOT;')
+ fixturerefs.append(r); fixturebuilds.append(add('fixturebuild'+p.name,f'isa = PBXBuildFile; fileRef = {r};'))
 group=add('sources',f'isa = PBXGroup; children = {arr(refs+[plist,asset])}; path = Journey; sourceTree = "<group>";')
-testgroup=add('tests',f'isa = PBXGroup; children = {arr([testref,routefixture])}; path = JourneyTests; sourceTree = "<group>";')
+testgroup=add('tests',f'isa = PBXGroup; children = {arr([testref]+extratestrefs+[routefixture]+fixturerefs)}; path = JourneyTests; sourceTree = "<group>";')
 products=add('products',f'isa = PBXGroup; children = {arr([product,testproduct])}; name = Products; sourceTree = "<group>";')
 signing=add('signing','isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Signing.xcconfig; sourceTree = SOURCE_ROOT;')
 main=add('main',f'isa = PBXGroup; children = {arr([group,testgroup,signing,products])}; sourceTree = "<group>";')
 sources=add('sourcesphase',f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = {arr(builds)}; runOnlyForDeploymentPostprocessing = 0;')
 resources=add('resourcesphase',f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = {arr([assetbuild])}; runOnlyForDeploymentPostprocessing = 0;')
 frameworks=add('frameworks','isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;')
-testsources=add('testsources',f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = {arr([testbuild])}; runOnlyForDeploymentPostprocessing = 0;')
-testresources=add('testresources',f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = {arr([routefixturebuild])}; runOnlyForDeploymentPostprocessing = 0;')
+testsources=add('testsources',f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = {arr([testbuild]+extratestbuilds)}; runOnlyForDeploymentPostprocessing = 0;')
+testresources=add('testresources',f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = {arr([routefixturebuild]+fixturebuilds)}; runOnlyForDeploymentPostprocessing = 0;')
 common='CLANG_ENABLE_MODULES = YES; SWIFT_VERSION = 5.0; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; TARGETED_DEVICE_FAMILY = "1,2";'
 projectconfigs=[]; appconfigs=[]; testconfigs=[]
 for name in ['Debug','Release']:
