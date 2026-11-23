@@ -1729,7 +1729,8 @@ export default function MapView({
               </button>
             </div>
           )}
-          {!hasSheet && error && (
+          {/* Phones in browse mode have no panel open; desktop shows the error in the panel below. */}
+          {isMobile && !hasSheet && error && (
             <p className="map-error map-error-inline" role="alert">
               {error}
             </p>
