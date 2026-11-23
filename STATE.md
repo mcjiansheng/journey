@@ -25,6 +25,7 @@
 
 ## 风险
 
+- 两条 E2E 在全量连续长跑时偶发失败、单独复跑通过：`frontend-review-shell`「pending destination lookup」、`map-camera-motion`「map gesture cancels pending explicit camera navigation」（时序敏感，接入 CI 前需加固）。
 - 未处理：P2-3（白板操作被服务端拒绝后不回滚且阻塞队列）、P2-6（离线超过 15 秒重连后未同步修改短暂消失/闪回）、P2-7（白板操作触发全员拉取整份旅程快照），以及审查报告第五节全部 P3。
 - 浅色暖黄便签上的橙色文字对比度 3.69:1 低于 AA（需求只要求深色模式可读，暂只记录）。
 
@@ -32,5 +33,6 @@
 
 - 原生端按 [11-原生端功能对齐](docs/设计文档/11-原生端功能对齐.md) 并行推进 N1、N2、N3、B1。
 - MOB-016 余下：九段 760px 断点合并，需截图对比。
-- 真机确认：iOS Safari、Android Chrome 上点选便签不弹软键盘，以及旧旅程真实数据懒创建白板确认。
+- 真机确认：iOS Safari、Android Chrome 上点选便签不弹软键盘；手机日期条下拉（MOB-001）与编辑器「完成」（MOB-014）；旧旅程真实数据懒创建白板。
+- 发布：`dev` 比 `main` 多 26 个提交（移动端修复、白板小组件修复、原生 N0），合并 `main` 需用户确认后经 PR 进行。
 - P2-3、P2-6、P2-7 与 P3 另行安排；CI 尚未接入 Playwright 端到端测试。
