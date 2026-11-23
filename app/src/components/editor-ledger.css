@@ -123,10 +123,15 @@
 .expense-more > summary::-webkit-details-marker {
   display: none;
 }
-.expense-more > summary:hover,
 .expense-more[open] > summary {
   background: var(--accent-soft);
   color: var(--accent);
+}
+@media (hover: hover) and (pointer: fine) {
+  .expense-more > summary:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
 }
 .expense-more-panel {
   position: absolute;
@@ -150,8 +155,10 @@
   font-size: var(--fs-meta);
   border-radius: var(--radius-sm);
 }
-.expense-more-panel .text-button:hover {
-  background: var(--accent-soft);
+@media (hover: hover) and (pointer: fine) {
+  .expense-more-panel .text-button:hover {
+    background: var(--accent-soft);
+  }
 }
 @media (max-width: 760px) {
   .expense-row {

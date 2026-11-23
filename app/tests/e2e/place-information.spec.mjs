@@ -65,18 +65,23 @@ test('real AMap all-details displays compact photos, category and hours on mobil
  await expect.poll(()=>photo.evaluate(img=>img.complete&&img.naturalWidth>0),{timeout:25000}).toBe(true);
  await expect(photo).toHaveCSS('width','88px');await expect(photo).toHaveCSS('height','72px');
  await expect(page.locator('.place-information-contact')).toBeHidden();
- // Keep the selected pin in the exposed map area below the compact panel.
+ // Keep the selected pin in the exposed band between the top dock and the bottom sheet (MOB-006).
  await page.evaluate(location=>{
   const map=window.__informationMap,zoom=15;
+  const canvas=document.querySelector('.map-canvas').getBoundingClientRect();
+  const dock=document.querySelector('.map-top-dock').getBoundingClientRect();
+  const sheet=document.querySelector('.map-panel').getBoundingClientRect();
+  // The pin's coordinate tip sits about 20px below the middle of the pin.
+  const offset=(dock.bottom+sheet.top)/2+20-(canvas.top+canvas.height/2);
   const point=map.lngLatToPixel(location.split(',').map(Number),zoom);
-  const center=map.pixelToLngLat(new window.AMap.Pixel(point.x,point.y-180),zoom);
+  const center=map.pixelToLngLat(new window.AMap.Pixel(point.x,point.y-offset),zoom);
   map.setZoomAndCenter(zoom,center,true);
  },payload.pois[0].location);
  const marker=page.locator('.selected-marker');
  await expect(marker).toBeVisible();await expect(marker).toBeInViewport();
  await expect.poll(async()=>{
-  const pin=await marker.boundingBox(),panel=await page.locator('.map-panel').boundingBox(),navigation=await page.getByRole('navigation',{name:'手机主导航'}).boundingBox();
-  return !!pin&&!!panel&&!!navigation&&pin.y>panel.y+panel.height+8&&pin.y+pin.height<navigation.y;
+  const pin=await marker.boundingBox(),panel=await page.locator('.map-panel').boundingBox(),topDock=await page.locator('.map-top-dock').boundingBox();
+  return !!pin&&!!panel&&!!topDock&&pin.y>topDock.y+topDock.height+8&&pin.y+pin.height<panel.y;
  }).toBe(true);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:testInfo.outputPath('place-information-mobile.png'),scale:'css'});
@@ -168,6 +173,7 @@ test('returning from an activity preserves edited provider place facts after det
  const saved=(await objects(page)).find(o=>o.kind==='activity').payload.place;
  expect(saved).toMatchObject({name:'我们约定的湖边入口',address:'东门售票亭旁集合',category:'景点',lng:118.7975,lat:32.0739,providerPlaceId:'BINFOEDIT'});
  expect((await objects(page)).filter(o=>o.kind==='favorite')).toHaveLength(0);
+ await page.getByRole('button',{name:'返回地图总览',exact:true}).click();
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();
  await page.locator('.activity-card').filter({hasText:'我们约定的湖边入口'}).getByRole('button',{name:/^在地图查看：/}).click();
  await expect(page.locator('.place-information-hours')).toContainText('复查完成');

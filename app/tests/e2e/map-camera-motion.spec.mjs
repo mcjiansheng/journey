@@ -67,11 +67,12 @@ async function emit(page,type,{id='BCAMERA',name='原地地点',lng=118.79,lat=3
 }
 async function noMovement(page,before){await settle(page);expect(await viewport(page)).toEqual(before);expect(await page.evaluate(()=>window.__cameraCalls)).toEqual([]);}
 async function resetCalls(page){await page.evaluate(()=>{window.__cameraCalls=[];});}
-async function favorite(page){await page.getByRole('button',{name:'查看收藏列表',exact:true}).click();await page.locator('.map-result').filter({hasText:'玄武湖选点验收'}).click();}
+async function favorite(page){await page.getByRole('button',{name:'查看收藏列表',exact:true}).click();await page.locator('.map-result:not(.map-route-stop)').filter({hasText:'玄武湖选点验收'}).click();}
 async function markerClearOfPanel(page){
  await expect.poll(()=>page.evaluate(()=>{
-  const marker=document.querySelector('.selected-marker').getBoundingClientRect(),panel=document.querySelector('.map-panel').getBoundingClientRect(),nav=document.querySelector('.bottom-nav').getBoundingClientRect();
-  return marker.top>panel.bottom&&marker.bottom<nav.top&&marker.left>=0&&marker.right<=innerWidth;
+  const marker=document.querySelector('.selected-marker').getBoundingClientRect(),panelEl=document.querySelector('.map-panel'),panel=panelEl.getBoundingClientRect(),topDock=(document.querySelector('.map-top-dock')||panelEl).getBoundingClientRect(),nav=document.querySelector('.bottom-nav').getBoundingClientRect();
+  const bottom=Math.min(nav.height?nav.top:Infinity,panelEl.classList.contains('has-sheet')?panel.top:Infinity);
+  return marker.top>topDock.bottom&&marker.bottom<bottom&&marker.left>=0&&marker.right<=innerWidth;
  })).toBe(true);
 }
 
@@ -125,7 +126,7 @@ for(const reduce of [false,true])test(`explicit favorite, search and location na
 test('a map gesture cancels pending explicit camera navigation',async({page})=>{
  test.setTimeout(90000);await openMap(page);await settle(page);await resetCalls(page);
  await page.getByRole('button',{name:'查看收藏列表',exact:true}).click();
- await page.locator('.map-result').filter({hasText:'玄武湖选点验收'}).click();
+ await page.locator('.map-result:not(.map-route-stop)').filter({hasText:'玄武湖选点验收'}).click();
  await emit(page,'dragstart');const before=await viewport(page);await noMovement(page,before);
 });
 

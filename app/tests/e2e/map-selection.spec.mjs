@@ -71,16 +71,20 @@ async function cameraRequest(page){return page.evaluate(()=>window.__selectionCa
 
 async function visibleMapFooter(page){
  await expect.poll(()=>page.evaluate(()=>{
-  const panel=document.querySelector('.map-panel').getBoundingClientRect();
+  const panelEl=document.querySelector('.map-panel'),panel=panelEl.getBoundingClientRect();
+  const topDock=(document.querySelector('.map-top-dock')||panelEl).getBoundingClientRect();
   const nav=document.querySelector('.bottom-nav').getBoundingClientRect();
   const viewport=window.visualViewport,top=viewport?.offsetTop||0;
-  const bottom=Math.min(top+(viewport?.height||innerHeight),nav.height?nav.top:Infinity);
+  const isSearch=panelEl.classList.contains('mode-search');
+  const isSheet=panelEl.classList.contains('has-sheet')&&!isSearch;
+  const minTop=Math.max(top,isSearch?panel.bottom:topDock.bottom);
+  const bottom=Math.min(top+(viewport?.height||innerHeight),nav.height?nav.top:Infinity,isSheet?panel.top:Infinity);
   return ['.amap-logo','.amap-copyright','.amap-scalecontrol'].every(selector=>{
    const element=document.querySelector(selector);if(!element)return false;
    // The real SDK omits copyright text at 320px and hides its empty placeholder.
    if(selector==='.amap-copyright'&&element.style.display==='none'&&!element.textContent.trim())return true;
    const bounds=element.getBoundingClientRect();
-   return bounds.width>0&&bounds.height>0&&bounds.top>=Math.max(top,panel.bottom)&&bounds.bottom<=bottom&&bounds.left>=0&&bounds.right<=innerWidth;
+   return bounds.width>0&&bounds.height>0&&bounds.top>=minTop&&bounds.bottom<=bottom&&bounds.left>=0&&bounds.right<=innerWidth;
   });
  })).toBe(true);
 }
@@ -94,9 +98,11 @@ async function visibleSelectedMarker(page){
  await visibleMapFooter(page);
  await expect.poll(()=>page.evaluate(()=>{
   const marker=document.querySelector('.selected-marker').getBoundingClientRect();
-  const panel=document.querySelector('.map-panel').getBoundingClientRect();
+  const panelEl=document.querySelector('.map-panel'),panel=panelEl.getBoundingClientRect();
+  const topDock=(document.querySelector('.map-top-dock')||panelEl).getBoundingClientRect();
   const nav=document.querySelector('.bottom-nav').getBoundingClientRect();
-  return marker.top>=panel.bottom+12&&marker.bottom<=nav.top-12&&marker.left>=0&&marker.right<=innerWidth;
+  const bottom=Math.min(nav.height?nav.top:Infinity,panelEl.classList.contains('has-sheet')?panel.top:Infinity);
+  return marker.top>=topDock.bottom+12&&marker.bottom<=bottom-12&&marker.left>=0&&marker.right<=innerWidth;
  })).toBe(true);
 }
 
@@ -110,7 +116,7 @@ for(const width of [390,320])test(`real map selection and activity entry leave t
  await expect.poll(()=>page.evaluate(()=>window.__selectionMap.lngLatToContainer([118.7975,32.0739]).y)).toBeCloseTo(before+80,0);
  await page.getByRole('button',{name:'查看收藏列表',exact:true}).click();
  const selectionRequest=await cameraRequest(page);
- await page.locator('.map-result').filter({hasText:'玄武湖选点验收'}).click();
+ await page.locator('.map-result:not(.map-route-stop)').filter({hasText:'玄武湖选点验收'}).click();
  await settledCamera(page,selectionRequest);await visibleSelectedMarker(page);
  const viewport=()=>page.evaluate(()=>{const map=window.__selectionMap,center=map.getCenter();return[center.lng,center.lat,map.getZoom()].map(n=>Number(n.toFixed(6)));});
  const beforeExpansion=await viewport();
@@ -119,6 +125,7 @@ for(const width of [390,320])test(`real map selection and activity entry leave t
  expect(await viewport()).toEqual(beforeExpansion);await visibleMapFooter(page);
  await page.setViewportSize({width,height:640});
  expect(await viewport()).toEqual(beforeExpansion);await visibleMapFooter(page);
+ await page.getByRole('button',{name:'返回地图总览',exact:true}).click();
  await page.getByRole('navigation',{name:'手机主导航'}).getByRole('button',{name:'行程',exact:true}).click();
  const activityRequest=await cameraRequest(page);
  await page.locator('.activity-card').getByRole('button',{name:/^在地图查看：/}).click();
@@ -131,7 +138,8 @@ for(const width of [390,320])test(`real SDK footer stays visible beside long lis
  await expect.poll(()=>page.evaluate(()=>!!window.__selectionMap&&document.querySelectorAll('.place-marker').length>0),{timeout:30000}).toBe(true);
  await settledCamera(page);
  await page.getByRole('button',{name:'查看收藏列表',exact:true}).click();
- await expect(page.locator('.map-result')).toHaveCount(16);await visibleMapFooter(page);
+ // The mobile list also shows the day's route stop; count the 16 favorites.
+ await expect(page.locator('.map-result:not(.map-route-stop)')).toHaveCount(16);await visibleMapFooter(page);
  await page.locator('.map-result').last().scrollIntoViewIfNeeded();await visibleMapFooter(page);
  const results=Array.from({length:20},(_,index)=>({id:`footer-poi-${index}`,name:`长搜索地点${index}`,address:'南京市玄武区',type:'风景名胜',location:'118.7975,32.0739'}));
  for(const [path,data] of [['place/text',{status:'1',info:'OK',infocode:'10000',count:'20',pois:results}],['assistant/inputtips',{status:'1',info:'OK',infocode:'10000',count:'0',tips:[]}]]){

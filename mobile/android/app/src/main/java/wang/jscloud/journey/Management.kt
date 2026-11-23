@@ -89,7 +89,7 @@ fun ManagementScreen(s: JourneyStore, onInvite: () -> Unit, onRename: () -> Unit
         }
     }, enabled = !s.busy)
     Text("整理", style = MaterialTheme.typography.titleMedium)
-    val deleted = s.objects().filter { it.s("state") == "deleted" }
+    val deleted = deletedContent(s.objects())
     Panel {
         Text("已删除的内容 · ${deleted.size}")
         deleted.forEach { o -> Text(o.o("payload").s("title").ifBlank { o.o("payload").s("name", "计划内容") }); ObjectActions(s, o) }

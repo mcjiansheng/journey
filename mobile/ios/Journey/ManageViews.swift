@@ -80,7 +80,7 @@ struct ManageView: View {
         }
       }
       Section {
-        NavigationLink("已删除的内容 · \(store.objects.filter { $0["state"].string == "deleted" }.count)") { DeletedView() }
+        NavigationLink("已删除的内容 · \(DeletedContent.items(store.objects).count)") { DeletedView() }
         Button(
           store.cache.trips.first(where: { $0.id == store.trip.id })?["archived"].bool == true
             ? "取消归档" : "归档旅程"
@@ -197,7 +197,7 @@ struct DeletedView: View {
   @EnvironmentObject var store: JourneyStore
   var body: some View {
     JourneyList {
-      ForEach(store.objects.filter { $0["state"].string == "deleted" }) { o in
+      ForEach(DeletedContent.items(store.objects)) { o in
         VStack(alignment: .leading, spacing: 12) {
           Text(
             o["payload"]["title"].string.isEmpty

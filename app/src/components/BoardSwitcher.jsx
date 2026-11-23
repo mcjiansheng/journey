@@ -36,6 +36,26 @@ export function BoardSwitcher({
   }, [startRenaming]);
 
   useEffect(() => onOpenChange?.(open), [open]);
+  // The header pills grow when sync shows a status text; leave room for their real width
+  // instead of a fixed 176px (MOB-011).
+  useEffect(() => {
+    const root = rootRef.current;
+    const pills = document.querySelector('.app-shell .header-right');
+    if (!root || !pills || typeof ResizeObserver !== 'function') return undefined;
+    const update = () =>
+      root.style.setProperty(
+        '--header-right-width',
+        `${Math.ceil(window.innerWidth - pills.getBoundingClientRect().left)}px`,
+      );
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(pills);
+    window.addEventListener('resize', update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) return undefined;

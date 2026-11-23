@@ -77,9 +77,13 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
-.activity-place-results > li[aria-selected='true'],
-.activity-place-results > li:hover {
+.activity-place-results > li[aria-selected='true'] {
   background: var(--accent-soft);
+}
+@media (hover: hover) and (pointer: fine) {
+  .activity-place-results > li:hover {
+    background: var(--accent-soft);
+  }
 }
 .activity-place-results > li > svg {
   flex-shrink: 0;

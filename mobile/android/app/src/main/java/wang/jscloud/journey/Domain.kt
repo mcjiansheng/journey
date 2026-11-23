@@ -89,6 +89,16 @@ fun orderedActivities(objects: List<JSONObject>, dayId: String): List<JSONObject
     }
 }
 
+/** Kinds the 「已删除的内容」 list can restore; the same list as the web client (Settings.jsx). */
+val RECOVERABLE_KINDS = setOf("activity", "favorite", "expense", "day", "route")
+
+/**
+ * Deleted objects the user can restore. Snapshots also carry kinds this client does not
+ * show (deleted boards, newer types); those are left out instead of listed as 「计划内容」.
+ */
+fun deletedContent(objects: List<JSONObject>): List<JSONObject> =
+    objects.filter { it.s("state") == "deleted" && it.s("kind") in RECOVERABLE_KINDS }
+
 fun currencyScale(code: String) = Currency.getInstance(code).defaultFractionDigits.coerceAtLeast(0)
 
 fun parseMinor(text: String, code: String): Long? {

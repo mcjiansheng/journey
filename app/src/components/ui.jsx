@@ -8,6 +8,45 @@ export function IconButton({ icon: Icon, label, ...props }) {
     </button>
   );
 }
+// Mobile layout breakpoint shared with the `@media (max-width: 760px)` rules.
+export const MOBILE_QUERY = '(max-width: 760px)';
+export function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() =>
+    typeof window === 'undefined' ? false : window.matchMedia(query).matches,
+  );
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const update = () => setMatches(list.matches);
+    update();
+    list.addEventListener('change', update);
+    return () => list.removeEventListener('change', update);
+  }, [query]);
+  return matches;
+}
+// Closes a popover on outside pointer-down or Escape; `ignore` lists elements that count as inside.
+export function useDismiss(open, onDismiss, ...ignore) {
+  const dismiss = useRef(onDismiss);
+  dismiss.current = onDismiss;
+  useEffect(() => {
+    if (!open) return undefined;
+    const inside = (target) => ignore.some((ref) => ref.current?.contains(target));
+    const onPointerDown = (event) => {
+      if (!inside(event.target)) dismiss.current('outside');
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape' && !document.querySelector('dialog[open]')) {
+        event.preventDefault();
+        dismiss.current('escape');
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+}
 let modalDepth = 0;
 export function Modal({
   title,
@@ -90,6 +129,30 @@ export function Modal({
       <div className="modal-body">{children}</div>
     </dialog>
   );
+}
+// In-app replacement for window.confirm (MOB-015): render `dialog`, then `await ask(message)`.
+export function useConfirm() {
+  const [request, setRequest] = useState(null);
+  const ask = (message, { title = '请确认', confirmLabel = '确定' } = {}) =>
+    new Promise((resolve) => setRequest({ message, title, confirmLabel, resolve }));
+  const finish = (value) => {
+    request?.resolve(value);
+    setRequest(null);
+  };
+  const dialog = request && (
+    <Modal title={request.title} className="confirm-dialog" onClose={() => finish(false)}>
+      <p>{request.message}</p>
+      <div className="modal-actions">
+        <button type="button" className="secondary" onClick={() => finish(false)}>
+          取消
+        </button>
+        <button type="button" className="primary" onClick={() => finish(true)}>
+          {request.confirmLabel}
+        </button>
+      </div>
+    </Modal>
+  );
+  return [dialog, ask];
 }
 export function ActionNotice({ notice, onClose }) {
   const [error, setError] = useState('');

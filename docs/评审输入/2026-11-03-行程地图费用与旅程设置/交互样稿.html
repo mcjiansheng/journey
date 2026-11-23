@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>行程与设置样稿</title>
+<style>
+:root{
+  --accent:#8ecce2;--on-accent:#123342;--bg:#0a151c;--surface:#13242e;--elevated:#162a35;
+  --text:#e2edf3;--muted:#a4bdca;--line:#253f4c;--accent-soft:#1c3c4c;--sel:#275a72;--icon-bg:#1c3947;--danger:#f09684;
+  --panel:#0e1b23d9;--r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:24px;
+  --map-accent:#176b88;--map-route:#1f7fa3;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:#05090c;color:var(--text);font:15px/1.5 -apple-system,"PingFang SC","Noto Sans CJK SC","Noto Sans SC",system-ui,sans-serif;padding:24px;display:grid;gap:32px}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none;vertical-align:middle}
+svg.i.s{width:15px;height:15px}svg.i.l{width:20px;height:20px}
+.frame{background:radial-gradient(120% 85% at 0% 0%,#2a9cc27a,transparent 62%),radial-gradient(90% 70% at 100% 0%,#4a5fc452,transparent 60%),radial-gradient(100% 60% at 60% 112%,#157a8a40,transparent 70%),var(--bg);border-radius:20px;padding:28px;width:1180px;position:relative;overflow:hidden}
+.frame>h2{margin:0 0 4px;font-size:20px}
+.frame>.lede{margin:0 0 22px;color:var(--muted);font-size:14px}
+.row{display:flex;gap:24px;align-items:flex-start}
+.col{display:grid;gap:12px}
+.tag{justify-self:start;align-self:flex-start;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--on-accent);background:var(--accent);border-radius:99px;padding:3px 10px;margin-bottom:10px}
+.tag.old{background:#3a2a2a;color:#f3c2b8}
+.cap{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.6}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-xl);box-shadow:inset 0 1px 0 #ffffff19}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+.btn{display:inline-flex;align-items:center;gap:8px;border-radius:var(--r-md);padding:10px 16px;font-weight:600;font-size:14px}
+.btn.primary{background:var(--accent);color:var(--on-accent)}
+.btn.ghost{border:1px solid var(--line);background:var(--elevated)}
+.btn.text{color:var(--accent);padding:8px 6px}
+.muted{color:var(--muted)}
+small{font-size:12.5px}
+/* ---------- 排序 ---------- */
+.act{position:relative;padding:18px 20px 18px 64px}
+.act .no{position:absolute;left:18px;top:18px;width:30px;height:30px;border-radius:50%;background:var(--icon-bg);display:grid;place-items:center;font-size:13px;color:var(--accent)}
+.act .when{font-size:13px;color:var(--accent);font-weight:600}
+.act .ttl{font-size:17px;font-weight:650;margin:2px 0 6px}
+.act .place{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:13.5px}
+.act .tools{position:absolute;right:16px;top:16px;display:flex;gap:6px;color:var(--muted)}
+.grip{position:absolute;left:-2px;top:50%;transform:translate(-100%,-50%);width:26px;height:44px;border-radius:8px;display:grid;place-items:center;color:var(--muted);background:var(--elevated);border:1px solid var(--line)}
+.act.hover{border-color:#3a6276}
+.lockchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);background:var(--elevated);border:1px solid var(--line);border-radius:99px;padding:2px 9px}
+.tip{position:absolute;background:#e9f2f6;color:#18323f;font-size:12.5px;padding:6px 10px;border-radius:8px;white-space:nowrap;box-shadow:0 6px 18px #0006}
+.phone{width:340px;border-radius:34px;border:1px solid var(--line);background:radial-gradient(120% 60% at 0% 0%,#2a9cc25a,transparent 62%),var(--bg);padding:16px 14px 18px;flex:none}
+.phone .bar{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.banner{display:flex;gap:10px;align-items:flex-start;background:var(--accent-soft);border:1px solid #2f5d72;border-radius:var(--r-md);padding:10px 12px;font-size:13px;margin-bottom:12px}
+.mini{display:flex;align-items:center;gap:10px;padding:12px;border-radius:var(--r-lg);background:var(--surface);border:1px solid var(--line);margin-bottom:8px}
+.mini .h{margin-left:auto;color:var(--muted);display:flex}
+.mini.drag{transform:rotate(-1.2deg) translateY(-4px);box-shadow:0 12px 28px #000a;border-color:var(--accent)}
+.mini.fixed{opacity:.86}
+.slot{height:44px;border:1.5px dashed #3a6276;border-radius:var(--r-lg);margin-bottom:8px}
+/* ---------- 地图 ---------- */
+.map{position:relative;width:740px;height:520px;border-radius:var(--r-xl);overflow:hidden;flex:none;
+ background:
+  linear-gradient(115deg,transparent 47%,#f5d58a 47%,#f5d58a 49%,transparent 49%),
+  linear-gradient(15deg,transparent 60%,#f0e3b8 60%,#f0e3b8 61.5%,transparent 61.5%),
+  linear-gradient(170deg,transparent 30%,#ffffff 30%,#ffffff 31.5%,transparent 31.5%),
+  radial-gradient(ellipse 160px 120px at 34% 34%,#a9cdec 98%,transparent 100%),
+  radial-gradient(ellipse 230px 190px at 72% 52%,#c7e3c1 98%,transparent 100%),
+  #f1efe9}
+.pin{position:absolute;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;border:2px solid #fff;box-shadow:0 2px 6px #0004}
+.pin svg.i{width:15px;height:15px}
+.pin.done::after{content:'';position:absolute;right:-3px;bottom:-3px;width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:inset 0 0 0 3px #3b8a5a}
+.route{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:#1b3442;color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;border:2px solid #fff}
+.sel{position:absolute;transform:translate(-50%,-100%)}
+.sel .lab{position:absolute;left:34px;top:6px;background:#fff;color:#18323f;font-size:12px;font-weight:600;border-radius:6px;padding:3px 8px;white-space:nowrap;border:1px solid #d2e0e7}
+.mpanel{position:absolute;left:16px;top:16px;width:300px;background:#13242ef2;border:1px solid var(--line);border-radius:var(--r-xl);padding:16px;box-shadow:0 12px 30px #0006}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--elevated);border-radius:99px;padding:5px 11px;font-size:13px}
+.chip.on{border-color:var(--accent);background:var(--sel)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.legend{position:absolute;right:16px;bottom:16px;background:#ffffffee;color:#18323f;border-radius:var(--r-md);padding:10px 12px;font-size:12px;display:grid;gap:6px;box-shadow:0 4px 14px #0003}
+.legend div{display:flex;align-items:center;gap:7px}
+.mk{position:absolute;transform:translate(-50%,-50%);filter:drop-shadow(0 2px 3px #0005)}
+.mk svg{display:block}
+.mk.done::after{content:'';position:absolute;right:-4px;bottom:-4px;width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:inset 0 0 0 3px #3b8a5a}
+.zmap{position:relative;width:368px;height:300px;border-radius:var(--r-xl);overflow:hidden}
+.zm{position:absolute;transform:translate(-50%,-50%);filter:drop-shadow(0 2px 3px #0005)}
+.zm>svg{display:block}
+.zl{position:absolute;top:50%;transform:translateY(-50%);white-space:nowrap;font-size:12.5px;font-weight:650;color:#1d3a48;text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff,0 0 3px #fff}
+.zl.r{left:calc(100% + 4px)}
+.badge{position:absolute;right:-8px;top:-8px;min-width:18px;height:18px;border-radius:9px;background:#fff;color:#1d3a48;font-size:11px;display:grid;place-items:center;padding:0 4px;box-shadow:0 1px 3px #0004}
+.pillc{display:flex;align-items:center;background:#fff;border-radius:99px;padding:4px 8px 4px 6px;gap:0}
+.pillc svg{margin-right:-3px;filter:drop-shadow(0 0 1px #fff)}
+.pillc b{margin-left:8px;color:#1d3a48;font-size:13px}
+.zr{position:absolute;transform:translate(-50%,-50%)}
+.zr>.n{width:24px;height:24px;border-radius:50%;background:#1b3442;color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;border:2px solid #fff;box-shadow:0 2px 4px #0004}
+.popl{position:absolute;width:200px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px;box-shadow:0 10px 26px #0008;color:var(--text)}
+.popl .ph{font-size:12.5px;color:var(--muted);padding:2px 6px 6px}
+.popl .pr{display:flex;align-items:center;gap:8px;padding:7px 6px;border-radius:8px;font-size:13.5px}
+.popl .pr:hover,.popl .pr:first-of-type{background:var(--elevated)}
+.popl small{margin-left:auto;color:var(--muted)}
+.grid8{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin:8px 0 14px}
+.grid8 span{height:36px;border-radius:9px;border:1px solid var(--line);background:var(--elevated);display:grid;place-items:center}
+.grid8 span.on{border-color:var(--accent);background:var(--sel)}
+.tgl{width:40px;height:24px;border-radius:99px;background:var(--line);position:relative;flex:none}
+.tgl.on{background:var(--accent)}
+.tgl::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff}
+.tgl.on::after{left:19px;background:var(--on-accent)}
+.swatches{display:flex;gap:8px;margin:8px 0}
+.sw{width:26px;height:26px;border-radius:50%;border:2px solid transparent}
+.sw.on{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent)}
+/* ---------- 费用 ---------- */
+.ledger{width:560px}
+.dayhead{display:flex;align-items:baseline;gap:8px;font-size:14px;font-weight:650;padding:14px 18px 8px}
+.dayhead small{font-weight:400}
+.erow{display:flex;gap:12px;align-items:flex-start;padding:12px 18px;border-top:1px solid var(--line)}
+.erow .ic{width:38px;height:38px;border-radius:10px;background:var(--icon-bg);display:grid;place-items:center;color:var(--accent);flex:none}
+.erow .t{font-weight:650}
+.erow .amt{margin-left:auto;font-weight:650;font-size:16px}
+.alink{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:13px;color:var(--accent);background:var(--accent-soft);border-radius:99px;padding:3px 10px}
+.field{display:grid;gap:6px;margin-bottom:12px}
+.field label{font-size:13px;font-weight:600}
+.input{display:flex;align-items:center;justify-content:space-between;background:var(--elevated);border:1px solid var(--line);border-radius:var(--r-md);padding:10px 12px;font-size:14px}
+.hint{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--muted)}
+.hint b{color:var(--accent);font-weight:600}
+.seg{display:inline-flex;background:var(--elevated);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.seg span{padding:5px 12px;border-radius:7px;font-size:13px}
+.seg span.on{background:var(--sel);color:var(--accent);font-weight:600}
+/* ---------- 旅程设置 ---------- */
+.settings{width:620px}
+.sgroup{margin-bottom:18px}
+.sgroup>h4{margin:0 0 8px 6px;font-size:13px;color:var(--muted);font-weight:600}
+.srow{display:flex;align-items:center;gap:14px;padding:14px 18px;min-height:56px;border-top:1px solid var(--line)}
+.srow:first-child{border-top:0}
+.srow .ic{width:32px;height:32px;border-radius:9px;background:var(--icon-bg);display:grid;place-items:center;color:var(--accent);flex:none}
+.srow .v{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--muted);font-size:14px}
+.srow .lbl{display:grid}
+.srow .lbl small{color:var(--muted)}
+.avs{display:flex}.avs span{width:24px;height:24px;border-radius:50%;background:#21485a;color:#d2eaf5;font-size:11px;display:grid;place-items:center;border:2px solid var(--surface);margin-left:-6px}
+.danger{color:var(--danger)}
+/* ---------- 调整日期 ---------- */
+.dlg{width:540px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-xl);box-shadow:0 18px 48px #000b;overflow:hidden;flex:none}
+.dlg .hd{display:flex;align-items:center;padding:18px 22px;border-bottom:1px solid var(--line);font-size:18px;font-weight:650;gap:10px}
+.dlg .hd .x{margin-left:auto;color:var(--muted)}
+.dlg .bd{padding:20px 22px}
+.steps{display:flex;gap:8px;font-size:12.5px;color:var(--muted);margin-bottom:16px}
+.steps span{display:flex;align-items:center;gap:6px}
+.steps b{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--elevated);border:1px solid var(--line);font-size:11px}
+.steps b svg.i{width:12px;height:12px}.steps .on{color:var(--text)}.steps .on b{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:13px}
+.cal .w{color:var(--muted);font-size:12px;padding:4px 0}
+.cal .d{padding:8px 0;border-radius:8px}
+.cal .in{background:var(--accent-soft)}
+.cal .edge{background:var(--accent);color:var(--on-accent);font-weight:700}
+.cal .old{outline:1.5px dashed #6f93a4;outline-offset:-3px}
+.cal .x{opacity:.35}
+.sum{display:flex;gap:10px;align-items:center;background:var(--elevated);border:1px solid var(--line);border-radius:var(--r-md);padding:12px 14px;margin:14px 0;font-size:14px}
+.opt{display:flex;gap:12px;padding:14px;border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:10px;background:var(--elevated)}
+.opt.on{border-color:var(--accent);background:var(--sel)}
+.radio{width:18px;height:18px;border-radius:50%;border:2px solid var(--muted);flex:none;margin-top:2px}
+.opt.on .radio{border-color:var(--accent);box-shadow:inset 0 0 0 4px var(--sel),inset 0 0 0 9px var(--accent)}
+.opt strong{display:block}
+.opt small{color:var(--muted)}
+.preview{display:grid;grid-template-columns:auto 1fr 18px 1fr;gap:6px 10px;align-items:center;font-size:12.5px;margin-top:10px}
+.preview .pill{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:4px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.preview .out{border-style:dashed;color:var(--muted)}
+.ft{display:flex;gap:10px;justify-content:flex-end;padding:14px 22px;border-top:1px solid var(--line)}
+.menu{position:absolute;background:var(--elevated);border:1px solid var(--line);border-radius:var(--r-lg);padding:6px;width:220px;box-shadow:0 14px 36px #000b}
+.menu div{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:9px;font-size:14px}
+.menu div.on{background:var(--sel)}
+.daytabs{display:flex;gap:8px;align-items:center}
+.daytab{padding:8px 14px;border-radius:12px;font-size:13px;line-height:1.35}
+.daytab.on{background:var(--sel);border:1px solid #3a6276}
+.daytab b{display:block;font-size:14px}
+</style>
+</head>
+<body>
+
+<!-- ============ 1 排序 ============ -->
+<section class="frame" id="f-sort">
+  <h2>一、排序：桌面端去掉开关，手机端改成“调整顺序”模式</h2>
+  <p class="lede">桌面端的拖动手柄本来就一直在，“排序 / 完成排序”切换后只多出一个“按时间排序”的小标记，所以看起来什么都没变。</p>
+  <div class="row">
+    <div class="col" style="width:720px">
+      <span class="tag">桌面 · 建议</span>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
+        <div class="daytabs"><div class="daytab"><b>第5天</b><span class="muted">今天</span></div><div class="daytab on"><b>第6天</b>11/04</div><div class="daytab"><b>第7天</b>11/05</div></div>
+        <span style="margin-left:auto"></span>
+        <span class="btn primary"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>添加活动</span><span class="muted"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span>
+      </div>
+      <div style="padding-left:34px;display:grid;gap:12px;position:relative;margin-top:44px">
+        <div class="card act hover" style="position:relative">
+          <span class="grip"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg></span>
+          <span class="no">1</span>
+          <div class="when">上午</div><div class="ttl">不知道该叫什么</div>
+          <div class="place"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>常发广场</div>
+          <div class="tools"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></div>
+          <span class="tip" style="left:-14px;top:-30px">拖动调整顺序 · 也可用 ↑ ↓ 键</span>
+        </div>
+        <div class="card act">
+          <span class="no">2</span>
+          <div class="when">09:30–11:30 <span class="muted" style="margin-left:4px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="16" r="1"/><rect x="3" y="10" width="18" height="12" rx="2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/></svg></span></div><div class="ttl">逛南京博物院</div>
+          <div class="place"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>南京博物院</div>
+          <div class="tools"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></div>
+        </div>
+      </div>
+      <p class="cap">· 去掉“排序”按钮。鼠标移到卡片上时左侧出现拖动手柄；<br>· 有具体时间的活动没有手柄，时间后面加一个小锁，悬停提示“按具体时间排列，改时间即可调整位置”；<br>· 拖动时其他卡片让位，松手即保存，不需要“完成”。</p>
+    </div>
+    <div class="col">
+      <span class="tag">手机 · 建议</span>
+      <div class="phone">
+        <div class="bar"><b>第6天 · 11/04</b><span style="margin-left:auto" class="btn primary" >完成</span></div>
+        <div class="banner"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg><div>按住 <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg> 拖动调整顺序。<br><span class="muted">有具体时间的安排会按时间自动排列。</span></div></div>
+        <div class="mini fixed"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="16" r="1"/><rect x="3" y="10" width="18" height="12" rx="2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/></svg><div><b>逛南京博物院</b><br><small class="muted">09:30 · 按时间排列</small></div></div>
+        <div class="slot"></div>
+        <div class="mini drag"><div><b>不知道该叫什么</b><br><small class="muted">上午 · 常发广场</small></div><span class="h"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg></span></div>
+        <div class="mini"><div><b>打原神</b><br><small class="muted">中午 · 南京大学</small></div><span class="h"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg></span></div>
+      </div>
+      <p class="cap" style="width:340px">· 按钮改名“调整顺序”，放进当天的“…”菜单；<br>· 进入后卡片收成一行，顶部说明怎么拖，“完成”在右上角；<br>· 不再顺带显示“添加路程”入口。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2 地图 ============ -->
+<section class="frame" id="f-map">
+  <h2>二、地图：标记跟随主题色；收藏标记由用户自选，常用组合存为“预设”</h2>
+  <p class="lede">我们不预设“哪种图标、哪种颜色代表什么”。每个收藏可以选一个图标和一种颜色；常用的组合可以存成预设并写上它的含义，下次收藏时一键套用。</p>
+  <div class="row">
+    <div class="map">
+      <svg style="position:absolute;inset:0" width="740" height="520"><path d="M430 150 C 420 220, 360 250, 330 300 S 300 360, 300 370" stroke="#1f7fa3" stroke-width="5" fill="none" stroke-linecap="round" opacity=".85"/></svg>
+      <div class="route" style="left:430px;top:150px">1</div>
+      <div class="route" style="left:300px;top:370px">2</div>
+      <div class="mk" style="left:520px;top:110px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#c8553d" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="M12 3 21.5 20H2.5Z"/></g></svg></div>
+      <div class="mk done" style="left:610px;top:300px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#c8553d" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="M12 3 21.5 20H2.5Z"/></g></svg></div>
+      <div class="mk" style="left:200px;top:450px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#176b88" stroke="#fff" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></g></svg></div>
+      <div class="mk" style="left:380px;top:430px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#176b88" stroke="#fff" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></g></svg></div>
+      <div class="mk" style="left:120px;top:400px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#7a4f9a" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="m12 2.5 2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.35 6.2 20.4l1.1-6.45-4.7-4.6 6.5-.95Z"/></g></svg></div>
+      <div class="mk" style="left:660px;top:180px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#4a5560" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="M12 2.5 21.5 12 12 21.5 2.5 12Z"/></g></svg></div>
+      <div class="mk" style="left:560px;top:200px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#7a4f9a" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="m12 2.5 2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.35 6.2 20.4l1.1-6.45-4.7-4.6 6.5-.95Z"/></g></svg></div>
+      <div class="sel" style="left:470px;top:262px">
+        <svg width="32" height="42" viewBox="0 0 32 42"><path d="M16 40C13 35 2 25 2 16a14 14 0 0 1 28 0c0 9-11 19-14 24Z" fill="#176b88" stroke="#fff" stroke-width="2"/><circle cx="16" cy="16" r="5" fill="#fff"/></svg>
+        <span class="lab">玄武湖景区</span>
+      </div>
+      <div class="mpanel">
+        <div style="font-size:18px;font-weight:700">玄武湖景区</div>
+        <small class="muted">国家级景点 · 玄武门路1号</small>
+        <div style="display:flex;gap:8px;margin:12px 0"><span class="btn primary" style="flex:1;justify-content:center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>加入行程</span><span class="btn ghost" style="flex:1;justify-content:center"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>已收藏</span></div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">标记</div>
+        <div class="chips">
+          <span class="chip on"><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#c8553d"><path d="M12 3 21.5 20H2.5Z"/></g></svg>必吃<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>
+          <span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#176b88"><circle cx="12" cy="12" r="9"/></g></svg>想去</span>
+          <span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#7a4f9a"><path d="m12 2.5 2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.35 6.2 20.4l1.1-6.45-4.7-4.6 6.5-.95Z"/></g></svg>拍照</span>
+          <span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#4a5560"><path d="M12 2.5 21.5 12 12 21.5 2.5 12Z"/></g></svg></span>
+          <span class="chip muted"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>自定义</span>
+        </div>
+      </div>
+      <div class="legend">
+        <div><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#c8553d"><path d="M12 3 21.5 20H2.5Z"/></g></svg>必吃 · 2</div>
+        <div><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#176b88"><circle cx="12" cy="12" r="9"/></g></svg>想去 · 2</div>
+        <div><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#7a4f9a"><path d="m12 2.5 2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.35 6.2 20.4l1.1-6.45-4.7-4.6 6.5-.95Z"/></g></svg>拍照 · 2</div>
+        <div><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#4a5560"><path d="M12 2.5 21.5 12 12 21.5 2.5 12Z"/></g></svg><span style="color:#53717f">未命名 · 1</span></div>
+        <div style="border-top:1px solid #d2e0e7;padding-top:6px;color:#53717f">点图例只看这一类 · 右下小圆点 = 已排进行程</div>
+      </div>
+    </div>
+    <div class="col" style="width:360px">
+      <span class="tag">自定义标记</span>
+      <div class="card" style="padding:18px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><svg width="44" height="44" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#c8553d" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"><path d="M12 3 21.5 20H2.5Z"/></g></svg><div><b>预览</b><br><small class="muted">地图上就是这个样子</small></div></div>
+        <label style="font-size:13px;font-weight:600">图标</label>
+        <div class="grid8">
+          <span><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#a4bdca"><circle cx="12" cy="12" r="9"/></g></svg></span><span class="on"><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#a4bdca"><path d="M12 3 21.5 20H2.5Z"/></g></svg></span><span><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#a4bdca"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/></g></svg></span><span><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#a4bdca"><path d="M12 2.5 21.5 12 12 21.5 2.5 12Z"/></g></svg></span>
+          <span><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#a4bdca"><path d="M12 2.5 20.5 7.25v9.5L12 21.5l-8.5-4.75v-9.5Z"/></g></svg></span><span><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#a4bdca"><path d="m12 2.5 2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.35 6.2 20.4l1.1-6.45-4.7-4.6 6.5-.95Z"/></g></svg></span><span><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#a4bdca"><path d="M12 20.5S3 15 3 8.8A4.8 4.8 0 0 1 12 6.3a4.8 4.8 0 0 1 9 2.5C21 15 12 20.5 12 20.5Z"/></g></svg></span><span><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#a4bdca"><path d="M5 21V3h13.5l-3.5 5 3.5 5H7v8Z"/></g></svg></span>
+        </div>
+        <label style="font-size:13px;font-weight:600">颜色</label>
+        <div class="swatches">
+          <span class="sw" style="background:#176b88"></span><span class="sw" style="background:#2f7a5a"></span><span class="sw on" style="background:#c8553d"></span><span class="sw" style="background:#b7791f"></span><span class="sw" style="background:#7a4f9a"></span><span class="sw" style="background:#b8457a"></span><span class="sw" style="background:#3f7fbf"></span><span class="sw" style="background:#4a5560"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin:14px 0 8px"><span class="tgl on"></span><b style="font-size:14px">存为预设</b></div>
+        <div class="input"><span>必吃</span></div>
+        <small class="muted" style="display:block;margin-top:6px">写上它代表什么（选填），会显示在图例和收藏列表里。预设对同行的人都可见。</small>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><span class="btn ghost">取消</span><span class="btn primary">完成</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2b 聚合 ============ -->
+<section class="frame" id="f-cluster">
+  <h2>二（续）、收藏名称与合并：先藏名字，再合并同类，最后才混合合并</h2>
+  <p class="lede">缩小地图时按三个层次处理，图标始终不消失；不同标记的收藏合并后，仍能看出里面有哪几种。</p>
+  <div class="row" style="gap:16px">
+    <div class="col"><span class="tag">放大 · 全部显示</span><div class="zmap" style="background:linear-gradient(118deg,transparent 46%,#f5d58a 46%,#f5d58a 48.5%,transparent 48.5%),linear-gradient(12deg,transparent 58%,#fff 58%,#fff 60%,transparent 60%),radial-gradient(ellipse 120px 80px at 75% 72%,#c7e3c1 98%,transparent 100%),radial-gradient(ellipse 90px 60px at 20% 30%,#a9cdec 98%,transparent 100%),#f1efe9"><div class="zm" style="left:70px;top:70px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#c8553d" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="M12 3 21.5 20H2.5Z"/></g></svg><span class="zl r">老门东</span></div><div class="zm" style="left:118px;top:112px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#c8553d" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="M12 3 21.5 20H2.5Z"/></g></svg><span class="zl r">鸭血粉丝汤</span></div><div class="zm" style="left:232px;top:66px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#176b88" stroke="#fff" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></g></svg><span class="zl r">夫子庙</span></div><div class="zm" style="left:96px;top:212px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#7a4f9a" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="m12 2.5 2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.35 6.2 20.4l1.1-6.45-4.7-4.6 6.5-.95Z"/></g></svg><span class="zl r">中华门</span></div><div class="zm" style="left:250px;top:196px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#176b88" stroke="#fff" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></g></svg><span class="zl r">白鹭洲公园</span></div><div class="zm" style="left:300px;top:128px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#4a5560" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="M12 2.5 21.5 12 12 21.5 2.5 12Z"/></g></svg></div><div class="zr" style="left:46px;top:262px"><span class="n">1</span><span class="zl r">金陵饭店</span></div></div></div>
+    <div class="col"><span class="tag">中间 · 名字让位，同类合并</span><div class="zmap" style="background:linear-gradient(118deg,transparent 46%,#f5d58a 46%,#f5d58a 48.5%,transparent 48.5%),linear-gradient(12deg,transparent 58%,#fff 58%,#fff 60%,transparent 60%),radial-gradient(ellipse 120px 80px at 75% 72%,#c7e3c1 98%,transparent 100%),radial-gradient(ellipse 90px 60px at 20% 30%,#a9cdec 98%,transparent 100%),#f1efe9"><div class="zm" style="left:110px;top:110px"><svg width="44" height="44" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#c8553d" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"><path d="M12 3 21.5 20H2.5Z"/></g></svg><b class="badge">2</b><span class="zl r">必吃</span></div><div class="zm" style="left:186px;top:102px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#176b88" stroke="#fff" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></g></svg><span class="zl r">夫子庙</span></div><div class="zm" style="left:140px;top:170px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#7a4f9a" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="m12 2.5 2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.35 6.2 20.4l1.1-6.45-4.7-4.6 6.5-.95Z"/></g></svg></div><div class="zm" style="left:196px;top:164px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#176b88" stroke="#fff" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></g></svg></div><div class="zm" style="left:222px;top:134px"><svg width="30" height="30" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#4a5560" stroke="#fff" stroke-width="2" stroke-linejoin="round"><path d="M12 2.5 21.5 12 12 21.5 2.5 12Z"/></g></svg></div><div class="zr" style="left:96px;top:196px"><span class="n">1</span><span class="zl r">金陵饭店</span></div></div></div>
+    <div class="col"><span class="tag">缩小 · 混合合并</span><div class="zmap" style="background:linear-gradient(118deg,transparent 46%,#f5d58a 46%,#f5d58a 48.5%,transparent 48.5%),linear-gradient(12deg,transparent 58%,#fff 58%,#fff 60%,transparent 60%),radial-gradient(ellipse 120px 80px at 75% 72%,#c7e3c1 98%,transparent 100%),radial-gradient(ellipse 90px 60px at 20% 30%,#a9cdec 98%,transparent 100%),#f1efe9"><div class="zm" style="left:168px;top:140px"><span class="pillc"><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#c8553d"><path d="M12 3 21.5 20H2.5Z"/></g></svg><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#176b88"><circle cx="12" cy="12" r="9"/></g></svg><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#7a4f9a"><path d="m12 2.5 2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.35 6.2 20.4l1.1-6.45-4.7-4.6 6.5-.95Z"/></g></svg><b>6</b></span></div><div class="zr" style="left:150px;top:178px"><span class="n">1</span></div></div></div>
+  </div>
+  <div class="row" style="margin-top:20px;gap:16px;align-items:flex-start">
+    <div class="col"><span class="tag">点合并点：能展开就放大；同一位置就列出来</span><div class="zmap" style="background:linear-gradient(118deg,transparent 46%,#f5d58a 46%,#f5d58a 48.5%,transparent 48.5%),linear-gradient(12deg,transparent 58%,#fff 58%,#fff 60%,transparent 60%),radial-gradient(ellipse 120px 80px at 75% 72%,#c7e3c1 98%,transparent 100%),radial-gradient(ellipse 90px 60px at 20% 30%,#a9cdec 98%,transparent 100%),#f1efe9"><div class="popl" style="left:150px;top:30px"><div class="ph">这里有 3 个收藏</div>
+<div class="pr"><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#c8553d"><path d="M12 3 21.5 20H2.5Z"/></g></svg>老门东<small>必吃</small></div>
+<div class="pr"><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#c8553d"><path d="M12 3 21.5 20H2.5Z"/></g></svg>鸭血粉丝汤<small>必吃</small></div>
+<div class="pr"><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#176b88"><circle cx="12" cy="12" r="9"/></g></svg>夫子庙<small>想去</small></div></div>
+<div class="zm" style="left:120px;top:190px"><span class="pillc"><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#c8553d"><path d="M12 3 21.5 20H2.5Z"/></g></svg><svg width="16" height="16" viewBox="0 0 24 24" style="flex:none;overflow:visible"><g fill="#176b88"><circle cx="12" cy="12" r="9"/></g></svg><b>3</b></span></div></div></div>
+    <div class="col" style="width:720px">
+      <div class="card" style="padding:16px 20px;font-size:14px;line-height:1.75">
+        <b>三个层次</b><br>
+        1. 名字和别的名字、图标或底图文字重叠 → 只隐藏名字，图标保留。按优先级决定谁留下：选中的地点 &gt; 行程里的活动 &gt; 收藏。<br>
+        2. 图标之间开始重叠，且标记相同 → 合并成这个标记，右上角显示数量；有预设名称时，名字位置显示预设名（如“必吃”）。<br>
+        3. 不同标记的图标重叠 → 合并成一个小胶囊：最多叠放 3 种标记（按数量排序）+ 总数。<br><br>
+        <b>不参与合并</b>：行程活动的序号标记和当前选中的地点，永远单独显示。<br>
+        <b>防闪烁</b>：只在缩放、拖动结束后重算；合并阈值 34px，拆开阈值 40px；变化时淡入淡出 150ms（减少动态效果时直接切换）。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3 费用 ============ -->
+<section class="frame" id="f-ledger">
+  <h2>三、费用：直接写出关联的活动；关联后默认用活动那天的日期</h2>
+  <p class="lede">现在列表只显示“查看关联活动”，点了打开的是活动编辑框；日期默认是记账当天，和活动所在日对不上。</p>
+  <div class="row">
+    <div class="col">
+      <span class="tag">列表 · 建议</span>
+      <div class="card ledger">
+        <div class="dayhead">第6天 <small class="muted">11/04 周三</small><span style="margin-left:auto" class="muted">¥180.00</span></div>
+        <div class="erow"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg></span>
+          <div><div class="t">游戏点卡</div><span class="alink"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>打原神 · 中午<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span></div>
+          <div class="amt">¥120.00</div><span class="muted"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span></div>
+        <div class="erow"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg></span>
+          <div><div class="t">门票</div><span class="alink"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>逛南京博物院 · 09:30<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span></div>
+          <div class="amt">¥60.00</div><span class="muted"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span></div>
+        <div class="dayhead">行前支付 <small class="muted">10/20 · 不在旅程日期内</small></div>
+        <div class="erow"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg></span>
+          <div><div class="t">酒店两晚</div><span class="alink"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>入住金陵饭店 · 第1天<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span></div>
+          <div class="amt">¥980.00</div><span class="muted"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span></div>
+      </div>
+      <p class="cap" style="width:560px">· 没填名称时用活动名代替“已支付 · ¥120.00”（金额右侧已经有了）；<br>· 关联活动写成一个可点的标签：点了跳到行程页对应那天并高亮这张卡片，不再打开编辑框；<br>· 分组标题用“第几天”，与上面的筛选标签一致。</p>
+    </div>
+    <div class="col">
+      <span class="tag">记一笔 · 建议</span>
+      <div class="card" style="width:500px;padding:20px">
+        <div class="field"><label>关联活动 · 选填</label><div class="input">打原神 · 第6天 中午<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></div></div>
+        <div class="field"><label>日期</label><div class="input">11/04 周三 · 第6天 <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg></div>
+          <div class="hint"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>已按活动所在日填写。<b>改为付款当天（11/03）</b></div></div>
+        <div class="field"><label>名称 · 选填</label><div class="input"><span class="muted">留空则用活动名“打原神”作为名称</span></div></div>
+      </div>
+      <p class="cap" style="width:500px">规则：<br>· 从活动卡片上点“记一笔”，或在这里选了活动，且用户没手动改过日期 → 日期跟活动走；<br>· 用户改过日期就不再自动覆盖（例如提前订酒店，付款日在行前）；<br>· 活动后来被移到别的日子，“跟随活动”的费用一起移动，手动设过日期的不动。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4 旅程设置 ============ -->
+<section class="frame" id="f-settings">
+  <h2>四、旅程设置：分组 + 统一的行，危险操作放到最后</h2>
+  <p class="lede">和“我的设置”用同一套行样式：左边名称，右边当前值和箭头。输入框只留旅程名称和目的地。</p>
+  <div class="row">
+    <div class="settings">
+      <div style="font-size:26px;font-weight:700">旅程设置</div>
+      <p class="muted" style="margin:4px 0 18px">目前只有你一人。邀请同伴后，这里的修改会同步给他们</p>
+      <div class="sgroup"><h4>基本信息</h4><div class="card">
+        <div class="srow"><span class="lbl">名称</span><span class="v" style="color:var(--text)">南京</span></div>
+        <div class="srow"><span class="lbl">目的地</span><span class="v" style="color:var(--text)">南京</span></div>
+        <div class="srow"><span class="lbl">时区</span><span class="v">北京时间 UTC+8<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span></div>
+      </div></div>
+      <div class="sgroup"><h4>日程</h4><div class="card">
+        <div class="srow"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M17 14h-6"/><path d="M13 18H7"/><path d="M7 14h.01"/><path d="M17 18h.01"/></svg></span><span class="lbl">日期<small>10/30 – 11/07 · 9 天</small></span><span class="v">调整<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span></div>
+      </div></div>
+      <div class="sgroup"><h4>成员与权限</h4><div class="card">
+        <div class="srow"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="lbl">成员与邀请<small>仅你一人</small></span><span class="v"><span class="avs"><span>x</span></span>邀请<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span></div>
+        <div class="srow"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg></span><span class="lbl">团队类型<small>创建者与管理员可直接删除</small></span><span class="v">管理员团队<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span></div>
+      </div></div>
+      <div class="sgroup"><h4>整理</h4><div class="card">
+        <div class="srow"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></span><span class="lbl">已删除的内容</span><span class="v">3 项<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span></div>
+        <div class="srow"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></span><span class="lbl">归档旅程<small>从“我的旅程”列表收起，可随时取消</small></span><span class="v"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span></div>
+      </div></div>
+      <div class="sgroup"><div class="card">
+        <div class="srow danger"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg><span class="lbl">退出并删除旅程<small class="muted">你是唯一成员，退出后旅程会被永久清除</small></span></div>
+      </div></div>
+      <button class="btn text">想改主题色或提醒方式？打开我的设置<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+    </div>
+    <div class="col" style="width:470px">
+      <span class="tag">时区选择</span>
+      <div class="card" style="padding:16px">
+        <div class="input" style="margin-bottom:12px"><span class="muted"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> 搜索城市或时区</span></div>
+        <small class="muted">推荐</small>
+        <div class="srow" style="padding:10px 4px">北京时间 UTC+8 <span class="v" style="color:var(--accent)"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span></div>
+        <div class="srow" style="padding:10px 4px">本机时间 · 洛杉矶 UTC−8</div>
+        <small class="muted" style="display:block;margin-top:8px">全部时区</small>
+        <div class="srow" style="padding:10px 4px">东京 UTC+9</div>
+        <div class="srow" style="padding:10px 4px">伦敦 UTC+0</div>
+      </div>
+      <p class="cap">原来是 400 多项的原生下拉框，换成可搜索的列表：先放目的地对应的时区和本机时区，再列全部。</p>
+      <span class="tag old" style="margin-top:8px">同时修正</span>
+      <p class="cap" style="margin-top:0">“成员与邀请”右侧写着“1 位同伴”，与上方“目前只有你一人”矛盾。一人时显示“仅你一人”，多人时显示“3 人”加头像。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5 调整日期 ============ -->
+<section class="frame" id="f-dates">
+  <h2>五、调整日期：先改日期，再问“已有安排怎么办”</h2>
+  <p class="lede">现在一打开就是全部活动的勾选框和“第几天”下拉，不改天数也要先看懂这张表。改成两步，只有确实会影响已有安排时才出现第二步。</p>
+  <div class="row">
+    <div class="dlg">
+      <div class="hd">调整旅程日期<span class="x"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span></div>
+      <div class="bd">
+        <div class="steps"><span class="on"><b>1</b>选日期</span><span>—</span><span><b>2</b>处理已有安排</span></div>
+        <div class="cal">
+          <span class="w">一</span><span class="w">二</span><span class="w">三</span><span class="w">四</span><span class="w">五</span><span class="w">六</span><span class="w">日</span>
+          <span class="d x">27</span><span class="d x">28</span><span class="d x">29</span><span class="d old">30</span><span class="d old">31</span><span class="d edge">1</span><span class="d in">2</span>
+          <span class="d in">3</span><span class="d in">4</span><span class="d in">5</span><span class="d in">6</span><span class="d in">7</span><span class="d in">8</span><span class="d edge">9</span>
+        </div>
+        <div class="sum"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M17 14h-6"/><path d="M13 18H7"/><path d="M7 14h.01"/><path d="M17 18h.01"/></svg><div><b>11/01 – 11/09 · 9 天</b><br><small class="muted">原来 10/30 – 11/07，整体推后 2 天</small></div></div>
+        <small class="muted">点两下选开始和结束；虚线框是这次移出范围的原日期。</small>
+      </div>
+      <div class="ft"><span class="btn ghost">取消</span><span class="btn primary">下一步<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span></div>
+    </div>
+    <div class="dlg">
+      <div class="hd">调整旅程日期<span class="x"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span></div>
+      <div class="bd">
+        <div class="steps"><span><b><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></b>选日期</span><span>—</span><span class="on"><b>2</b>处理已有安排</span></div>
+        <p style="margin:0 0 12px">旅程推后 2 天，已有 <b>4 项安排</b>。它们怎么办？</p>
+        <div class="opt on"><span class="radio"></span><div><strong>跟着一起推后（推荐）</strong><small>第 1 天的安排还在第 1 天，日期变成 11/01</small>
+          <div class="preview"><span class="muted">第6天</span><span class="pill">打原神 · 11/04</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="pill">11/06</span><span class="muted">第9天</span><span class="pill">test01 · 11/07</span><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="pill">11/09</span></div></div></div>
+        <div class="opt"><span class="radio"></span><div><strong>留在原来的日期</strong><small>安排保持原日期（11/04、11/07），在新范围里变成第 4 天、第 7 天；落到范围外的会放进“行程外安排”</small></div></div>
+        <div class="opt"><span class="radio"></span><div><strong>逐项选择…</strong><small>打开现在这张逐项列表</small></div></div>
+      </div>
+      <div class="ft"><span class="btn ghost"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>上一步</span><span class="btn primary">确认调整</span></div>
+    </div>
+  </div>
+  <div class="row" style="margin-top:22px;align-items:center">
+    <div style="position:relative;width:540px;height:200px">
+      <div class="daytabs"><div class="daytab"><b>第5天</b>今天</div><div class="daytab on"><b>第6天</b>11/04</div><div class="daytab"><b>第7天</b>11/05</div><span class="muted" style="margin-left:12px"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span></div>
+      <div class="menu" style="left:250px;top:60px">
+        <div><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg>调整顺序</div>
+        <div class="on"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m2 9 3-3 3 3"/><path d="M13 18H7a2 2 0 0 1-2-2V6"/><path d="m22 15-3 3-3-3"/><path d="M11 6h6a2 2 0 0 1 2 2v10"/></svg>与另一天交换…</div>
+        <div><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M17 14h-6"/><path d="M13 18H7"/><path d="M7 14h.01"/><path d="M17 18h.01"/></svg>调整旅程日期…</div>
+      </div>
+    </div>
+    <p class="cap" style="width:560px">“交换两天安排”从这个弹窗里拿出来，放到当天的“…”菜单：先在第6天点“与另一天交换”，再点目标日即可，默认整天交换，不再要求逐项勾选。<br>只把天数从 9 改成 10 这类不影响任何安排的修改，第一步直接显示“完成”，没有第二步。</p>
+  </div>
+</section>
+
+</body>
+</html>

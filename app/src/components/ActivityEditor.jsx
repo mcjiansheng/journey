@@ -391,8 +391,10 @@ export default function ActivityEditor({
         <button
           className="primary small editor-done"
           disabled={completing || !draft.title.trim()}
-          onPointerDown={(e) => {
-            if (e.pointerType === 'mouse' && e.button === 0) e.preventDefault();
+          // Prevent focus leaving the active field before click runs, without blocking
+          // synthesized clicks on WebKit touch (MOB-014).
+          onMouseDown={(e) => {
+            if (e.button === 0) e.preventDefault();
           }}
           onClick={complete}
         >
@@ -417,8 +419,10 @@ export default function ActivityEditor({
         </p>
         <button
           className="text-button editor-later"
-          onPointerDown={(e) => {
-            if (e.pointerType === 'mouse' && e.button === 0) e.preventDefault();
+          // Prevent focus leaving the active field before click runs, without blocking
+          // synthesized clicks on WebKit touch (MOB-014).
+          onMouseDown={(e) => {
+            if (e.button === 0) e.preventDefault();
           }}
           onClick={requestClose}
         >

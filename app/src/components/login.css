@@ -347,8 +347,10 @@ body:has(.auth-page) {
     inset 0 1px 0 var(--button-highlight),
     0 5px 14px var(--optical-shadow);
 }
-.login-card .login-form > .primary:hover {
-  filter: brightness(1.06);
+@media (hover: hover) and (pointer: fine) {
+  .login-card .login-form > .primary:hover {
+    filter: brightness(1.06);
+  }
 }
 .login-card .login-form > .primary:active {
   transform: scale(0.985);

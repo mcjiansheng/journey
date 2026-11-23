@@ -207,7 +207,9 @@ test('detail actions stay visible and 320px manual edit returns to the selected 
   if(descriptor)Object.defineProperty(viewport,'height',descriptor);else delete viewport.height;
   delete window.__mapOriginalVisualHeight;viewport.dispatchEvent(new Event('resize'));
  });
- await expect(page.locator('.journey-map')).not.toHaveClass(/map-keyboard-open/);await expect(page.locator('.map-shell .bottom-nav')).toBeVisible();
+ await expect(page.locator('.journey-map')).not.toHaveClass(/map-keyboard-open/);
+ await expect(page.locator('.map-shell .bottom-nav')).toBeHidden();
+ await expect(page.getByRole('button',{name:'返回地图总览',exact:true})).toBeVisible();
  await expect(page.getByRole('heading',{name:'玄武湖',exact:true})).toBeVisible();
  const details=page.locator('.map-details-toggle');await expect(details).toBeVisible();await expect(details).toHaveAttribute('aria-expanded','false');await expect(details).toHaveText(/更多操作/);
  await details.click();await expect(details).toHaveAttribute('aria-expanded','true');
@@ -218,6 +220,11 @@ test('detail actions stay visible and 320px manual edit returns to the selected 
  await expect(page.getByRole('heading',{name:'玄武湖',exact:true})).toBeVisible();
  await expect(details).toBeVisible();await expect(details).toHaveAttribute('aria-expanded','false');await expect(details).toHaveText(/更多操作/);
  await screenshot(page,'detail-mobile-320');
+ await page.getByRole('button',{name:'返回地图总览',exact:true}).click();
+ await expect(page.locator('.journey-map')).toBeVisible();
+ await expect(page.locator('.map-shell .bottom-nav')).toBeVisible();
+ await expect(page.getByRole('button',{name:'返回我的旅程',exact:true})).toBeVisible();
+ await expect(page.locator('.map-offline-places')).toBeVisible();
 });
 
 test('filter apply remains clickable at 800x500 and filter content scrolls on narrow mobile',async({page})=>{
@@ -227,11 +234,11 @@ test('filter apply remains clickable at 800x500 and filter content scrolls on na
 
  await page.setViewportSize({width:320,height:500});await page.getByRole('navigation',{name:'手机主导航',exact:true}).getByRole('button',{name:'地图',exact:true}).click();
  await page.getByRole('button',{name:'筛选地点',exact:true}).click();const mobileFilter=page.locator('.map-panel.mode-filter');await expect(mobileFilter).toBeVisible();
- const scrollable=await mobileFilter.evaluate(panel=>[panel,...panel.querySelectorAll('*')].find(el=>el.scrollHeight>el.clientHeight+1&&getComputedStyle(el).overflowY!=='visible'));
+ const scrollable=await mobileFilter.evaluate(panel=>[panel,...panel.querySelectorAll('*')].find(el=>el.scrollHeight>el.clientHeight+1&&['auto','scroll'].includes(getComputedStyle(el).overflowY)));
  expect(scrollable).toBeTruthy();
- const before=await mobileFilter.evaluate(panel=>{const el=[panel,...panel.querySelectorAll('*')].find(node=>node.scrollHeight>node.clientHeight+1&&getComputedStyle(node).overflowY!=='visible');return el.scrollTop});
+ const before=await mobileFilter.evaluate(panel=>{const el=[panel,...panel.querySelectorAll('*')].find(node=>node.scrollHeight>node.clientHeight+1&&['auto','scroll'].includes(getComputedStyle(node).overflowY));return el.scrollTop});
  await mobileFilter.getByRole('button',{name:'完成',exact:true}).scrollIntoViewIfNeeded();
- const after=await mobileFilter.evaluate(panel=>{const el=[panel,...panel.querySelectorAll('*')].find(node=>node.scrollHeight>node.clientHeight+1&&getComputedStyle(node).overflowY!=='visible');return el.scrollTop});
+ const after=await mobileFilter.evaluate(panel=>{const el=[panel,...panel.querySelectorAll('*')].find(node=>node.scrollHeight>node.clientHeight+1&&['auto','scroll'].includes(getComputedStyle(node).overflowY));return el.scrollTop});
  expect(after).toBeGreaterThan(before);
 });
 
@@ -281,4 +288,45 @@ for(const width of [1440,1024,390,320])test(`sync and return controls retain the
  }
  await openMap(page,{mobile:width<=760});await screenshot(page,`return-position-${width}`);
  await page.getByRole('button',{name:width<=760?'返回我的旅程':'我的旅程',exact:true}).click();await expect(page.getByRole('heading',{name:'我的旅程',exact:true})).toBeVisible();
+});
+
+test('mobile peek bar opens flush sheet, swipe down dismisses, and top-left back returns to browse nav',async({page})=>{
+ const prevKey=app.locals.config.amapKey;app.locals.config.amapKey='map-controls-peek-fixture';
+ const sdk=`class Pixel{constructor(x,y){this.x=x;this.y=y}}class MapFixture{constructor(c,o){this.c=c;this.center=o.center;this.zoom=o.zoom;this.h={};setTimeout(()=>this.h.complete?.(),10)}on(n,fn){this.h[n]=fn}getCenter(){return{lng:this.center[0],lat:this.center[1]}}getZoom(){return this.zoom}add(){}remove(){}addControl(){}stopMove(){}setFitView(){}destroy(){this.c.replaceChildren()}}class S{search(_a,_b,cb){(cb||_b)('no_data',null)}}class G{getLocation(_n,cb){cb('complete',{geocodes:[{location:{lng:118.8,lat:32.07}}]})}}window.AMap={Map:MapFixture,Marker:class{constructor(o){this.options=o;this.content=o.content}on(){}},Pixel,LabelMarker:class{},LabelsLayer:class{constructor(){this.content=document.createElement('div')}add(){}},Polyline:class{},Scale:class{},Geocoder:G,PlaceSearch:S,AutoComplete:S,Walking:S,Driving:S,Riding:S,Transfer:S,plugin(_p,d){d()}};window.___onAPILoaded?.();`;
+ try{
+ await page.route('https://webapi.amap.com/maps?**',route=>route.fulfill({status:200,contentType:'application/javascript',body:sdk}));
+ await page.setViewportSize({width:390,height:844});await register(page);await createTrip(page);await openMap(page,{mobile:true});
+ await expect(page.locator('.map-shell .bottom-nav')).toBeVisible();
+ const peek=page.locator('.map-peek-bar');await expect(peek).toBeVisible();
+ const peekBox=await peek.boundingBox();const navBox=await page.locator('.bottom-nav').boundingBox();
+ expect(peekBox.y+peekBox.height).toBeLessThanOrEqual(navBox.y);
+ await peek.click();
+ await expect(page.locator('.map-panel.mode-list')).toBeVisible();
+ await expect(page.locator('.map-shell .bottom-nav')).toBeHidden();
+ const backSub=page.getByRole('button',{name:'返回地图总览',exact:true});
+ await expect(backSub).toBeVisible();
+ const panelBox=await page.locator('.map-sheet-surface').boundingBox();
+ expect(Math.round(panelBox.y+panelBox.height)).toBeGreaterThanOrEqual(843);
+ const handle=page.locator('.map-sheet-handle');
+ await handle.click();
+ await expect(page.locator('.map-panel.has-sheet.sheet-expanded')).toBeVisible();
+ await handle.click();
+ await expect(page.locator('.map-panel.has-sheet.sheet-expanded')).toHaveCount(0);
+ const handleBox=await handle.boundingBox();
+ await page.mouse.move(handleBox.x+handleBox.width/2,handleBox.y+handleBox.height/2);
+ await page.mouse.down();
+ await page.mouse.move(handleBox.x+handleBox.width/2,handleBox.y+120,{steps:8});
+ await page.mouse.up();
+ await expect(page.locator('.map-panel.mode-list')).toHaveCount(0);
+ await expect(page.locator('.map-shell .bottom-nav')).toBeVisible();
+ await expect(page.getByRole('button',{name:'返回我的旅程',exact:true})).toBeVisible();
+ const search=page.getByRole('textbox',{name:'搜索地点',exact:true});
+ await search.focus();await expect(page.locator('.map-search-back')).toBeVisible();
+ await expect(page.locator('.map-shell .bottom-nav')).toBeHidden();
+ await search.fill('夫子庙');await expect(page.getByRole('button',{name:'清空搜索',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'清空搜索',exact:true}).click();await expect(search).toHaveValue('');
+ await backSub.click();
+ await expect(page.locator('.map-panel.mode-search')).toHaveCount(0);
+ await expect(page.locator('.map-shell .bottom-nav')).toBeVisible();
+ }finally{app.locals.config.amapKey=prevKey;}
 });

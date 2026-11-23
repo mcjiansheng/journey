@@ -97,8 +97,10 @@
   color: var(--accent);
   font-size: var(--fs-caption);
 }
-.activity-expense-link:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .activity-expense-link:hover {
+    text-decoration: underline;
+  }
 }
 .ledger-activity-filter {
   display: flex;
@@ -135,6 +137,15 @@
     border-radius: 50%;
     background: var(--accent-soft);
     color: var(--accent);
+    position: relative;
+    margin-inline: 6px;
+  }
+  /* 32px circle, 44px touch target (MOB-004). */
+  .itinerary-page .mobile-day-bar .mobile-today-jump::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
   }
   .day-browse-actions:not(:has(button:not(.desktop-today-jump))) {
     display: none;

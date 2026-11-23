@@ -49,6 +49,18 @@ export function NoteFormatBar({ rect, stage, fontSize = 'm', onFontSize }) {
   const [pos, setPos] = useState(null);
   const [state, setState] = useState({});
   const [colors, setColors] = useState(false);
+  const colorPop = useRef(null);
+  // Open the colour row upwards when it would leave the visible area, e.g. above the
+  // on-screen keyboard or near the bottom of the board (MOB-009).
+  useLayoutEffect(() => {
+    const pop = colorPop.current;
+    if (!colors || !pop) return;
+    delete pop.dataset.placement;
+    const viewport = window.visualViewport;
+    const bottom = viewport ? viewport.offsetTop + viewport.height : window.innerHeight;
+    const rect = pop.getBoundingClientRect();
+    if (rect.bottom > bottom - 8) pop.dataset.placement = 'top';
+  }, [colors]);
 
   useEffect(() => {
     const read = () => {
@@ -203,7 +215,7 @@ export function NoteFormatBar({ rect, stage, fontSize = 'm', onFontSize }) {
           <span className="color-dot" />
         </B>
         {colors && (
-          <div className="fmt-color-pop glass" role="menu">
+          <div ref={colorPop} className="fmt-color-pop glass" role="menu">
             {NOTE_TEXT_COLORS.map((c) => (
               <B key={c.id} label={c.name} onRun={() => color(c.id)}>
                 <span className="color-dot" style={{ background: c.value }} />

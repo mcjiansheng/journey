@@ -1,0 +1,2339 @@
+{
+  "$comment": "由 mobile/tools/generate-fixtures.mjs 从网页端代码生成，不要手改。网页端函数改动后重新运行该脚本。",
+  "sources": [
+    "app/src/domain.js",
+    "app/src/expenses.js"
+  ],
+  "snapshot": {
+    "trip": {
+      "id": "trip-1",
+      "name": "杭州三日",
+      "destination": "杭州",
+      "startDate": "2026-12-01",
+      "endDate": "2026-12-03",
+      "dayCount": 3,
+      "timezone": "Asia/Shanghai",
+      "currency": "CNY",
+      "teamMode": "equal",
+      "ownerId": "u1",
+      "state": "active"
+    },
+    "members": [
+      {
+        "userId": "u1",
+        "displayName": "Alice",
+        "isAdmin": true
+      },
+      {
+        "userId": "u2",
+        "displayName": "Bob",
+        "isAdmin": false
+      }
+    ],
+    "objects": [
+      {
+        "id": "day-1",
+        "tripId": "trip-1",
+        "kind": "day",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "ordinal": 1,
+          "date": "2026-12-01"
+        }
+      },
+      {
+        "id": "day-2",
+        "tripId": "trip-1",
+        "kind": "day",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "ordinal": 2,
+          "date": "2026-12-02"
+        }
+      },
+      {
+        "id": "day-3",
+        "tripId": "trip-1",
+        "kind": "day",
+        "state": "deleted",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "ordinal": 3,
+          "date": "2026-12-03"
+        }
+      },
+      {
+        "id": "day-x",
+        "tripId": "trip-1",
+        "kind": "day",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "ordinal": 4,
+          "date": null
+        }
+      },
+      {
+        "id": "act-1",
+        "tripId": "trip-1",
+        "kind": "activity",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "断桥残雪",
+          "dayId": "day-1",
+          "order": 3,
+          "time": {
+            "mode": "precise",
+            "period": "",
+            "start": "09:00",
+            "end": "10:30",
+            "endDayOffset": 0
+          },
+          "place": {
+            "name": "断桥残雪",
+            "address": "",
+            "lng": 120.1517,
+            "lat": 30.2615,
+            "provider": "amap",
+            "providerPlaceId": null,
+            "category": "",
+            "sourceUrl": "",
+            "fetchedAt": null,
+            "coordSystem": "GCJ-02"
+          },
+          "buffers": {
+            "before": 15,
+            "after": null
+          },
+          "notes": "早上去人少",
+          "url": ""
+        }
+      },
+      {
+        "id": "act-2",
+        "tripId": "trip-1",
+        "kind": "activity",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "平湖秋月",
+          "dayId": "day-1",
+          "order": 1,
+          "time": {
+            "mode": "flexible",
+            "period": "上午",
+            "start": null,
+            "end": null,
+            "endDayOffset": 0
+          },
+          "place": {
+            "name": "平湖秋月",
+            "address": "",
+            "lng": 120.1452,
+            "lat": 30.2551,
+            "provider": "amap",
+            "providerPlaceId": null,
+            "category": "",
+            "sourceUrl": "",
+            "fetchedAt": null,
+            "coordSystem": "GCJ-02"
+          },
+          "buffers": {
+            "before": null,
+            "after": null
+          },
+          "notes": "",
+          "url": ""
+        }
+      },
+      {
+        "id": "act-3",
+        "tripId": "trip-1",
+        "kind": "activity",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "楼外楼午餐",
+          "dayId": "day-1",
+          "order": 2,
+          "time": {
+            "mode": "precise",
+            "period": "",
+            "start": "08:30",
+            "end": "09:00",
+            "endDayOffset": 0
+          },
+          "place": {
+            "name": "楼外楼",
+            "address": "",
+            "lng": 120.1446,
+            "lat": 30.2532,
+            "provider": "amap",
+            "providerPlaceId": null,
+            "category": "",
+            "sourceUrl": "",
+            "fetchedAt": null,
+            "coordSystem": "GCJ-02"
+          },
+          "buffers": {
+            "before": null,
+            "after": 10
+          },
+          "notes": "",
+          "url": "https://example.test/menu"
+        }
+      },
+      {
+        "id": "act-4",
+        "tripId": "trip-1",
+        "kind": "activity",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "雷峰塔夜景",
+          "dayId": "day-1",
+          "order": 4,
+          "time": {
+            "mode": "precise",
+            "period": "",
+            "start": "19:00",
+            "end": "21:00",
+            "endDayOffset": 0
+          },
+          "place": null,
+          "buffers": {
+            "before": null,
+            "after": null
+          },
+          "notes": "",
+          "url": ""
+        }
+      },
+      {
+        "id": "act-5",
+        "tripId": "trip-1",
+        "kind": "activity",
+        "state": "deleted",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "已删除的安排",
+          "dayId": "day-1",
+          "order": 5,
+          "time": {
+            "mode": "flexible",
+            "period": "",
+            "start": null,
+            "end": null,
+            "endDayOffset": 0
+          },
+          "place": null,
+          "buffers": {
+            "before": null,
+            "after": null
+          },
+          "notes": "",
+          "url": ""
+        }
+      },
+      {
+        "id": "act-6",
+        "tripId": "trip-1",
+        "kind": "activity",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "灵隐寺",
+          "dayId": "day-2",
+          "order": 1,
+          "time": {
+            "mode": "precise",
+            "period": "",
+            "start": "23:00",
+            "end": "01:00",
+            "endDayOffset": 0
+          },
+          "place": {
+            "name": "灵隐寺",
+            "address": "",
+            "lng": 120.1012,
+            "lat": 30.2408,
+            "provider": "amap",
+            "providerPlaceId": null,
+            "category": "",
+            "sourceUrl": "",
+            "fetchedAt": null,
+            "coordSystem": "GCJ-02"
+          },
+          "buffers": {
+            "before": null,
+            "after": null
+          },
+          "notes": "",
+          "url": ""
+        }
+      },
+      {
+        "id": "act-7",
+        "tripId": "trip-1",
+        "kind": "activity",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "被删除那天的安排",
+          "dayId": "day-3",
+          "order": 1,
+          "time": {
+            "mode": "flexible",
+            "period": "",
+            "start": null,
+            "end": null,
+            "endDayOffset": 0
+          },
+          "place": {
+            "name": "西溪湿地",
+            "address": "",
+            "lng": 120.0726,
+            "lat": 30.2726,
+            "provider": "amap",
+            "providerPlaceId": null,
+            "category": "",
+            "sourceUrl": "",
+            "fetchedAt": null,
+            "coordSystem": "GCJ-02"
+          },
+          "buffers": {
+            "before": null,
+            "after": null
+          },
+          "notes": "",
+          "url": ""
+        }
+      },
+      {
+        "id": "route-1",
+        "tripId": "trip-1",
+        "kind": "route",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "fromId": "act-3",
+          "toId": "act-1",
+          "mode": "walking",
+          "minutes": 12,
+          "distance": 900
+        }
+      },
+      {
+        "id": "route-stale",
+        "tripId": "trip-1",
+        "kind": "route",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "fromId": "act-6",
+          "toId": "act-2",
+          "mode": "driving",
+          "minutes": 40,
+          "distance": 15000
+        }
+      },
+      {
+        "id": "preset-food",
+        "tripId": "trip-1",
+        "kind": "markPreset",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "icon": "circle",
+          "color": "coral",
+          "name": "必吃",
+          "order": 1
+        }
+      },
+      {
+        "id": "preset-view",
+        "tripId": "trip-1",
+        "kind": "markPreset",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "icon": "triangle",
+          "color": "blue",
+          "name": "机位",
+          "order": 2
+        }
+      },
+      {
+        "id": "preset-empty",
+        "tripId": "trip-1",
+        "kind": "markPreset",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "icon": "square",
+          "color": "purple",
+          "name": "没人用",
+          "order": 3
+        }
+      },
+      {
+        "id": "fav-1",
+        "tripId": "trip-1",
+        "kind": "favorite",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "name": "知味观",
+          "address": "",
+          "lng": 120.1601,
+          "lat": 30.2575,
+          "provider": "amap",
+          "providerPlaceId": null,
+          "category": "餐饮",
+          "sourceUrl": "",
+          "fetchedAt": null,
+          "coordSystem": "GCJ-02",
+          "mark": {
+            "icon": "circle",
+            "color": "coral"
+          }
+        }
+      },
+      {
+        "id": "fav-2",
+        "tripId": "trip-1",
+        "kind": "favorite",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "name": "宝石山",
+          "address": "",
+          "lng": 120.1468,
+          "lat": 30.2654,
+          "provider": "amap",
+          "providerPlaceId": null,
+          "category": "景点",
+          "sourceUrl": "",
+          "fetchedAt": null,
+          "coordSystem": "GCJ-02",
+          "mark": {
+            "icon": "triangle",
+            "color": "blue"
+          }
+        }
+      },
+      {
+        "id": "fav-3",
+        "tripId": "trip-1",
+        "kind": "favorite",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "name": "西泠印社",
+          "address": "",
+          "lng": 120.1405,
+          "lat": 30.2575,
+          "provider": "amap",
+          "providerPlaceId": null,
+          "category": "景点",
+          "sourceUrl": "",
+          "fetchedAt": null,
+          "coordSystem": "GCJ-02"
+        }
+      },
+      {
+        "id": "fav-4",
+        "tripId": "trip-1",
+        "kind": "favorite",
+        "state": "deleted",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "name": "已删除收藏",
+          "address": "",
+          "lng": 120.15,
+          "lat": 30.25,
+          "provider": "amap",
+          "providerPlaceId": null,
+          "category": "",
+          "sourceUrl": "",
+          "fetchedAt": null,
+          "coordSystem": "GCJ-02",
+          "mark": {
+            "icon": "circle",
+            "color": "coral"
+          }
+        }
+      },
+      {
+        "id": "exp-1",
+        "tripId": "trip-1",
+        "kind": "expense",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "",
+          "activityId": "act-3",
+          "date": null,
+          "payment": {
+            "status": "paid",
+            "currency": "CNY",
+            "amountMinor": 38000
+          }
+        }
+      },
+      {
+        "id": "exp-2",
+        "tripId": "trip-1",
+        "kind": "expense",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "游船票",
+          "activityId": null,
+          "date": "2026-12-02",
+          "payment": {
+            "status": "estimated",
+            "currency": "CNY",
+            "amountMinor": 10000
+          }
+        }
+      },
+      {
+        "id": "exp-3",
+        "tripId": "trip-1",
+        "kind": "expense",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "外币咖啡",
+          "activityId": null,
+          "date": "2026-12-01",
+          "payment": {
+            "status": "paid",
+            "currency": "USD",
+            "amountMinor": 1500
+          }
+        }
+      },
+      {
+        "id": "exp-4",
+        "tripId": "trip-1",
+        "kind": "expense",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "",
+          "activityId": "act-7",
+          "date": null,
+          "payment": {
+            "status": "paid",
+            "currency": "JPY",
+            "amountMinor": 1200
+          }
+        }
+      },
+      {
+        "id": "exp-5",
+        "tripId": "trip-1",
+        "kind": "expense",
+        "state": "deleted",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "已删除费用",
+          "activityId": null,
+          "date": "2026-12-01",
+          "payment": {
+            "status": "paid",
+            "currency": "CNY",
+            "amountMinor": 999
+          }
+        }
+      },
+      {
+        "id": "default-board",
+        "tripId": "trip-1",
+        "kind": "board",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "主白板",
+          "order": 0,
+          "background": "dots"
+        }
+      },
+      {
+        "id": "board-old",
+        "tripId": "trip-1",
+        "kind": "board",
+        "state": "deleted",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "已删除的白板",
+          "order": 1,
+          "background": "grid"
+        }
+      }
+    ],
+    "cursor": 42,
+    "epoch": 7
+  },
+  "cases": [
+    {
+      "module": "domain",
+      "fn": "orderedActivities",
+      "args": [
+        "$snapshot",
+        "day-1"
+      ],
+      "result": [
+        {
+          "id": "act-2",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "平湖秋月",
+            "dayId": "day-1",
+            "order": 1,
+            "time": {
+              "mode": "flexible",
+              "period": "上午",
+              "start": null,
+              "end": null,
+              "endDayOffset": 0
+            },
+            "place": {
+              "name": "平湖秋月",
+              "address": "",
+              "lng": 120.1452,
+              "lat": 30.2551,
+              "provider": "amap",
+              "providerPlaceId": null,
+              "category": "",
+              "sourceUrl": "",
+              "fetchedAt": null,
+              "coordSystem": "GCJ-02"
+            },
+            "buffers": {
+              "before": null,
+              "after": null
+            },
+            "notes": "",
+            "url": ""
+          }
+        },
+        {
+          "id": "act-3",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "楼外楼午餐",
+            "dayId": "day-1",
+            "order": 2,
+            "time": {
+              "mode": "precise",
+              "period": "",
+              "start": "08:30",
+              "end": "09:00",
+              "endDayOffset": 0
+            },
+            "place": {
+              "name": "楼外楼",
+              "address": "",
+              "lng": 120.1446,
+              "lat": 30.2532,
+              "provider": "amap",
+              "providerPlaceId": null,
+              "category": "",
+              "sourceUrl": "",
+              "fetchedAt": null,
+              "coordSystem": "GCJ-02"
+            },
+            "buffers": {
+              "before": null,
+              "after": 10
+            },
+            "notes": "",
+            "url": "https://example.test/menu"
+          }
+        },
+        {
+          "id": "act-1",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "断桥残雪",
+            "dayId": "day-1",
+            "order": 3,
+            "time": {
+              "mode": "precise",
+              "period": "",
+              "start": "09:00",
+              "end": "10:30",
+              "endDayOffset": 0
+            },
+            "place": {
+              "name": "断桥残雪",
+              "address": "",
+              "lng": 120.1517,
+              "lat": 30.2615,
+              "provider": "amap",
+              "providerPlaceId": null,
+              "category": "",
+              "sourceUrl": "",
+              "fetchedAt": null,
+              "coordSystem": "GCJ-02"
+            },
+            "buffers": {
+              "before": 15,
+              "after": null
+            },
+            "notes": "早上去人少",
+            "url": ""
+          }
+        },
+        {
+          "id": "act-4",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "雷峰塔夜景",
+            "dayId": "day-1",
+            "order": 4,
+            "time": {
+              "mode": "precise",
+              "period": "",
+              "start": "19:00",
+              "end": "21:00",
+              "endDayOffset": 0
+            },
+            "place": null,
+            "buffers": {
+              "before": null,
+              "after": null
+            },
+            "notes": "",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "module": "domain",
+      "fn": "orderedActivities",
+      "args": [
+        "$snapshot",
+        "day-2"
+      ],
+      "result": [
+        {
+          "id": "act-6",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "灵隐寺",
+            "dayId": "day-2",
+            "order": 1,
+            "time": {
+              "mode": "precise",
+              "period": "",
+              "start": "23:00",
+              "end": "01:00",
+              "endDayOffset": 0
+            },
+            "place": {
+              "name": "灵隐寺",
+              "address": "",
+              "lng": 120.1012,
+              "lat": 30.2408,
+              "provider": "amap",
+              "providerPlaceId": null,
+              "category": "",
+              "sourceUrl": "",
+              "fetchedAt": null,
+              "coordSystem": "GCJ-02"
+            },
+            "buffers": {
+              "before": null,
+              "after": null
+            },
+            "notes": "",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "module": "domain",
+      "fn": "orderedActivities",
+      "args": [
+        "$snapshot",
+        "day-3"
+      ],
+      "result": [
+        {
+          "id": "act-7",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "被删除那天的安排",
+            "dayId": "day-3",
+            "order": 1,
+            "time": {
+              "mode": "flexible",
+              "period": "",
+              "start": null,
+              "end": null,
+              "endDayOffset": 0
+            },
+            "place": {
+              "name": "西溪湿地",
+              "address": "",
+              "lng": 120.0726,
+              "lat": 30.2726,
+              "provider": "amap",
+              "providerPlaceId": null,
+              "category": "",
+              "sourceUrl": "",
+              "fetchedAt": null,
+              "coordSystem": "GCJ-02"
+            },
+            "buffers": {
+              "before": null,
+              "after": null
+            },
+            "notes": "",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "module": "domain",
+      "fn": "orderedActivities",
+      "args": [
+        "$snapshot",
+        "day-x"
+      ],
+      "result": []
+    },
+    {
+      "module": "domain",
+      "fn": "orderedActivities",
+      "args": [
+        "$snapshot",
+        "missing"
+      ],
+      "result": []
+    },
+    {
+      "module": "domain",
+      "fn": "visibleDays",
+      "args": [
+        "$snapshot"
+      ],
+      "result": [
+        {
+          "id": "day-1",
+          "tripId": "trip-1",
+          "kind": "day",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "ordinal": 1,
+            "date": "2026-12-01"
+          }
+        },
+        {
+          "id": "day-2",
+          "tripId": "trip-1",
+          "kind": "day",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "ordinal": 2,
+            "date": "2026-12-02"
+          }
+        }
+      ]
+    },
+    {
+      "module": "domain",
+      "fn": "outsideDays",
+      "args": [
+        "$snapshot"
+      ],
+      "result": [
+        {
+          "id": "day-x",
+          "tripId": "trip-1",
+          "kind": "day",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "ordinal": 4,
+            "date": null
+          }
+        }
+      ]
+    },
+    {
+      "module": "domain",
+      "fn": "dayLabel",
+      "args": [
+        {
+          "id": "day-1",
+          "tripId": "trip-1",
+          "kind": "day",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "ordinal": 1,
+            "date": "2026-12-01"
+          }
+        },
+        {
+          "id": "trip-1",
+          "name": "杭州三日",
+          "destination": "杭州",
+          "startDate": "2026-12-01",
+          "endDate": "2026-12-03",
+          "dayCount": 3,
+          "timezone": "Asia/Shanghai",
+          "currency": "CNY",
+          "teamMode": "equal",
+          "ownerId": "u1",
+          "state": "active"
+        }
+      ],
+      "result": "第1天"
+    },
+    {
+      "module": "domain",
+      "fn": "dayLabel",
+      "args": [
+        {
+          "id": "day-2",
+          "tripId": "trip-1",
+          "kind": "day",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "ordinal": 2,
+            "date": "2026-12-02"
+          }
+        },
+        {
+          "id": "trip-1",
+          "name": "杭州三日",
+          "destination": "杭州",
+          "startDate": "2026-12-01",
+          "endDate": "2026-12-03",
+          "dayCount": 3,
+          "timezone": "Asia/Shanghai",
+          "currency": "CNY",
+          "teamMode": "equal",
+          "ownerId": "u1",
+          "state": "active"
+        }
+      ],
+      "result": "第2天"
+    },
+    {
+      "module": "domain",
+      "fn": "dayLabel",
+      "args": [
+        {
+          "id": "day-3",
+          "tripId": "trip-1",
+          "kind": "day",
+          "state": "deleted",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "ordinal": 3,
+            "date": "2026-12-03"
+          }
+        },
+        {
+          "id": "trip-1",
+          "name": "杭州三日",
+          "destination": "杭州",
+          "startDate": "2026-12-01",
+          "endDate": "2026-12-03",
+          "dayCount": 3,
+          "timezone": "Asia/Shanghai",
+          "currency": "CNY",
+          "teamMode": "equal",
+          "ownerId": "u1",
+          "state": "active"
+        }
+      ],
+      "result": "第3天"
+    },
+    {
+      "module": "domain",
+      "fn": "dayLabel",
+      "args": [
+        {
+          "id": "day-x",
+          "tripId": "trip-1",
+          "kind": "day",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "ordinal": 4,
+            "date": null
+          }
+        },
+        {
+          "id": "trip-1",
+          "name": "杭州三日",
+          "destination": "杭州",
+          "startDate": "2026-12-01",
+          "endDate": "2026-12-03",
+          "dayCount": 3,
+          "timezone": "Asia/Shanghai",
+          "currency": "CNY",
+          "teamMode": "equal",
+          "ownerId": "u1",
+          "state": "active"
+        }
+      ],
+      "result": "第4天"
+    },
+    {
+      "module": "domain",
+      "fn": "timeLabel",
+      "args": [
+        {
+          "time": {
+            "mode": "precise",
+            "period": "",
+            "start": "09:00",
+            "end": "10:30",
+            "endDayOffset": 0
+          }
+        }
+      ],
+      "result": "09:00–10:30"
+    },
+    {
+      "module": "domain",
+      "fn": "timeLabel",
+      "args": [
+        {
+          "time": {
+            "mode": "precise",
+            "period": "",
+            "start": "23:00",
+            "end": "01:00",
+            "endDayOffset": 0
+          }
+        }
+      ],
+      "result": "23:00–01:00"
+    },
+    {
+      "module": "domain",
+      "fn": "timeLabel",
+      "args": [
+        {
+          "time": {
+            "mode": "precise",
+            "period": "",
+            "start": "22:00",
+            "end": "02:00",
+            "endDayOffset": 1
+          }
+        }
+      ],
+      "result": "22:00–次日02:00"
+    },
+    {
+      "module": "domain",
+      "fn": "timeLabel",
+      "args": [
+        {
+          "time": {
+            "mode": "precise",
+            "period": "",
+            "start": "07:15",
+            "end": null,
+            "endDayOffset": 0
+          }
+        }
+      ],
+      "result": "07:15"
+    },
+    {
+      "module": "domain",
+      "fn": "timeLabel",
+      "args": [
+        {
+          "time": {
+            "mode": "flexible",
+            "period": "下午",
+            "start": null,
+            "end": null,
+            "endDayOffset": 0
+          }
+        }
+      ],
+      "result": "下午"
+    },
+    {
+      "module": "domain",
+      "fn": "timeLabel",
+      "args": [
+        {
+          "time": {
+            "mode": "flexible",
+            "period": "",
+            "start": null,
+            "end": null,
+            "endDayOffset": 0
+          }
+        }
+      ],
+      "result": ""
+    },
+    {
+      "module": "domain",
+      "fn": "timeLabel",
+      "args": [
+        {}
+      ],
+      "result": ""
+    },
+    {
+      "module": "domain",
+      "fn": "minutesOf",
+      "args": [
+        "00:00"
+      ],
+      "result": 0
+    },
+    {
+      "module": "domain",
+      "fn": "minutesOf",
+      "args": [
+        "09:05"
+      ],
+      "result": 545
+    },
+    {
+      "module": "domain",
+      "fn": "minutesOf",
+      "args": [
+        "23:59"
+      ],
+      "result": 1439
+    },
+    {
+      "module": "domain",
+      "fn": "minutesOf",
+      "args": [
+        ""
+      ],
+      "result": null
+    },
+    {
+      "module": "domain",
+      "fn": "minutesOf",
+      "args": [
+        null
+      ],
+      "result": null
+    },
+    {
+      "module": "domain",
+      "fn": "minutesOf",
+      "args": [
+        "7:3"
+      ],
+      "result": null
+    },
+    {
+      "module": "domain",
+      "fn": "formatMinutes",
+      "args": [
+        0
+      ],
+      "result": "00:00"
+    },
+    {
+      "module": "domain",
+      "fn": "formatMinutes",
+      "args": [
+        5
+      ],
+      "result": "00:05"
+    },
+    {
+      "module": "domain",
+      "fn": "formatMinutes",
+      "args": [
+        59
+      ],
+      "result": "00:59"
+    },
+    {
+      "module": "domain",
+      "fn": "formatMinutes",
+      "args": [
+        60
+      ],
+      "result": "01:00"
+    },
+    {
+      "module": "domain",
+      "fn": "formatMinutes",
+      "args": [
+        61
+      ],
+      "result": "01:01"
+    },
+    {
+      "module": "domain",
+      "fn": "formatMinutes",
+      "args": [
+        125
+      ],
+      "result": "02:05"
+    },
+    {
+      "module": "domain",
+      "fn": "formatMinutes",
+      "args": [
+        1440
+      ],
+      "result": "00:00"
+    },
+    {
+      "module": "domain",
+      "fn": "formatMinutes",
+      "args": [
+        null
+      ],
+      "result": "00:00"
+    },
+    {
+      "module": "domain",
+      "fn": "currencyFactor",
+      "args": [
+        "CNY"
+      ],
+      "result": 100
+    },
+    {
+      "module": "domain",
+      "fn": "currencyFactor",
+      "args": [
+        "USD"
+      ],
+      "result": 100
+    },
+    {
+      "module": "domain",
+      "fn": "currencyFactor",
+      "args": [
+        "JPY"
+      ],
+      "result": 1
+    },
+    {
+      "module": "domain",
+      "fn": "currencyFactor",
+      "args": [
+        "KRW"
+      ],
+      "result": 1
+    },
+    {
+      "module": "domain",
+      "fn": "currencyFactor",
+      "args": [
+        "EUR"
+      ],
+      "result": 100
+    },
+    {
+      "module": "domain",
+      "fn": "currencyFactor",
+      "args": [
+        "XXX"
+      ],
+      "result": 100
+    },
+    {
+      "module": "domain",
+      "fn": "money",
+      "args": [
+        38000,
+        "CNY"
+      ],
+      "result": "¥380.00"
+    },
+    {
+      "module": "domain",
+      "fn": "money",
+      "args": [
+        1500,
+        "USD"
+      ],
+      "result": "US$15.00"
+    },
+    {
+      "module": "domain",
+      "fn": "money",
+      "args": [
+        1200,
+        "JPY"
+      ],
+      "result": "JP¥1,200"
+    },
+    {
+      "module": "domain",
+      "fn": "money",
+      "args": [
+        0,
+        "CNY"
+      ],
+      "result": "¥0.00"
+    },
+    {
+      "module": "domain",
+      "fn": "money",
+      "args": [
+        -250,
+        "CNY"
+      ],
+      "result": "-¥2.50"
+    },
+    {
+      "module": "domain",
+      "fn": "dateAdd",
+      "args": [
+        "2026-12-01",
+        1
+      ],
+      "result": "2026-12-02"
+    },
+    {
+      "module": "domain",
+      "fn": "dateAdd",
+      "args": [
+        "2026-12-31",
+        1
+      ],
+      "result": "2027-01-01"
+    },
+    {
+      "module": "domain",
+      "fn": "dateAdd",
+      "args": [
+        "2026-03-01",
+        -1
+      ],
+      "result": "2026-02-28"
+    },
+    {
+      "module": "domain",
+      "fn": "dateAdd",
+      "args": [
+        "2028-02-28",
+        2
+      ],
+      "result": "2028-03-01"
+    },
+    {
+      "module": "domain",
+      "fn": "dateRangeDays",
+      "args": [
+        "2026-12-01",
+        "2026-12-03"
+      ],
+      "result": 3
+    },
+    {
+      "module": "domain",
+      "fn": "dateRangeDays",
+      "args": [
+        "2026-12-03",
+        "2026-12-01"
+      ],
+      "error": {
+        "message": "结束日期不能早于出发日期",
+        "code": null
+      }
+    },
+    {
+      "module": "domain",
+      "fn": "dateRangeDays",
+      "args": [
+        "bad",
+        "2026-12-01"
+      ],
+      "error": {
+        "message": "请选择出发日期和结束日期",
+        "code": null
+      }
+    },
+    {
+      "module": "domain",
+      "fn": "planDayId",
+      "args": [
+        "trip-1",
+        {
+          "date": "2026-12-01",
+          "ordinal": 1
+        }
+      ],
+      "result": "plan-day-trip-1-date-2026-12-01"
+    },
+    {
+      "module": "domain",
+      "fn": "planDayId",
+      "args": [
+        "trip-1",
+        {
+          "ordinal": 4
+        }
+      ],
+      "result": "plan-day-trip-1-ordinal-4"
+    },
+    {
+      "module": "domain",
+      "fn": "endpointSignature",
+      "args": [
+        {
+          "id": "act-3",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "楼外楼午餐",
+            "dayId": "day-1",
+            "order": 2,
+            "time": {
+              "mode": "precise",
+              "period": "",
+              "start": "08:30",
+              "end": "09:00",
+              "endDayOffset": 0
+            },
+            "place": {
+              "name": "楼外楼",
+              "address": "",
+              "lng": 120.1446,
+              "lat": 30.2532,
+              "provider": "amap",
+              "providerPlaceId": null,
+              "category": "",
+              "sourceUrl": "",
+              "fetchedAt": null,
+              "coordSystem": "GCJ-02"
+            },
+            "buffers": {
+              "before": null,
+              "after": 10
+            },
+            "notes": "",
+            "url": "https://example.test/menu"
+          }
+        },
+        {
+          "id": "act-1",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "断桥残雪",
+            "dayId": "day-1",
+            "order": 3,
+            "time": {
+              "mode": "precise",
+              "period": "",
+              "start": "09:00",
+              "end": "10:30",
+              "endDayOffset": 0
+            },
+            "place": {
+              "name": "断桥残雪",
+              "address": "",
+              "lng": 120.1517,
+              "lat": 30.2615,
+              "provider": "amap",
+              "providerPlaceId": null,
+              "category": "",
+              "sourceUrl": "",
+              "fetchedAt": null,
+              "coordSystem": "GCJ-02"
+            },
+            "buffers": {
+              "before": 15,
+              "after": null
+            },
+            "notes": "早上去人少",
+            "url": ""
+          }
+        }
+      ],
+      "result": "[\"act-3\",[\"\",120.1446,30.2532,\"\",\"楼外楼\"],\"act-1\",[\"\",120.1517,30.2615,\"\",\"断桥残雪\"]]"
+    },
+    {
+      "module": "domain",
+      "fn": "routeSignature",
+      "args": [
+        {
+          "id": "act-3",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "楼外楼午餐",
+            "dayId": "day-1",
+            "order": 2,
+            "time": {
+              "mode": "precise",
+              "period": "",
+              "start": "08:30",
+              "end": "09:00",
+              "endDayOffset": 0
+            },
+            "place": {
+              "name": "楼外楼",
+              "address": "",
+              "lng": 120.1446,
+              "lat": 30.2532,
+              "provider": "amap",
+              "providerPlaceId": null,
+              "category": "",
+              "sourceUrl": "",
+              "fetchedAt": null,
+              "coordSystem": "GCJ-02"
+            },
+            "buffers": {
+              "before": null,
+              "after": 10
+            },
+            "notes": "",
+            "url": "https://example.test/menu"
+          }
+        },
+        {
+          "id": "act-1",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "断桥残雪",
+            "dayId": "day-1",
+            "order": 3,
+            "time": {
+              "mode": "precise",
+              "period": "",
+              "start": "09:00",
+              "end": "10:30",
+              "endDayOffset": 0
+            },
+            "place": {
+              "name": "断桥残雪",
+              "address": "",
+              "lng": 120.1517,
+              "lat": 30.2615,
+              "provider": "amap",
+              "providerPlaceId": null,
+              "category": "",
+              "sourceUrl": "",
+              "fetchedAt": null,
+              "coordSystem": "GCJ-02"
+            },
+            "buffers": {
+              "before": 15,
+              "after": null
+            },
+            "notes": "早上去人少",
+            "url": ""
+          }
+        },
+        "walking"
+      ],
+      "result": "[\"[\\\"act-3\\\",[\\\"\\\",120.1446,30.2532,\\\"\\\",\\\"楼外楼\\\"],\\\"act-1\\\",[\\\"\\\",120.1517,30.2615,\\\"\\\",\\\"断桥残雪\\\"]]\",\"walking\"]"
+    },
+    {
+      "module": "domain",
+      "fn": "travelAdvice",
+      "args": [
+        {
+          "id": "act-3",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "楼外楼午餐",
+            "dayId": "day-1",
+            "order": 2,
+            "time": {
+              "mode": "precise",
+              "period": "",
+              "start": "08:30",
+              "end": "09:00",
+              "endDayOffset": 0
+            },
+            "place": {
+              "name": "楼外楼",
+              "address": "",
+              "lng": 120.1446,
+              "lat": 30.2532,
+              "provider": "amap",
+              "providerPlaceId": null,
+              "category": "",
+              "sourceUrl": "",
+              "fetchedAt": null,
+              "coordSystem": "GCJ-02"
+            },
+            "buffers": {
+              "before": null,
+              "after": 10
+            },
+            "notes": "",
+            "url": "https://example.test/menu"
+          }
+        },
+        {
+          "id": "act-1",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "断桥残雪",
+            "dayId": "day-1",
+            "order": 3,
+            "time": {
+              "mode": "precise",
+              "period": "",
+              "start": "09:00",
+              "end": "10:30",
+              "endDayOffset": 0
+            },
+            "place": {
+              "name": "断桥残雪",
+              "address": "",
+              "lng": 120.1517,
+              "lat": 30.2615,
+              "provider": "amap",
+              "providerPlaceId": null,
+              "category": "",
+              "sourceUrl": "",
+              "fetchedAt": null,
+              "coordSystem": "GCJ-02"
+            },
+            "buffers": {
+              "before": 15,
+              "after": null
+            },
+            "notes": "早上去人少",
+            "url": ""
+          }
+        },
+        {
+          "id": "route-1",
+          "tripId": "trip-1",
+          "kind": "route",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "fromId": "act-3",
+            "toId": "act-1",
+            "mode": "walking",
+            "minutes": 12,
+            "distance": 900
+          }
+        }
+      ],
+      "result": {
+        "depart": "08:33",
+        "arrive": "08:45",
+        "lateMinutes": 37,
+        "overlapMinutes": 0
+      }
+    },
+    {
+      "module": "domain",
+      "fn": "travelAdvice",
+      "args": [
+        {
+          "id": "act-2",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "平湖秋月",
+            "dayId": "day-1",
+            "order": 1,
+            "time": {
+              "mode": "flexible",
+              "period": "上午",
+              "start": null,
+              "end": null,
+              "endDayOffset": 0
+            },
+            "place": {
+              "name": "平湖秋月",
+              "address": "",
+              "lng": 120.1452,
+              "lat": 30.2551,
+              "provider": "amap",
+              "providerPlaceId": null,
+              "category": "",
+              "sourceUrl": "",
+              "fetchedAt": null,
+              "coordSystem": "GCJ-02"
+            },
+            "buffers": {
+              "before": null,
+              "after": null
+            },
+            "notes": "",
+            "url": ""
+          }
+        },
+        {
+          "id": "act-1",
+          "tripId": "trip-1",
+          "kind": "activity",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "断桥残雪",
+            "dayId": "day-1",
+            "order": 3,
+            "time": {
+              "mode": "precise",
+              "period": "",
+              "start": "09:00",
+              "end": "10:30",
+              "endDayOffset": 0
+            },
+            "place": {
+              "name": "断桥残雪",
+              "address": "",
+              "lng": 120.1517,
+              "lat": 30.2615,
+              "provider": "amap",
+              "providerPlaceId": null,
+              "category": "",
+              "sourceUrl": "",
+              "fetchedAt": null,
+              "coordSystem": "GCJ-02"
+            },
+            "buffers": {
+              "before": 15,
+              "after": null
+            },
+            "notes": "早上去人少",
+            "url": ""
+          }
+        },
+        null
+      ],
+      "result": {
+        "depart": null,
+        "arrive": "08:45",
+        "lateMinutes": null,
+        "overlapMinutes": null
+      }
+    },
+    {
+      "module": "domain",
+      "fn": "activityOrderPlan",
+      "args": [
+        "$snapshot",
+        {
+          "dayId": "day-1",
+          "time": {
+            "mode": "precise",
+            "period": "",
+            "start": "12:00",
+            "end": null,
+            "endDayOffset": 0
+          }
+        },
+        "new-act"
+      ],
+      "result": {
+        "order": 3.5,
+        "updates": []
+      }
+    },
+    {
+      "module": "domain",
+      "fn": "activityOrderPlan",
+      "args": [
+        "$snapshot",
+        {
+          "dayId": "day-1",
+          "time": {
+            "mode": "flexible",
+            "period": "晚上",
+            "start": null,
+            "end": null,
+            "endDayOffset": 0
+          }
+        },
+        "act-2"
+      ],
+      "result": {
+        "order": 3.5,
+        "updates": []
+      }
+    },
+    {
+      "module": "domain",
+      "fn": "activityOrderPlan",
+      "args": [
+        "$snapshot",
+        {
+          "dayId": "day-2",
+          "time": {
+            "mode": "flexible",
+            "period": "",
+            "start": null,
+            "end": null,
+            "endDayOffset": 0
+          }
+        },
+        "act-1"
+      ],
+      "result": {
+        "order": 1025,
+        "updates": []
+      }
+    },
+    {
+      "module": "expenses",
+      "fn": "linkedExpenseActivity",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-1",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "",
+            "activityId": "act-3",
+            "date": null,
+            "payment": {
+              "status": "paid",
+              "currency": "CNY",
+              "amountMinor": 38000
+            }
+          }
+        }
+      ],
+      "result": {
+        "id": "act-3",
+        "tripId": "trip-1",
+        "kind": "activity",
+        "state": "active",
+        "generation": 1,
+        "clocks": {},
+        "payload": {
+          "title": "楼外楼午餐",
+          "dayId": "day-1",
+          "order": 2,
+          "time": {
+            "mode": "precise",
+            "period": "",
+            "start": "08:30",
+            "end": "09:00",
+            "endDayOffset": 0
+          },
+          "place": {
+            "name": "楼外楼",
+            "address": "",
+            "lng": 120.1446,
+            "lat": 30.2532,
+            "provider": "amap",
+            "providerPlaceId": null,
+            "category": "",
+            "sourceUrl": "",
+            "fetchedAt": null,
+            "coordSystem": "GCJ-02"
+          },
+          "buffers": {
+            "before": null,
+            "after": 10
+          },
+          "notes": "",
+          "url": "https://example.test/menu"
+        }
+      }
+    },
+    {
+      "module": "expenses",
+      "fn": "expenseDate",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-1",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "",
+            "activityId": "act-3",
+            "date": null,
+            "payment": {
+              "status": "paid",
+              "currency": "CNY",
+              "amountMinor": 38000
+            }
+          }
+        }
+      ],
+      "result": "2026-12-01"
+    },
+    {
+      "module": "expenses",
+      "fn": "expenseTitle",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-1",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "",
+            "activityId": "act-3",
+            "date": null,
+            "payment": {
+              "status": "paid",
+              "currency": "CNY",
+              "amountMinor": 38000
+            }
+          }
+        }
+      ],
+      "result": "楼外楼午餐"
+    },
+    {
+      "module": "expenses",
+      "fn": "linkedExpenseActivity",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-2",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "游船票",
+            "activityId": null,
+            "date": "2026-12-02",
+            "payment": {
+              "status": "estimated",
+              "currency": "CNY",
+              "amountMinor": 10000
+            }
+          }
+        }
+      ],
+      "result": null
+    },
+    {
+      "module": "expenses",
+      "fn": "expenseDate",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-2",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "游船票",
+            "activityId": null,
+            "date": "2026-12-02",
+            "payment": {
+              "status": "estimated",
+              "currency": "CNY",
+              "amountMinor": 10000
+            }
+          }
+        }
+      ],
+      "result": "2026-12-02"
+    },
+    {
+      "module": "expenses",
+      "fn": "expenseTitle",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-2",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "游船票",
+            "activityId": null,
+            "date": "2026-12-02",
+            "payment": {
+              "status": "estimated",
+              "currency": "CNY",
+              "amountMinor": 10000
+            }
+          }
+        }
+      ],
+      "result": "游船票"
+    },
+    {
+      "module": "expenses",
+      "fn": "linkedExpenseActivity",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-3",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "外币咖啡",
+            "activityId": null,
+            "date": "2026-12-01",
+            "payment": {
+              "status": "paid",
+              "currency": "USD",
+              "amountMinor": 1500
+            }
+          }
+        }
+      ],
+      "result": null
+    },
+    {
+      "module": "expenses",
+      "fn": "expenseDate",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-3",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "外币咖啡",
+            "activityId": null,
+            "date": "2026-12-01",
+            "payment": {
+              "status": "paid",
+              "currency": "USD",
+              "amountMinor": 1500
+            }
+          }
+        }
+      ],
+      "result": "2026-12-01"
+    },
+    {
+      "module": "expenses",
+      "fn": "expenseTitle",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-3",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "外币咖啡",
+            "activityId": null,
+            "date": "2026-12-01",
+            "payment": {
+              "status": "paid",
+              "currency": "USD",
+              "amountMinor": 1500
+            }
+          }
+        }
+      ],
+      "result": "外币咖啡"
+    },
+    {
+      "module": "expenses",
+      "fn": "linkedExpenseActivity",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-4",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "",
+            "activityId": "act-7",
+            "date": null,
+            "payment": {
+              "status": "paid",
+              "currency": "JPY",
+              "amountMinor": 1200
+            }
+          }
+        }
+      ],
+      "result": null
+    },
+    {
+      "module": "expenses",
+      "fn": "expenseDate",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-4",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "",
+            "activityId": "act-7",
+            "date": null,
+            "payment": {
+              "status": "paid",
+              "currency": "JPY",
+              "amountMinor": 1200
+            }
+          }
+        }
+      ],
+      "result": null
+    },
+    {
+      "module": "expenses",
+      "fn": "expenseTitle",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-4",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "active",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "",
+            "activityId": "act-7",
+            "date": null,
+            "payment": {
+              "status": "paid",
+              "currency": "JPY",
+              "amountMinor": 1200
+            }
+          }
+        }
+      ],
+      "result": "已支付"
+    },
+    {
+      "module": "expenses",
+      "fn": "linkedExpenseActivity",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-5",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "deleted",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "已删除费用",
+            "activityId": null,
+            "date": "2026-12-01",
+            "payment": {
+              "status": "paid",
+              "currency": "CNY",
+              "amountMinor": 999
+            }
+          }
+        }
+      ],
+      "result": null
+    },
+    {
+      "module": "expenses",
+      "fn": "expenseDate",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-5",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "deleted",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "已删除费用",
+            "activityId": null,
+            "date": "2026-12-01",
+            "payment": {
+              "status": "paid",
+              "currency": "CNY",
+              "amountMinor": 999
+            }
+          }
+        }
+      ],
+      "result": "2026-12-01"
+    },
+    {
+      "module": "expenses",
+      "fn": "expenseTitle",
+      "args": [
+        "$snapshot",
+        {
+          "id": "exp-5",
+          "tripId": "trip-1",
+          "kind": "expense",
+          "state": "deleted",
+          "generation": 1,
+          "clocks": {},
+          "payload": {
+            "title": "已删除费用",
+            "activityId": null,
+            "date": "2026-12-01",
+            "payment": {
+              "status": "paid",
+              "currency": "CNY",
+              "amountMinor": 999
+            }
+          }
+        }
+      ],
+      "result": "已删除费用"
+    },
+    {
+      "module": "expenses",
+      "fn": "expenseDateLabel",
+      "args": [
+        "$snapshot",
+        "2026-12-01"
+      ],
+      "result": "第 1 天 · 12/01周二"
+    },
+    {
+      "module": "expenses",
+      "fn": "expenseDateLabel",
+      "args": [
+        "$snapshot",
+        "2026-12-05"
+      ],
+      "result": "行后支付 · 12/05周六"
+    },
+    {
+      "module": "expenses",
+      "fn": "expenseDateLabel",
+      "args": [
+        "$snapshot",
+        null
+      ],
+      "result": "未记录日期"
+    }
+  ]
+}
