@@ -35,7 +35,13 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
             launch {
                 ensureSession()
                 sync()
-                if (tripId == null) refreshTrips() else refreshCurrent()
+                if (tripId == null) refreshTrips()
+                else {
+                    refreshCurrent()
+                    if (boardSync.activeTripId == tripId && boardSync.activeBoardId != null) {
+                        runCatching { boardSync.refreshActiveBoard() }
+                    }
+                }
             }
         }
     }
@@ -81,6 +87,29 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
         prefs.getString("deviceId", null)
             ?: UUID.randomUUID().toString().also { prefs.edit().putString("deviceId", it).commit() }
 
+    val boardSync =
+        BoardSyncController(
+            api = api,
+            cache =
+                FileBoardCacheStore {
+                    val uid = user?.s("id")?.ifBlank { null } ?: "anon"
+                    File(
+                        getApplication<Application>().filesDir,
+                        "board-cache-${BuildConfig.BASE_URL.hashCode()}-$uid",
+                    )
+                },
+            enqueueMutation = { kind, objectId, objectType, patch, generation ->
+                mutate(
+                    kind = kind,
+                    objectId = objectId,
+                    objectType = objectType,
+                    patch = patch,
+                    generation = generation,
+                )
+            },
+            currentUserId = { user?.s("id").orEmpty() },
+        )
+
     init {
         launch {
             try {
@@ -96,7 +125,13 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
                     this@JourneyStore.launch {
                         ensureSession()
                         sync()
-                        if (tripId == null) refreshTrips() else refreshCurrent()
+                        if (tripId == null) refreshTrips()
+                        else {
+                            refreshCurrent()
+                            if (boardSync.activeTripId == tripId && boardSync.activeBoardId != null) {
+                                runCatching { boardSync.refreshActiveBoard() }
+                            }
+                        }
                     }
             }
         }
@@ -150,6 +185,7 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
         pending = account.a("queue").rows()
         tripId = null
         snapshot = null
+        boardSync.resetActiveBoard()
         prefs.edit().putString("lastUser", user!!.s("id")).commit()
     }
 
@@ -229,6 +265,7 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
         pending = emptyList()
         tripId = null
         snapshot = null
+        boardSync.resetActiveBoard()
         lease = null
         api.csrf = ""
         cookies.clear()
@@ -254,6 +291,7 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
                 else -> "行程"
             }
         selectedDay = context.s("dayId").ifBlank { null }
+        boardSync.resetActiveBoard()
         snapshot = account.o("snapshots").optJSONObject(id)?.let { overlay(it) }
         refreshCurrent()
         api.request("/api/navigation", "PUT", obj("lastTripId" to id))
@@ -262,6 +300,7 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
     fun home() {
         launch {
             saveContext()
+            boardSync.resetActiveBoard()
             tripId = null
             snapshot = null
         }
@@ -308,6 +347,85 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
     fun objects(kind: String? = null) =
         snapshot?.a("objects")?.rows()?.filter { kind == null || it.s("kind") == kind }
             ?: emptyList()
+
+    fun boards(): List<JSONObject> = activeBoards(objects())
+
+    fun deletedBoards(): List<JSONObject> = deletedBoards(objects())
+
+    suspend fun openBoard(preferredBoardId: String? = null) {
+        val id = tripId ?: return
+        val targetBoardId = resolveBoardId(snapshot, preferredBoardId)
+        boardSync.openBoard(id, targetBoardId)
+    }
+
+    suspend fun refreshBoard(forceFull: Boolean = false) {
+        if (tripId == null) return
+        boardSync.refreshActiveBoard(forceFull)
+    }
+
+    suspend fun createBoard(
+        title: String? = null,
+        background: String = DEFAULT_BOARD_BACKGROUND,
+    ): String {
+        val list = boards()
+        val id = UUID.randomUUID().toString()
+        val resolvedTitle = title?.trim()?.takeIf { it.isNotEmpty() } ?: "白板 ${list.size + 1}"
+        val resolvedBg = if (background in BOARD_BACKGROUNDS) background else DEFAULT_BOARD_BACKGROUND
+        mutate(
+            kind = "create",
+            objectId = id,
+            objectType = "board",
+            patch =
+                obj(
+                    "title" to resolvedTitle,
+                    "order" to nextBoardOrder(objects()),
+                    "background" to resolvedBg,
+                ),
+        )
+        return id
+    }
+
+    suspend fun patchBoard(boardId: String, patch: JSONObject) {
+        mutate(kind = "patch", objectId = boardId, objectType = "board", patch = patch)
+    }
+
+    suspend fun deleteBoard(boardId: String) {
+        val target = boards().find { it.s("id") == boardId } ?: return
+        mutate(
+            kind = "delete",
+            objectId = boardId,
+            objectType = "board",
+            generation = target.optInt("generation", 0),
+        )
+    }
+
+    suspend fun restoreBoard(boardId: String) {
+        val target = deletedBoards().find { it.s("id") == boardId } ?: return
+        mutate(
+            kind = "restore",
+            objectId = boardId,
+            objectType = "board",
+            generation = target.optInt("generation", 0),
+        )
+    }
+
+    suspend fun onRemoteTripChange(noticeCursor: Long? = null, noticeEpoch: Long? = null) {
+        val id = tripId ?: return
+        val current = snapshot
+        val curEpoch = (current?.opt("epoch") as? Number)?.toLong() ?: 0L
+        val curCursor = (current?.opt("cursor") as? Number)?.toLong() ?: -1L
+        val shouldRefreshSnapshot =
+            noticeEpoch == null ||
+                noticeCursor == null ||
+                noticeEpoch > curEpoch ||
+                (noticeEpoch == curEpoch && noticeCursor > curCursor)
+        if (shouldRefreshSnapshot) {
+            refreshCurrent()
+        }
+        if (boardSync.activeTripId == id && boardSync.activeBoardId != null) {
+            boardSync.refreshActiveBoard()
+        }
+    }
 
     private fun overlay(s: JSONObject): JSONObject =
         projectSnapshot(s, pending, user?.s("id").orEmpty())
@@ -367,12 +485,18 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
                     if (generation != null) put("generation", generation)
                     if (expression != null) put("expression", expression)
                 }
+        val summary =
+            when (objectType) {
+                "board" -> patch?.s("title")?.ifBlank { null } ?: "白板修改"
+                "boardItem" -> "白板贴纸"
+                else -> patch?.s("title")?.ifBlank { null } ?: "旅程修改"
+            }
         val candidate =
             pending +
                 obj(
                     "tripId" to id,
                     "operation" to op,
-                    "summary" to (patch?.s("title")?.ifBlank { null } ?: "旅程修改"),
+                    "summary" to summary,
                 )
         val previous = pending
         val previousAccount = account.copyJson()
@@ -393,6 +517,7 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
     private suspend fun sync() {
         if (user == null) return
         val paused = mutableSetOf<String>()
+        val syncedBoardTrips = mutableSetOf<String>()
         for (q in pending.toList()) {
             val id = q.s("tripId")
             if (id in paused) continue
@@ -408,20 +533,41 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
             }
             try {
                 val op = q.o("operation")
+                val isBoardItemOp =
+                    op.s("objectType") == "boardItem" || boardSync.hasItem(op.s("objectId"))
                 val r = api.request("/api/trips/$id/operations", "POST", op)
-                if (r.o("receipt").s("operationId") != op.s("id") || !r.has("snapshot"))
+                val receipt = r.o("receipt")
+                if (receipt.s("operationId") != op.s("id") || (!isBoardItemOp && !r.has("snapshot")))
                     throw ApiFailure("RECEIPT_UNKNOWN", "修改结果待确认，请重试")
                 pending = pending.filter { it !== q }
-                storeSnapshot(id, r.o("snapshot"))
-                status = "已同步"
+                if (r.has("snapshot")) {
+                    storeSnapshot(id, r.o("snapshot"))
+                } else {
+                    persist()
+                }
+                if (isBoardItemOp) {
+                    syncedBoardTrips.add(id)
+                }
+                status = if (pending.none { it.s("tripId") == id }) "已同步" else "有待上传修改"
             } catch (e: ApiFailure) {
                 if (e.code == "NETWORK" || e.code == "RECEIPT_UNKNOWN" || e.status >= 500) {
                     q.put("unknown", true)
                     status = "修改结果待确认"
                 } else {
+                    val op = q.o("operation")
+                    val isBoardLimit = e.code == "BOARD_FULL"
+                    val failureMessage =
+                        if (isBoardLimit) boardFullMessage(op.s("objectType").ifBlank { null }, e.message)
+                        else e.message
                     q.remove("unknown")
                     q.put("blocked", e.code)
-                    q.put("message", e.message)
+                    q.put("message", failureMessage)
+                    if (isBoardLimit) {
+                        error = failureMessage
+                    }
+                    if (op.s("objectType") == "boardItem") {
+                        boardSync.onOperationRejected(id, op, e.code, failureMessage)
+                    }
                     status = "有修改需要处理"
                     if (e.status == 401) {
                         status = "请重新登录"
@@ -437,6 +583,9 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
         pending = pending.toList()
         tripId?.let { id ->
             account.o("snapshots").optJSONObject(id)?.let { snapshot = overlay(it) }
+            if (id in syncedBoardTrips && boardSync.activeTripId == id && boardSync.activeBoardId != null) {
+                runCatching { boardSync.refreshActiveBoard() }
+            }
         }
     }
 
@@ -575,6 +724,7 @@ class JourneyStore(application: Application) : AndroidViewModel(application) {
         require(pending.none { it.s("tripId") == id }) { "请先处理这段旅程的未上传修改，再退出" }
         api.request("/api/trips/$id/leave", "POST", obj("confirmPurge" to confirm))
         account.o("snapshots").remove(id)
+        boardSync.clearTripCache(id)
         pending = pending.filter { it.s("tripId") != id }
         tripId = null
         snapshot = null

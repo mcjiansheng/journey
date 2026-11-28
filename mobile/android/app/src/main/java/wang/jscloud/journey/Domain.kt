@@ -239,6 +239,7 @@ fun projectSnapshot(snapshot: JSONObject, queue: List<JSONObject>, userId: Strin
         .filter { it.s("tripId") == id }
         .forEach { queued ->
             val op = queued.o("operation")
+            if (op.s("objectType") == "boardItem") return@forEach
             val target =
                 if (op.s("objectId") == id) trip else rows.find { it.s("id") == op.s("objectId") }
             when (op.s("kind")) {
