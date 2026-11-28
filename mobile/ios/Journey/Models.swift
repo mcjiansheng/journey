@@ -253,6 +253,8 @@ enum SnapshotProjection {
     let tid = trip.id
     for op in queue {
       let b = op.body
+      // Board items are not part of the main snapshot (BoardStore shows them).
+      if b["objectType"].string == "boardItem" { continue }
       let oid = b["objectId"].string
       let kind = b["kind"].string
       if kind == "reschedule" {

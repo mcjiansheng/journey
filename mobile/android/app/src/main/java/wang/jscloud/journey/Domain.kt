@@ -239,6 +239,7 @@ fun projectSnapshot(snapshot: JSONObject, queue: List<JSONObject>, userId: Strin
         .filter { it.s("tripId") == id }
         .forEach { queued ->
             val op = queued.o("operation")
+            if (op.s("objectType") == "boardItem") return@forEach
             val target =
                 if (op.s("objectId") == id) trip else rows.find { it.s("id") == op.s("objectId") }
             when (op.s("kind")) {
@@ -338,16 +339,18 @@ fun projectSnapshot(snapshot: JSONObject, queue: List<JSONObject>, userId: Strin
 
 fun normalizeInvite(value: String): String {
     val text = value.trim()
-    if (!text.contains("://")) return text
-    val uri = java.net.URI(text)
+    val uri = runCatching {
+        java.net.URI(text).takeIf { it.isAbsolute && !it.scheme.isNullOrBlank() }
+    }.getOrNull() ?: return text
     val query =
         uri.rawQuery
             .orEmpty()
             .split('&')
             .firstOrNull { it.substringBefore('=') == "invite" }
             ?.substringAfter('=')
-    return if (query != null) java.net.URLDecoder.decode(query, "UTF-8")
-    else uri.path.substringAfterLast('/')
+            ?.let { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrNull() }
+    if (!query.isNullOrEmpty()) return query
+    return uri.path.orEmpty().split('/').filter { it.isNotEmpty() }.lastOrNull().orEmpty()
 }
 
 fun endpointSignature(from: JSONObject, to: JSONObject): String {

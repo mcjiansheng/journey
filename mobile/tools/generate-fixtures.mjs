@@ -19,10 +19,12 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import * as rich from '../../app/src/rich-text.js';
 import * as board from '../../app/src/board.js';
+import * as boardPending from '../../app/src/board-pending.js';
 import * as geo from '../../app/src/board-geometry.js';
 import * as widgets from '../../app/src/board-widgets.js';
 import * as domain from '../../app/src/domain.js';
 import * as expenses from '../../app/src/expenses.js';
+import * as placeInfo from '../../app/src/place-information.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.resolve(here, '..', 'fixtures');
@@ -758,11 +760,445 @@ function itineraryFixture() {
 }
 
 // ---------------------------------------------------------------------------
+// place-information.json (app/src/place-information.js)
+// ---------------------------------------------------------------------------
+function placeInformationFixture() {
+  const { cases, call } = recorder(placeInfo, 'app/src/place-information.js');
+  for (const candidate of [
+    '',
+    '   ',
+    null,
+    [],
+    123,
+    'javascript:alert(1)',
+    'data:image/png;base64,a',
+    '//example.com',
+    '/place/1',
+    'https://user:password@example.com',
+    'https://user@example.com',
+    ' https://example.com/info ',
+    'https://example.com',
+    'HTTP://EXAMPLE.COM:80/Path?a=1#h',
+    'https://example.com:443/a',
+    'http://example.com:8080/a',
+  ])
+    call('safePlaceUrl', candidate);
+
+  for (const poi of [
+    {
+      id: 'B00190BBCZ',
+      type: '风景名胜;风景名胜;国家级景点',
+      tel: '025-83614286',
+      website: [],
+      open_time: '24小时营业',
+      opentime2: '周一至周日 00:00-24:00',
+      photos: [{ title: '夏季', url: 'http://store.is.autonavi.com/showpic/example' }],
+      rating: '4.8',
+    },
+    {
+      id: 'a/b',
+      tel: '400-123-4567;025-12345678',
+      website: 'https://example.com',
+      photos: [{ url: 'javascript:alert(1)' }],
+      scenic: {
+        intro: ' 景区简介 ',
+        opentime: '09:00–17:00',
+        photos: [{ url: 'https://example.com/photo.jpg', title: '景区' }],
+      },
+    },
+    { type: [], photos: [], tel: [], website: [] },
+    {},
+    { tel: '请到现场咨询' },
+    { tel: '+86 25-8361 4286，025-11111111' },
+    { cinema: { openingtime: '10:00–22:00' } },
+    { dining: { opentime: '11:00-21:00', intro: '老字号菜馆' } },
+    { hotel: { intro: '近地铁口' } },
+    { photos: [{ url: 'http://sub.amap.com/p.jpg' }] },
+    { photos: [{ url: 'http://sub.amap.com:80/p.jpg' }] },
+    { photos: [{ url: 'http://amap.com/p.jpg' }] },
+    { photos: [{ url: 'http://example.com/photo.jpg' }] },
+    { photos: [{ url: 'http://autonavi.com.evil.test/photo.jpg' }] },
+    { id: 'id with/space' },
+  ])
+    call('normalizePlaceInformation', poi);
+
+  return {
+    ...header(['app/src/place-information.js']),
+    cases,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// board-sync.json (app/src/board-pending.js)
+// ---------------------------------------------------------------------------
+function boardSyncFixture() {
+  const { cases, call } = recorder(boardPending, 'app/src/board-pending.js');
+
+  call('mergeExpected', {}, {});
+  call('mergeExpected', { frame: { x: 1 } }, { frame: { y: 2 }, z: 3 });
+  call(
+    'mergeExpected',
+    { frame: { x: 1, y: 2 }, state: 'active' },
+    { frame: { x: 10 }, state: 'deleted' },
+  );
+  call('mergeExpected', { content: { type: 'note', text: 'a' } }, { content: { text: 'b' } });
+  call('mergeExpected', { style: { color: 'yellow' } }, { style: { locked: true } });
+  call(
+    'mergeExpected',
+    { points: [[0, 0]] },
+    {
+      points: [
+        [1, 2],
+        [3, 4],
+      ],
+    },
+  );
+  call('mergeExpected', { linkedActivityId: 'a1' }, { linkedActivityId: null });
+  call('mergeExpected', undefined, { state: 'active' });
+
+  const recordReconcile = (serverItems, localItems, pendingObj, now) => {
+    const pendingMap = new Map(Object.entries(pendingObj).map(([k, v]) => [k, structuredClone(v)]));
+    const out = boardPending.reconcilePending(
+      structuredClone(serverItems),
+      structuredClone(localItems),
+      pendingMap,
+      now,
+    );
+    cases.push({
+      fn: 'reconcilePending',
+      args: [json(serverItems), json(localItems), json(pendingObj), now],
+      result: {
+        items: json(out),
+        pending: json(Object.fromEntries(pendingMap)),
+      },
+    });
+  };
+
+  const itemA10 = { id: 'a', state: 'active', frame: { x: 10, y: 0, w: 168, h: 168 } };
+  const itemA200 = { id: 'a', state: 'active', frame: { x: 200, y: 0, w: 168, h: 168 } };
+  // Empty pending -> returns serverItems unchanged
+  recordReconcile([itemA10], [itemA200], {}, 2000);
+  // Stale server copy within PENDING_TTL -> keeps local item, retains pending
+  recordReconcile([itemA10], [itemA200], { a: { expect: { frame: { x: 200 } }, at: 1000 } }, 2000);
+  // Exact boundary (now - at === PENDING_TTL is NOT > PENDING_TTL) -> still keeps local
+  recordReconcile(
+    [itemA10],
+    [itemA200],
+    { a: { expect: { frame: { x: 200 } }, at: 1000 } },
+    1000 + boardPending.PENDING_TTL,
+  );
+  // Exact match -> adopts server copy and clears pending
+  recordReconcile([itemA200], [itemA10], { a: { expect: { frame: { x: 200 } }, at: 1000 } }, 2500);
+  // Within numeric tolerance (< 0.01) -> adopts server copy and clears pending
+  recordReconcile(
+    [{ id: 'a', state: 'active', frame: { x: 200.005, y: 0, w: 168, h: 168 } }],
+    [itemA200],
+    { a: { expect: { frame: { x: 200 } }, at: 1000 } },
+    2500,
+  );
+  // Outside numeric tolerance (>= 0.01) -> keeps local copy and retains pending
+  recordReconcile(
+    [{ id: 'a', state: 'active', frame: { x: 200.02, y: 0, w: 168, h: 168 } }],
+    [itemA200],
+    { a: { expect: { frame: { x: 200 } }, at: 1000 } },
+    2500,
+  );
+  // Expired entry -> adopts server copy and clears pending
+  recordReconcile(
+    [itemA10],
+    [itemA200],
+    { a: { expect: { frame: { x: 200 } }, at: 0 } },
+    boardPending.PENDING_TTL + 1,
+  );
+  // Newly created local item missing from server, within TTL -> appended
+  recordReconcile(
+    [],
+    [{ id: 'b', state: 'active' }],
+    { b: { expect: { state: 'active' }, at: 1000 } },
+    1200,
+  );
+  // Newly created local item missing from server, expired -> dropped & cleared
+  recordReconcile(
+    [],
+    [{ id: 'b', state: 'active' }],
+    { b: { expect: { state: 'active' }, at: 0 } },
+    boardPending.PENDING_TTL + 1,
+  );
+  // Pending entry missing from both server and localItems within TTL -> not appended, pending retained
+  recordReconcile([], [], { ghost: { expect: { state: 'active' }, at: 1000 } }, 1200);
+  // Server item mismatched with pending, missing from localItems -> falls back to server item, pending retained
+  recordReconcile([itemA10], [], { a: { expect: { frame: { x: 200 } }, at: 1000 } }, 1200);
+  // Multi-field nested expect + null/undefined equivalence
+  recordReconcile(
+    [{ id: 'm', state: 'active', frame: { x: 50, y: 60 }, style: { color: 'blue', locked: true } }],
+    [
+      {
+        id: 'm',
+        state: 'active',
+        frame: { x: 0, y: 0 },
+        style: { color: 'yellow' },
+        linkedActivityId: 'act-1',
+      },
+    ],
+    {
+      m: {
+        expect: {
+          frame: { x: 50, y: 60 },
+          style: { color: 'blue', locked: true },
+          linkedActivityId: null,
+        },
+        at: 1000,
+      },
+    },
+    2000,
+  );
+  // Delete / restore state transitions
+  recordReconcile(
+    [
+      { id: 'd1', state: 'active' },
+      { id: 'r1', state: 'deleted' },
+    ],
+    [
+      { id: 'd1', state: 'deleted' },
+      { id: 'r1', state: 'active' },
+    ],
+    {
+      d1: { expect: { state: 'deleted' }, at: 1000 },
+      r1: { expect: { state: 'active' }, at: 1000 },
+    },
+    2000,
+  );
+  recordReconcile(
+    [
+      { id: 'd1', state: 'deleted' },
+      { id: 'r1', state: 'active' },
+    ],
+    [
+      { id: 'd1', state: 'active' },
+      { id: 'r1', state: 'deleted' },
+    ],
+    {
+      d1: { expect: { state: 'deleted' }, at: 1000 },
+      r1: { expect: { state: 'active' }, at: 1000 },
+    },
+    2000,
+  );
+  // Combined multi-item scenario
+  recordReconcile(
+    [
+      { id: 'confirmed', state: 'active', z: 5 },
+      { id: 'still-pending', state: 'active', z: 1 },
+      { id: 'expired', state: 'active', z: 2 },
+      { id: 'untouched', state: 'active', z: 3 },
+    ],
+    [
+      { id: 'confirmed', state: 'active', z: 1 },
+      { id: 'still-pending', state: 'active', z: 9 },
+      { id: 'expired', state: 'active', z: 8 },
+      { id: 'local-new', state: 'active', z: 10 },
+    ],
+    {
+      confirmed: { expect: { z: 5 }, at: 10000 },
+      'still-pending': { expect: { z: 9 }, at: 10000 },
+      expired: { expect: { z: 8 }, at: 0 },
+      'local-new': { expect: { state: 'active' }, at: 10000 },
+    },
+    16000,
+  );
+
+  call('isStaleResponse', { cursor: 6, epoch: 3 }, 7, 3);
+  call('isStaleResponse', { cursor: 7, epoch: 3 }, 7, 3);
+  call('isStaleResponse', { cursor: 8, epoch: 3 }, 7, 3);
+  call('isStaleResponse', { cursor: 2, epoch: 4 }, 7, 3);
+  call('isStaleResponse', { cursor: 2, epoch: 2 }, 7, 3);
+  call('isStaleResponse', { cursor: 2, epoch: 3 }, 0, 3);
+  call('isStaleResponse', { cursor: 2, epoch: 3 }, 7, null);
+  call('isStaleResponse', null, 7, 3);
+  call('isStaleResponse', { epoch: 3 }, 1, 3);
+  call('isStaleResponse', { cursor: 0, epoch: 3 }, 0, 3);
+
+  // Further cases from the iOS port (B1).
+  call('mergeExpected');
+  call(
+    'mergeExpected',
+    { frame: { x: 1, y: 2, w: 10, h: 10, rotation: 0, scale: 1 }, z: 3 },
+    { frame: { x: 5 }, z: 4 },
+  );
+  call(
+    'mergeExpected',
+    { style: { color: 'yellow' } },
+    { style: { locked: true }, content: { type: 'note', text: '集合' } },
+  );
+  call(
+    'mergeExpected',
+    {
+      content: {
+        type: 'stroke',
+        tool: 'pen',
+        points: [
+          [0, 0],
+          [1, 1],
+        ],
+      },
+    },
+    { content: { points: [[2, 2]] } },
+  );
+  call('mergeExpected', { z: 1 }, { frame: { x: 1, y: 2 } });
+  call('mergeExpected', { tags: ['a', 'b'] }, { tags: ['c'] });
+
+  const NOW = Date.parse('2026-11-27T08:00:00Z');
+  const TTL = boardPending.PENDING_TTL;
+  const frame = (x, y, w = 160, h = 120) => ({ x, y, w, h, rotation: 0, scale: 1 });
+  const item = (id, fields = {}) => ({
+    id,
+    kind: 'boardItem',
+    state: 'active',
+    generation: 0,
+    boardId: 'default-board',
+    frame: frame(0, 0),
+    z: 1,
+    content: { type: 'note', text: id },
+    style: { color: 'yellow' },
+    linkedActivityId: null,
+    ...fields,
+  });
+  const server = [
+    item('a', { frame: frame(10, 20) }),
+    item('b', { frame: frame(300, 40), z: 2 }),
+    item('c', { state: 'deleted', generation: 1, z: 3 }),
+  ];
+  const fresh = NOW - 1000;
+  const expired = NOW - TTL - 1;
+  // Not reflected yet: the local copy replaces the server's in place.
+  recordReconcile(
+    server,
+    [item('a', { frame: frame(80, 90) }), item('b', { frame: frame(300, 40), z: 2 })],
+    { a: { expect: { frame: { x: 80, y: 90 } }, at: fresh } },
+    NOW,
+  );
+  // A difference of 0.02 is a change; 0.005 is not.
+  recordReconcile(
+    [item('a', { z: 3.02 })],
+    [item('a', { z: 3 })],
+    { a: { expect: { z: 3 }, at: fresh } },
+    NOW,
+  );
+  recordReconcile(
+    [item('a', { z: 3.005 })],
+    [item('a', { z: 3 })],
+    { a: { expect: { z: 3 }, at: fresh } },
+    NOW,
+  );
+  // A number never matches a string; a missing value matches null.
+  recordReconcile(
+    [item('a', { z: '3' }), item('b')],
+    [item('a', { z: 3 }), item('b', { linkedActivityId: null })],
+    {
+      a: { expect: { z: 3 }, at: fresh },
+      b: { expect: { linkedActivityId: null }, at: fresh },
+    },
+    NOW,
+  );
+  // A group the server copy lacks does not match.
+  recordReconcile(
+    [{ id: 'a', state: 'active' }],
+    [item('a')],
+    { a: { expect: { linkedActivityId: null, frame: { x: 0 } }, at: fresh } },
+    NOW,
+  );
+  // Only the listed fields of a group are compared; arrays are compared whole.
+  recordReconcile(
+    [
+      item('a', { style: { color: 'yellow', locked: true, size: 'M' } }),
+      item('b', {
+        content: {
+          type: 'stroke',
+          tool: 'pen',
+          points: [
+            [0, 0],
+            [4, 4],
+          ],
+        },
+      }),
+    ],
+    [
+      item('a', { style: { color: 'yellow', locked: true } }),
+      item('b', {
+        content: {
+          type: 'stroke',
+          tool: 'pen',
+          points: [
+            [0, 0],
+            [5, 5],
+          ],
+        },
+      }),
+    ],
+    {
+      a: { expect: { style: { color: 'yellow', locked: true } }, at: fresh },
+      b: {
+        expect: {
+          content: {
+            type: 'stroke',
+            tool: 'pen',
+            points: [
+              [0, 0],
+              [5, 5],
+            ],
+          },
+        },
+        at: fresh,
+      },
+    },
+    NOW,
+  );
+  // New local items the server has not returned: fresh ones are appended, expired
+  // or unknown ones dropped.
+  recordReconcile(
+    server,
+    [item('new-1'), item('new-3'), item('a')],
+    {
+      'new-1': { expect: { state: 'active' }, at: fresh },
+      'new-3': { expect: { state: 'active' }, at: expired },
+      gone: { expect: { state: 'active' }, at: fresh },
+    },
+    NOW,
+  );
+  // Matched and expired at once: forgotten either way.
+  recordReconcile(
+    server,
+    [item('b', { frame: frame(300, 40), z: 2 })],
+    { b: { expect: { z: 2 }, at: expired } },
+    NOW,
+  );
+
+  call('isStaleResponse', { items: [], cursor: 3, epoch: 1 }, 5, 1);
+  call('isStaleResponse', { items: [], cursor: 3, epoch: 1 }, 5, null);
+  call('isStaleResponse', { items: [], cursor: 3, epoch: 2 }, 5, 1);
+  call('isStaleResponse', { items: [], epoch: 1 }, 5, 1);
+  call('isStaleResponse', { items: [], cursor: 3 }, 5, 1);
+  call('isStaleResponse', { items: [], cursor: 3, epoch: 0 }, 5, 0);
+
+  return {
+    ...header(
+      ['app/src/board-pending.js'],
+      'reconcilePending 的 args[2] 为对象形式的 pending 映射，result 为 { items, pending }（含清理后的剩余 pending）。',
+    ),
+    constants: {
+      PENDING_TTL: boardPending.PENDING_TTL,
+    },
+    cases,
+  };
+}
+
+// ---------------------------------------------------------------------------
 const files = {
   'rich-text.json': richTextFixture(),
   'board-geometry.json': boardGeometryFixture(),
   'board-widgets.json': boardWidgetsFixture(),
+  'board-sync.json': boardSyncFixture(),
   'itinerary.json': itineraryFixture(),
+  'place-information.json': placeInformationFixture(),
 };
 
 const check = process.argv.includes('--check');
