@@ -64,7 +64,7 @@ class SessionCookies(private val read: () -> String, private val write: (String)
     }
 }
 
-class JourneyApi(val baseUrl: String, cookies: CookieJar) {
+class JourneyApi(val baseUrl: String, cookies: CookieJar) : BoardItemsApi {
     var csrf = ""
     private val origin = URI(baseUrl).let { "${it.scheme}://${it.authority}" }
     val client = OkHttpClient.Builder().cookieJar(cookies).callTimeout(30, TimeUnit.SECONDS).build()
@@ -128,6 +128,11 @@ class JourneyApi(val baseUrl: String, cookies: CookieJar) {
                 "coordSystem" to "GCJ-02",
             )
         }
+    }
+
+    override fun fetchBoardItems(tripId: String, boardId: String, since: Long?): JSONObject {
+        val query = if (since != null && since > 0L) "?since=$since" else ""
+        return request("/api/trips/${encode(tripId)}/boards/${encode(boardId)}/items$query")
     }
 
     companion object {

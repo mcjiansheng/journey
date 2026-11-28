@@ -117,7 +117,7 @@ fun MapPlaceDetailSheet(
                     SecondaryButton(
                         onClick = {
                             s.action {
-                                val clean = mapPlacePayload(place).put("mark", lastMark)
+                                val clean = mapPlacePayload(place).put("mark", JSONObject.NULL)
                                 s.mutate("create", objectType = "favorite", patch = clean)
                             }
                         }
@@ -182,7 +182,7 @@ fun MapPlaceDetailSheet(
                             presets.forEach { preset ->
                                 val payload = preset.o("payload")
                                 val mark = obj("icon" to payload.s("icon"), "color" to payload.s("color"))
-                                val selected = markKey(pointMark(favorite.o("payload"))) == markKey(mark)
+                                val selected = markKey(rawMark(favorite.o("payload"))) == markKey(mark)
                                 FilterChip(
                                     selected = selected,
                                     onClick = {
@@ -193,7 +193,7 @@ fun MapPlaceDetailSheet(
                                     },
                                     label = {
                                         Text(
-                                            markTitle(payload) + " " + payload.s("name").ifBlank { "未命名" },
+                                            markTitle(payload) + " " + payload.s("name").ifBlank { markLabel(payload) },
                                             maxLines = 1,
                                             softWrap = false,
                                         )
