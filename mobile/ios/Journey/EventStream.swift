@@ -437,6 +437,9 @@ extension JourneyStore {
     guard event.type == "change",
       let notice = try? JSONDecoder().decode(JSON.self, from: Data(event.data.utf8))
     else { return }
+    // Every change also refreshes the open board (B1), as useBoard's onTripChange does on
+    // the web: board items are not in the snapshot.
+    Task { await boards.refresh() }
     live.notices[id] = notice
     guard LiveUpdates.isNewer(notice, than: cache.snapshots[id]) else { return }
     Task { await catchUp(id, to: notice) }

@@ -475,10 +475,12 @@ private final class TripServer: @unchecked Sendable {
   private var cursors = ["trip": 1, "other": 1]
   private var members: Set<String> = ["trip", "other"]
   private var readCount = 0
+  private var boardReadCount = 0
   private var delay: TimeInterval = 0
   private var epoch = 1
 
   var reads: Int { locked { readCount } }
+  var boardReads: Int { locked { boardReadCount } }
   /// Snapshot reads answer after `seconds`.
   func slowReads(_ seconds: TimeInterval) { locked { delay = seconds } }
   /// A restart ends every stream and starts a higher epoch.
@@ -534,6 +536,16 @@ private final class TripServer: @unchecked Sendable {
       // As the server: revoke this user's streams first, then answer.
       LiveMockProtocol.push("event: revoked\ndata: {}\n\n", thenClose: true)
       return .init(status: 200, body: .object(["purged": .bool(false)]), delay: 0.2)
+    case ("GET", let items) where items.contains("/boards/") && items.hasSuffix("/items"):
+      let id = String(items.split(separator: "/")[2])
+      return locked {
+        boardReadCount += 1
+        return .init(
+          status: 200,
+          body: .object([
+            "items": .array([]), "cursor": .integer(cursors[id] ?? 0), "epoch": .integer(epoch),
+          ]))
+      }
     case ("GET", let trip) where trip.hasPrefix("/api/trips/"):
       let id = String(trip.dropFirst("/api/trips/".count))
       return locked {
@@ -762,6 +774,22 @@ final class LiveUpdatesStoreTests: XCTestCase {
     let shown = await Live.eventually { store.trip["name"].string == "再改一次" }
     XCTAssertTrue(shown)
     XCTAssertEqual(seen.count, 2)
+  }
+
+  @MainActor func testChangeAlsoRefreshesTheOpenBoard() async throws {
+    let server = TripServer()
+    let store = try await signedInStore(server)
+    defer { finish(store) }
+    try await store.open("trip")
+    let open = await Live.eventually { LiveMockProtocol.openStreams == 1 }
+    XCTAssertTrue(open)
+    await store.boards.open("default-board")
+    let loaded = server.boardReads
+    XCTAssertGreaterThanOrEqual(loaded, 1)
+    // Board items are not in the snapshot: a `change` also pulls the open board's items.
+    server.rename("trip", "白板之外的修改")
+    let refreshed = await Live.eventually { server.boardReads > loaded }
+    XCTAssertTrue(refreshed)
   }
 
   @MainActor func testSignedOutOrExpiredSessionHasNoStream() async throws {
