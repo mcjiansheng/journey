@@ -415,7 +415,11 @@ private final class BoardMockServer {
       let since = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?
         .first { $0.name == "since" }?.value.flatMap(Double.init)
       let rows = items.values.filter { since == nil || $0["changedCursor"].number > since! }
-        .sorted { $0["changedCursor"].number < $1["changedCursor"].number }
+        // Ties broken by id: a dictionary's order changes from run to run, and on the real
+        // server every operation moves the cursor, so two rows never share one.
+        .sorted {
+          ($0["changedCursor"].number, $0["id"].string) < ($1["changedCursor"].number, $1["id"].string)
+        }
       return (200, .object(["items": .array(rows), "cursor": .number(cursor), "epoch": .number(epoch)]))
     default:
       return (404, .object(["error": .object(["code": .string("NOT_FOUND"), "message": .string(path)])]))
