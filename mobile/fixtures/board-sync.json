@@ -1,5 +1,5 @@
 {
-  "$comment": "由 mobile/tools/generate-fixtures.mjs 从网页端代码生成，不要手改。网页端函数改动后重新运行该脚本。 reconcilePending 的第 3 个参数是 pending Map 的条目数组 [[id, { expect, at }], …]（按插入顺序），结果为 { items, pending }，pending 是调用后剩下的条目。",
+  "$comment": "由 mobile/tools/generate-fixtures.mjs 从网页端代码生成，不要手改。网页端函数改动后重新运行该脚本。 reconcilePending 的 args[2] 为对象形式的 pending 映射，result 为 { items, pending }（含清理后的剩余 pending）。",
   "sources": [
     "app/src/board-pending.js"
   ],
@@ -9,13 +9,158 @@
   "cases": [
     {
       "fn": "mergeExpected",
-      "args": [],
+      "args": [
+        {},
+        {}
+      ],
       "result": {}
     },
     {
       "fn": "mergeExpected",
       "args": [
-        {},
+        {
+          "frame": {
+            "x": 1
+          }
+        },
+        {
+          "frame": {
+            "y": 2
+          },
+          "z": 3
+        }
+      ],
+      "result": {
+        "frame": {
+          "x": 1,
+          "y": 2
+        },
+        "z": 3
+      }
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        {
+          "frame": {
+            "x": 1,
+            "y": 2
+          },
+          "state": "active"
+        },
+        {
+          "frame": {
+            "x": 10
+          },
+          "state": "deleted"
+        }
+      ],
+      "result": {
+        "frame": {
+          "x": 10,
+          "y": 2
+        },
+        "state": "deleted"
+      }
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        {
+          "content": {
+            "type": "note",
+            "text": "a"
+          }
+        },
+        {
+          "content": {
+            "text": "b"
+          }
+        }
+      ],
+      "result": {
+        "content": {
+          "type": "note",
+          "text": "b"
+        }
+      }
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        {
+          "style": {
+            "color": "yellow"
+          }
+        },
+        {
+          "style": {
+            "locked": true
+          }
+        }
+      ],
+      "result": {
+        "style": {
+          "color": "yellow",
+          "locked": true
+        }
+      }
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        {
+          "points": [
+            [
+              0,
+              0
+            ]
+          ]
+        },
+        {
+          "points": [
+            [
+              1,
+              2
+            ],
+            [
+              3,
+              4
+            ]
+          ]
+        }
+      ],
+      "result": {
+        "points": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ]
+        ]
+      }
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        {
+          "linkedActivityId": "a1"
+        },
+        {
+          "linkedActivityId": null
+        }
+      ],
+      "result": {
+        "linkedActivityId": null
+      }
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        null,
         {
           "state": "active"
         }
@@ -23,6 +168,977 @@
       "result": {
         "state": "active"
       }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 10,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        {},
+        2000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 10,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        "pending": {}
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 10,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        {
+          "a": {
+            "expect": {
+              "frame": {
+                "x": 200
+              }
+            },
+            "at": 1000
+          }
+        },
+        2000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        "pending": {
+          "a": {
+            "expect": {
+              "frame": {
+                "x": 200
+              }
+            },
+            "at": 1000
+          }
+        }
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 10,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        {
+          "a": {
+            "expect": {
+              "frame": {
+                "x": 200
+              }
+            },
+            "at": 1000
+          }
+        },
+        16000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        "pending": {
+          "a": {
+            "expect": {
+              "frame": {
+                "x": 200
+              }
+            },
+            "at": 1000
+          }
+        }
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 10,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        {
+          "a": {
+            "expect": {
+              "frame": {
+                "x": 200
+              }
+            },
+            "at": 1000
+          }
+        },
+        2500
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        "pending": {}
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200.005,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        {
+          "a": {
+            "expect": {
+              "frame": {
+                "x": 200
+              }
+            },
+            "at": 1000
+          }
+        },
+        2500
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200.005,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        "pending": {}
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200.02,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        {
+          "a": {
+            "expect": {
+              "frame": {
+                "x": 200
+              }
+            },
+            "at": 1000
+          }
+        },
+        2500
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        "pending": {
+          "a": {
+            "expect": {
+              "frame": {
+                "x": 200
+              }
+            },
+            "at": 1000
+          }
+        }
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 10,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 200,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        {
+          "a": {
+            "expect": {
+              "frame": {
+                "x": 200
+              }
+            },
+            "at": 0
+          }
+        },
+        15001
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 10,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        "pending": {}
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [],
+        [
+          {
+            "id": "b",
+            "state": "active"
+          }
+        ],
+        {
+          "b": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 1000
+          }
+        },
+        1200
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "b",
+            "state": "active"
+          }
+        ],
+        "pending": {
+          "b": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 1000
+          }
+        }
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [],
+        [
+          {
+            "id": "b",
+            "state": "active"
+          }
+        ],
+        {
+          "b": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 0
+          }
+        },
+        15001
+      ],
+      "result": {
+        "items": [],
+        "pending": {}
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [],
+        [],
+        {
+          "ghost": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 1000
+          }
+        },
+        1200
+      ],
+      "result": {
+        "items": [],
+        "pending": {
+          "ghost": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 1000
+          }
+        }
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 10,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        [],
+        {
+          "a": {
+            "expect": {
+              "frame": {
+                "x": 200
+              }
+            },
+            "at": 1000
+          }
+        },
+        1200
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "state": "active",
+            "frame": {
+              "x": 10,
+              "y": 0,
+              "w": 168,
+              "h": 168
+            }
+          }
+        ],
+        "pending": {
+          "a": {
+            "expect": {
+              "frame": {
+                "x": 200
+              }
+            },
+            "at": 1000
+          }
+        }
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "m",
+            "state": "active",
+            "frame": {
+              "x": 50,
+              "y": 60
+            },
+            "style": {
+              "color": "blue",
+              "locked": true
+            }
+          }
+        ],
+        [
+          {
+            "id": "m",
+            "state": "active",
+            "frame": {
+              "x": 0,
+              "y": 0
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": "act-1"
+          }
+        ],
+        {
+          "m": {
+            "expect": {
+              "frame": {
+                "x": 50,
+                "y": 60
+              },
+              "style": {
+                "color": "blue",
+                "locked": true
+              },
+              "linkedActivityId": null
+            },
+            "at": 1000
+          }
+        },
+        2000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "m",
+            "state": "active",
+            "frame": {
+              "x": 50,
+              "y": 60
+            },
+            "style": {
+              "color": "blue",
+              "locked": true
+            }
+          }
+        ],
+        "pending": {}
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "d1",
+            "state": "active"
+          },
+          {
+            "id": "r1",
+            "state": "deleted"
+          }
+        ],
+        [
+          {
+            "id": "d1",
+            "state": "deleted"
+          },
+          {
+            "id": "r1",
+            "state": "active"
+          }
+        ],
+        {
+          "d1": {
+            "expect": {
+              "state": "deleted"
+            },
+            "at": 1000
+          },
+          "r1": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 1000
+          }
+        },
+        2000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "d1",
+            "state": "deleted"
+          },
+          {
+            "id": "r1",
+            "state": "active"
+          }
+        ],
+        "pending": {
+          "d1": {
+            "expect": {
+              "state": "deleted"
+            },
+            "at": 1000
+          },
+          "r1": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 1000
+          }
+        }
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "d1",
+            "state": "deleted"
+          },
+          {
+            "id": "r1",
+            "state": "active"
+          }
+        ],
+        [
+          {
+            "id": "d1",
+            "state": "active"
+          },
+          {
+            "id": "r1",
+            "state": "deleted"
+          }
+        ],
+        {
+          "d1": {
+            "expect": {
+              "state": "deleted"
+            },
+            "at": 1000
+          },
+          "r1": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 1000
+          }
+        },
+        2000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "d1",
+            "state": "deleted"
+          },
+          {
+            "id": "r1",
+            "state": "active"
+          }
+        ],
+        "pending": {}
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "confirmed",
+            "state": "active",
+            "z": 5
+          },
+          {
+            "id": "still-pending",
+            "state": "active",
+            "z": 1
+          },
+          {
+            "id": "expired",
+            "state": "active",
+            "z": 2
+          },
+          {
+            "id": "untouched",
+            "state": "active",
+            "z": 3
+          }
+        ],
+        [
+          {
+            "id": "confirmed",
+            "state": "active",
+            "z": 1
+          },
+          {
+            "id": "still-pending",
+            "state": "active",
+            "z": 9
+          },
+          {
+            "id": "expired",
+            "state": "active",
+            "z": 8
+          },
+          {
+            "id": "local-new",
+            "state": "active",
+            "z": 10
+          }
+        ],
+        {
+          "confirmed": {
+            "expect": {
+              "z": 5
+            },
+            "at": 10000
+          },
+          "still-pending": {
+            "expect": {
+              "z": 9
+            },
+            "at": 10000
+          },
+          "expired": {
+            "expect": {
+              "z": 8
+            },
+            "at": 0
+          },
+          "local-new": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 10000
+          }
+        },
+        16000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "confirmed",
+            "state": "active",
+            "z": 5
+          },
+          {
+            "id": "still-pending",
+            "state": "active",
+            "z": 9
+          },
+          {
+            "id": "expired",
+            "state": "active",
+            "z": 2
+          },
+          {
+            "id": "untouched",
+            "state": "active",
+            "z": 3
+          },
+          {
+            "id": "local-new",
+            "state": "active",
+            "z": 10
+          }
+        ],
+        "pending": {
+          "still-pending": {
+            "expect": {
+              "z": 9
+            },
+            "at": 10000
+          },
+          "local-new": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 10000
+          }
+        }
+      }
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "cursor": 6,
+          "epoch": 3
+        },
+        7,
+        3
+      ],
+      "result": true
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "cursor": 7,
+          "epoch": 3
+        },
+        7,
+        3
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "cursor": 8,
+          "epoch": 3
+        },
+        7,
+        3
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "cursor": 2,
+          "epoch": 4
+        },
+        7,
+        3
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "cursor": 2,
+          "epoch": 2
+        },
+        7,
+        3
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "cursor": 2,
+          "epoch": 3
+        },
+        0,
+        3
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "cursor": 2,
+          "epoch": 3
+        },
+        7,
+        null
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        null,
+        7,
+        3
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "epoch": 3
+        },
+        1,
+        3
+      ],
+      "result": true
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "cursor": 0,
+          "epoch": 3
+        },
+        0,
+        3
+      ],
+      "result": false
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [],
+      "result": {}
     },
     {
       "fn": "mergeExpected",
@@ -133,36 +1249,6 @@
       "fn": "mergeExpected",
       "args": [
         {
-          "linkedActivityId": "act-1",
-          "state": "active"
-        },
-        {
-          "linkedActivityId": null
-        }
-      ],
-      "result": {
-        "linkedActivityId": null,
-        "state": "active"
-      }
-    },
-    {
-      "fn": "mergeExpected",
-      "args": [
-        {
-          "state": "active"
-        },
-        {
-          "state": "deleted"
-        }
-      ],
-      "result": {
-        "state": "deleted"
-      }
-    },
-    {
-      "fn": "mergeExpected",
-      "args": [
-        {
           "z": 1
         },
         {
@@ -202,525 +1288,6 @@
       }
     },
     {
-      "fn": "isStaleResponse",
-      "args": [
-        null,
-        5,
-        1
-      ],
-      "result": false
-    },
-    {
-      "fn": "isStaleResponse",
-      "args": [
-        {
-          "items": [],
-          "cursor": 3,
-          "epoch": 1
-        },
-        5,
-        null
-      ],
-      "result": false
-    },
-    {
-      "fn": "isStaleResponse",
-      "args": [
-        {
-          "items": [],
-          "cursor": 3,
-          "epoch": 1
-        },
-        0,
-        1
-      ],
-      "result": false
-    },
-    {
-      "fn": "isStaleResponse",
-      "args": [
-        {
-          "items": [],
-          "cursor": 3,
-          "epoch": 1
-        },
-        5,
-        1
-      ],
-      "result": true
-    },
-    {
-      "fn": "isStaleResponse",
-      "args": [
-        {
-          "items": [],
-          "cursor": 5,
-          "epoch": 1
-        },
-        5,
-        1
-      ],
-      "result": false
-    },
-    {
-      "fn": "isStaleResponse",
-      "args": [
-        {
-          "items": [],
-          "cursor": 7,
-          "epoch": 1
-        },
-        5,
-        1
-      ],
-      "result": false
-    },
-    {
-      "fn": "isStaleResponse",
-      "args": [
-        {
-          "items": [],
-          "cursor": 3,
-          "epoch": 2
-        },
-        5,
-        1
-      ],
-      "result": false
-    },
-    {
-      "fn": "isStaleResponse",
-      "args": [
-        {
-          "items": [],
-          "cursor": 3,
-          "epoch": "1"
-        },
-        5,
-        1
-      ],
-      "result": true
-    },
-    {
-      "fn": "isStaleResponse",
-      "args": [
-        {
-          "items": [],
-          "epoch": 1
-        },
-        5,
-        1
-      ],
-      "result": true
-    },
-    {
-      "fn": "isStaleResponse",
-      "args": [
-        {
-          "items": [],
-          "cursor": 0,
-          "epoch": 1
-        },
-        5,
-        1
-      ],
-      "result": true
-    },
-    {
-      "fn": "isStaleResponse",
-      "args": [
-        {
-          "items": [],
-          "cursor": 3
-        },
-        5,
-        1
-      ],
-      "result": false
-    },
-    {
-      "fn": "isStaleResponse",
-      "args": [
-        {
-          "items": [],
-          "cursor": 3,
-          "epoch": null
-        },
-        5,
-        0
-      ],
-      "result": true
-    },
-    {
-      "fn": "isStaleResponse",
-      "args": [
-        {
-          "items": [],
-          "cursor": 3,
-          "epoch": 0
-        },
-        5,
-        0
-      ],
-      "result": true
-    },
-    {
-      "fn": "reconcilePending",
-      "args": [
-        [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 10,
-              "y": 20,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "b",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 300,
-              "y": 40,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 2,
-            "content": {
-              "type": "note",
-              "text": "b"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "c",
-            "kind": "boardItem",
-            "state": "deleted",
-            "generation": 1,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 3,
-            "content": {
-              "type": "note",
-              "text": "c"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          }
-        ],
-        [],
-        [],
-        1795766400000
-      ],
-      "result": {
-        "items": [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 10,
-              "y": 20,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "b",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 300,
-              "y": 40,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 2,
-            "content": {
-              "type": "note",
-              "text": "b"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "c",
-            "kind": "boardItem",
-            "state": "deleted",
-            "generation": 1,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 3,
-            "content": {
-              "type": "note",
-              "text": "c"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          }
-        ],
-        "pending": []
-      }
-    },
-    {
-      "fn": "reconcilePending",
-      "args": [
-        [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 10,
-              "y": 20,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "b",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 300,
-              "y": 40,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 2,
-            "content": {
-              "type": "note",
-              "text": "b"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "c",
-            "kind": "boardItem",
-            "state": "deleted",
-            "generation": 1,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 3,
-            "content": {
-              "type": "note",
-              "text": "c"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          }
-        ],
-        [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 10.004,
-              "y": 19.996,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          }
-        ],
-        [
-          [
-            "a",
-            {
-              "expect": {
-                "frame": {
-                  "x": 10.004,
-                  "y": 19.996
-                }
-              },
-              "at": 1795766399000
-            }
-          ]
-        ],
-        1795766400000
-      ],
-      "result": {
-        "items": [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 10,
-              "y": 20,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "b",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 300,
-              "y": 40,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 2,
-            "content": {
-              "type": "note",
-              "text": "b"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "c",
-            "kind": "boardItem",
-            "state": "deleted",
-            "generation": 1,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 3,
-            "content": {
-              "type": "note",
-              "text": "c"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          }
-        ],
-        "pending": []
-      }
-    },
-    {
       "fn": "reconcilePending",
       "args": [
         [
@@ -847,20 +1414,17 @@
             "linkedActivityId": null
           }
         ],
-        [
-          [
-            "a",
-            {
-              "expect": {
-                "frame": {
-                  "x": 80,
-                  "y": 90
-                }
-              },
-              "at": 1795766399000
-            }
-          ]
-        ],
+        {
+          "a": {
+            "expect": {
+              "frame": {
+                "x": 80,
+                "y": 90
+              }
+            },
+            "at": 1795766399000
+          }
+        },
         1795766400000
       ],
       "result": {
@@ -938,427 +1502,17 @@
             "linkedActivityId": null
           }
         ],
-        "pending": [
-          [
-            "a",
-            {
-              "expect": {
-                "frame": {
-                  "x": 80,
-                  "y": 90
-                }
-              },
-              "at": 1795766399000
-            }
-          ]
-        ]
-      }
-    },
-    {
-      "fn": "reconcilePending",
-      "args": [
-        [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 10,
-              "y": 20,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
+        "pending": {
+          "a": {
+            "expect": {
+              "frame": {
+                "x": 80,
+                "y": 90
+              }
             },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "b",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 300,
-              "y": 40,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 2,
-            "content": {
-              "type": "note",
-              "text": "b"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "c",
-            "kind": "boardItem",
-            "state": "deleted",
-            "generation": 1,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 3,
-            "content": {
-              "type": "note",
-              "text": "c"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
+            "at": 1795766399000
           }
-        ],
-        [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 80,
-              "y": 90,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          }
-        ],
-        [
-          [
-            "a",
-            {
-              "expect": {
-                "frame": {
-                  "x": 80,
-                  "y": 90
-                }
-              },
-              "at": 1795766385000
-            }
-          ]
-        ],
-        1795766400000
-      ],
-      "result": {
-        "items": [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 80,
-              "y": 90,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "b",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 300,
-              "y": 40,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 2,
-            "content": {
-              "type": "note",
-              "text": "b"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "c",
-            "kind": "boardItem",
-            "state": "deleted",
-            "generation": 1,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 3,
-            "content": {
-              "type": "note",
-              "text": "c"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          }
-        ],
-        "pending": [
-          [
-            "a",
-            {
-              "expect": {
-                "frame": {
-                  "x": 80,
-                  "y": 90
-                }
-              },
-              "at": 1795766385000
-            }
-          ]
-        ]
-      }
-    },
-    {
-      "fn": "reconcilePending",
-      "args": [
-        [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 10,
-              "y": 20,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "b",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 300,
-              "y": 40,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 2,
-            "content": {
-              "type": "note",
-              "text": "b"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "c",
-            "kind": "boardItem",
-            "state": "deleted",
-            "generation": 1,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 3,
-            "content": {
-              "type": "note",
-              "text": "c"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          }
-        ],
-        [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 80,
-              "y": 90,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          }
-        ],
-        [
-          [
-            "a",
-            {
-              "expect": {
-                "frame": {
-                  "x": 80,
-                  "y": 90
-                }
-              },
-              "at": 1795766384999
-            }
-          ]
-        ],
-        1795766400000
-      ],
-      "result": {
-        "items": [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 10,
-              "y": 20,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "b",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 300,
-              "y": 40,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 2,
-            "content": {
-              "type": "note",
-              "text": "b"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "c",
-            "kind": "boardItem",
-            "state": "deleted",
-            "generation": 1,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 3,
-            "content": {
-              "type": "note",
-              "text": "c"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          }
-        ],
-        "pending": []
+        }
       }
     },
     {
@@ -1416,17 +1570,14 @@
             "linkedActivityId": null
           }
         ],
-        [
-          [
-            "a",
-            {
-              "expect": {
-                "z": 3
-              },
-              "at": 1795766399000
-            }
-          ]
-        ],
+        {
+          "a": {
+            "expect": {
+              "z": 3
+            },
+            "at": 1795766399000
+          }
+        },
         1795766400000
       ],
       "result": {
@@ -1456,17 +1607,14 @@
             "linkedActivityId": null
           }
         ],
-        "pending": [
-          [
-            "a",
-            {
-              "expect": {
-                "z": 3
-              },
-              "at": 1795766399000
-            }
-          ]
-        ]
+        "pending": {
+          "a": {
+            "expect": {
+              "z": 3
+            },
+            "at": 1795766399000
+          }
+        }
       }
     },
     {
@@ -1524,17 +1672,14 @@
             "linkedActivityId": null
           }
         ],
-        [
-          [
-            "a",
-            {
-              "expect": {
-                "z": 3
-              },
-              "at": 1795766399000
-            }
-          ]
-        ],
+        {
+          "a": {
+            "expect": {
+              "z": 3
+            },
+            "at": 1795766399000
+          }
+        },
         1795766400000
       ],
       "result": {
@@ -1564,7 +1709,7 @@
             "linkedActivityId": null
           }
         ],
-        "pending": []
+        "pending": {}
       }
     },
     {
@@ -1670,26 +1815,20 @@
             "linkedActivityId": null
           }
         ],
-        [
-          [
-            "a",
-            {
-              "expect": {
-                "z": 3
-              },
-              "at": 1795766399000
-            }
-          ],
-          [
-            "b",
-            {
-              "expect": {
-                "linkedActivityId": null
-              },
-              "at": 1795766399000
-            }
-          ]
-        ],
+        {
+          "a": {
+            "expect": {
+              "z": 3
+            },
+            "at": 1795766399000
+          },
+          "b": {
+            "expect": {
+              "linkedActivityId": null
+            },
+            "at": 1795766399000
+          }
+        },
         1795766400000
       ],
       "result": {
@@ -1743,17 +1882,14 @@
             "linkedActivityId": null
           }
         ],
-        "pending": [
-          [
-            "a",
-            {
-              "expect": {
-                "z": 3
-              },
-              "at": 1795766399000
-            }
-          ]
-        ]
+        "pending": {
+          "a": {
+            "expect": {
+              "z": 3
+            },
+            "at": 1795766399000
+          }
+        }
       }
     },
     {
@@ -1791,20 +1927,17 @@
             "linkedActivityId": null
           }
         ],
-        [
-          [
-            "a",
-            {
-              "expect": {
-                "linkedActivityId": null,
-                "frame": {
-                  "x": 0
-                }
-              },
-              "at": 1795766399000
-            }
-          ]
-        ],
+        {
+          "a": {
+            "expect": {
+              "linkedActivityId": null,
+              "frame": {
+                "x": 0
+              }
+            },
+            "at": 1795766399000
+          }
+        },
         1795766400000
       ],
       "result": {
@@ -1834,20 +1967,17 @@
             "linkedActivityId": null
           }
         ],
-        "pending": [
-          [
-            "a",
-            {
-              "expect": {
-                "linkedActivityId": null,
-                "frame": {
-                  "x": 0
-                }
-              },
-              "at": 1795766399000
-            }
-          ]
-        ]
+        "pending": {
+          "a": {
+            "expect": {
+              "linkedActivityId": null,
+              "frame": {
+                "x": 0
+              }
+            },
+            "at": 1795766399000
+          }
+        }
       }
     },
     {
@@ -1976,42 +2106,36 @@
             "linkedActivityId": null
           }
         ],
-        [
-          [
-            "a",
-            {
-              "expect": {
-                "style": {
-                  "color": "yellow",
-                  "locked": true
-                }
-              },
-              "at": 1795766399000
-            }
-          ],
-          [
-            "b",
-            {
-              "expect": {
-                "content": {
-                  "type": "stroke",
-                  "tool": "pen",
-                  "points": [
-                    [
-                      0,
-                      0
-                    ],
-                    [
-                      5,
-                      5
-                    ]
+        {
+          "a": {
+            "expect": {
+              "style": {
+                "color": "yellow",
+                "locked": true
+              }
+            },
+            "at": 1795766399000
+          },
+          "b": {
+            "expect": {
+              "content": {
+                "type": "stroke",
+                "tool": "pen",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    5,
+                    5
                   ]
-                }
-              },
-              "at": 1795766399000
-            }
-          ]
-        ],
+                ]
+              }
+            },
+            "at": 1795766399000
+          }
+        },
         1795766400000
       ],
       "result": {
@@ -2077,30 +2201,27 @@
             "linkedActivityId": null
           }
         ],
-        "pending": [
-          [
-            "b",
-            {
-              "expect": {
-                "content": {
-                  "type": "stroke",
-                  "tool": "pen",
-                  "points": [
-                    [
-                      0,
-                      0
-                    ],
-                    [
-                      5,
-                      5
-                    ]
+        "pending": {
+          "b": {
+            "expect": {
+              "content": {
+                "type": "stroke",
+                "tool": "pen",
+                "points": [
+                  [
+                    0,
+                    0
+                  ],
+                  [
+                    5,
+                    5
                   ]
-                }
-              },
-              "at": 1795766399000
-            }
-          ]
-        ]
+                ]
+              }
+            },
+            "at": 1795766399000
+          }
+        }
       }
     },
     {
@@ -2181,276 +2302,6 @@
           }
         ],
         [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "deleted",
-            "generation": 1,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "c",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 2,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 3,
-            "content": {
-              "type": "note",
-              "text": "c"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          }
-        ],
-        [
-          [
-            "a",
-            {
-              "expect": {
-                "state": "deleted"
-              },
-              "at": 1795766399000
-            }
-          ],
-          [
-            "c",
-            {
-              "expect": {
-                "state": "active"
-              },
-              "at": 1795766399000
-            }
-          ]
-        ],
-        1795766400000
-      ],
-      "result": {
-        "items": [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "deleted",
-            "generation": 1,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "b",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 300,
-              "y": 40,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 2,
-            "content": {
-              "type": "note",
-              "text": "b"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "c",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 2,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 3,
-            "content": {
-              "type": "note",
-              "text": "c"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          }
-        ],
-        "pending": [
-          [
-            "a",
-            {
-              "expect": {
-                "state": "deleted"
-              },
-              "at": 1795766399000
-            }
-          ],
-          [
-            "c",
-            {
-              "expect": {
-                "state": "active"
-              },
-              "at": 1795766399000
-            }
-          ]
-        ]
-      }
-    },
-    {
-      "fn": "reconcilePending",
-      "args": [
-        [
-          {
-            "id": "a",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 10,
-              "y": 20,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "a"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "b",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 300,
-              "y": 40,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 2,
-            "content": {
-              "type": "note",
-              "text": "b"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
-          {
-            "id": "c",
-            "kind": "boardItem",
-            "state": "deleted",
-            "generation": 1,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 3,
-            "content": {
-              "type": "note",
-              "text": "c"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          }
-        ],
-        [
-          {
-            "id": "new-2",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "new-2"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
-          },
           {
             "id": "new-1",
             "kind": "boardItem",
@@ -2524,44 +2375,26 @@
             "linkedActivityId": null
           }
         ],
-        [
-          [
-            "new-1",
-            {
-              "expect": {
-                "state": "active"
-              },
-              "at": 1795766399000
-            }
-          ],
-          [
-            "new-2",
-            {
-              "expect": {
-                "state": "active"
-              },
-              "at": 1795766398995
-            }
-          ],
-          [
-            "new-3",
-            {
-              "expect": {
-                "state": "active"
-              },
-              "at": 1795766384999
-            }
-          ],
-          [
-            "gone",
-            {
-              "expect": {
-                "state": "active"
-              },
-              "at": 1795766399000
-            }
-          ]
-        ],
+        {
+          "new-1": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 1795766399000
+          },
+          "new-3": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 1795766384999
+          },
+          "gone": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 1795766399000
+          }
+        },
         1795766400000
       ],
       "result": {
@@ -2661,61 +2494,22 @@
               "color": "yellow"
             },
             "linkedActivityId": null
-          },
-          {
-            "id": "new-2",
-            "kind": "boardItem",
-            "state": "active",
-            "generation": 0,
-            "boardId": "default-board",
-            "frame": {
-              "x": 0,
-              "y": 0,
-              "w": 160,
-              "h": 120,
-              "rotation": 0,
-              "scale": 1
-            },
-            "z": 1,
-            "content": {
-              "type": "note",
-              "text": "new-2"
-            },
-            "style": {
-              "color": "yellow"
-            },
-            "linkedActivityId": null
           }
         ],
-        "pending": [
-          [
-            "new-1",
-            {
-              "expect": {
-                "state": "active"
-              },
-              "at": 1795766399000
-            }
-          ],
-          [
-            "new-2",
-            {
-              "expect": {
-                "state": "active"
-              },
-              "at": 1795766398995
-            }
-          ],
-          [
-            "gone",
-            {
-              "expect": {
-                "state": "active"
-              },
-              "at": 1795766399000
-            }
-          ]
-        ]
+        "pending": {
+          "new-1": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 1795766399000
+          },
+          "gone": {
+            "expect": {
+              "state": "active"
+            },
+            "at": 1795766399000
+          }
+        }
       }
     },
     {
@@ -2821,17 +2615,14 @@
             "linkedActivityId": null
           }
         ],
-        [
-          [
-            "b",
-            {
-              "expect": {
-                "z": 2
-              },
-              "at": 1795766384999
-            }
-          ]
-        ],
+        {
+          "b": {
+            "expect": {
+              "z": 2
+            },
+            "at": 1795766384999
+          }
+        },
         1795766400000
       ],
       "result": {
@@ -2909,8 +2700,84 @@
             "linkedActivityId": null
           }
         ],
-        "pending": []
+        "pending": {}
       }
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 3,
+          "epoch": 1
+        },
+        5,
+        1
+      ],
+      "result": true
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 3,
+          "epoch": 1
+        },
+        5,
+        null
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 3,
+          "epoch": 2
+        },
+        5,
+        1
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "epoch": 1
+        },
+        5,
+        1
+      ],
+      "result": true
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 3
+        },
+        5,
+        1
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 3,
+          "epoch": 0
+        },
+        5,
+        0
+      ],
+      "result": true
     }
   ]
 }

@@ -64,21 +64,57 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
     var mapError by remember { mutableStateOf("") }
     var groups by remember { mutableStateOf<List<List<JSONObject>>>(emptyList()) }
     var clusterList by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
-    var markFilter by remember { mutableStateOf<String?>(null) }
+    var filter by remember(s.tripId) { mutableStateOf(MapFilterState()) }
+    var routeDayId by remember(s.tripId) { mutableStateOf<String?>(null) }
+    var filterSheetOpen by remember { mutableStateOf(false) }
+    var legendSheetOpen by remember { mutableStateOf(false) }
     var managingPresets by remember { mutableStateOf(false) }
     var customizing by remember { mutableStateOf<JSONObject?>(null) }
-    val defaultMark = obj("icon" to "circle", "color" to if (s.user?.o("preferences")?.s("palette") == "atlas") "blue" else "green")
-    var lastMark by remember(s.tripId) { mutableStateOf(s.draft("last-favorite-mark") ?: defaultMark) }
-    fun pointMark(p: JSONObject) = p.optJSONObject("mark") ?: defaultMark
-    val presets = s.objects("markPreset").filter { it.s("state") == "active" }.sortedBy { it.o("payload").optDouble("order", 0.0) }
-    fun presetName(p: JSONObject) = presets.firstOrNull { markKey(it.o("payload")) == markKey(pointMark(p)) }?.o("payload")?.s("name").orEmpty().ifBlank { "未命名" }
-    var mapReady by remember { mutableStateOf(false) }
-    val favorites = s.objects("favorite").filter { it.s("state") == "active" }
-    val activities =
-        s.objects("activity").filter {
-            it.s("state") == "active" && it.o("payload").optJSONObject("place") != null
+    val placeInfoMap = remember { mutableStateMapOf<String, PlaceInformationData>() }
+    var placeInfoLoading by remember { mutableStateOf(false) }
+    var lastMark by remember(s.tripId) { mutableStateOf(s.draft("last-favorite-mark") ?: defaultMark()) }
+    fun pointMark(p: JSONObject) = effectiveMark(p)
+    val filtered = filterMapData(s.snapshot, filter, routeDayId, selected)
+    LaunchedEffect(filter.mark, filtered.effectiveMarkFilter) {
+        if (filter.mark != filtered.effectiveMarkFilter) {
+            filter = filter.copy(mark = filtered.effectiveMarkFilter)
         }
-    val points = favorites.filter { markFilter == null || markKey(pointMark(it.o("payload"))) == markFilter }.map { it.o("payload").copyJson().put("_id", it.s("id")).put("_priority", if (selected?.let { p -> sameMapPlace(p, it.o("payload")) } == true) 1 else 0) } + activities.mapIndexed { index, activity -> activity.o("payload").o("place").copyJson().put("_id", activity.s("id")).put("_priority", 1).put("_sequence", index + 1) }
+    }
+    LaunchedEffect(routeDayId, filtered.days) {
+        if (routeDayId != null && filtered.days.none { it.s("id") == routeDayId }) {
+            routeDayId = null
+        }
+    }
+    val presets = filtered.presets
+    fun presetName(p: JSONObject) = presetDisplayName(p, presets)
+    var mapReady by remember { mutableStateOf(false) }
+    val favorites = filtered.favorites
+    val points =
+        filtered.favoriteMarkers.map {
+            it.o("payload").copyJson().put("_id", it.s("id")).put("_priority", 0)
+        } +
+            filtered.activityMarkers.map { (activity, order) ->
+                activity.o("payload").o("place").copyJson()
+                    .put("_id", activity.s("id"))
+                    .put("_priority", 1)
+                    .put("_sequence", order)
+            } +
+            (selected?.takeIf(::placeLocated)?.let { p ->
+                val matchedFavorite = favorites.firstOrNull { sameMapPlace(it.o("payload"), p) }
+                val matchedActivity = filtered.mapActivities.firstOrNull {
+                    it.activity.o("payload").optJSONObject("place")?.let { ap -> sameMapPlace(ap, p) } == true
+                }
+                listOf(
+                    p.copyJson().apply {
+                        put("_id", matchedFavorite?.s("id") ?: matchedActivity?.activity?.s("id") ?: p.s("_id").ifBlank { "selected" })
+                        put("_priority", 2)
+                        if (matchedActivity != null) put("_sequence", matchedActivity.order)
+                        if (matchedFavorite != null && rawMark(this) == null) {
+                            rawMark(matchedFavorite.o("payload"))?.let { put("mark", it) }
+                        }
+                    }
+                )
+            } ?: emptyList())
     fun render(map: MapLibreMap) {
         val style = map.style ?: return
         val screenPoints = points.filter { !it.isNull("lng") && !it.isNull("lat") }.map { p ->
@@ -107,7 +143,7 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
                 paint.color = routeColor; canvas.drawCircle(26f, 27f, 21f, paint)
                 paint.color = android.graphics.Color.WHITE; paint.textSize = 24f; paint.textAlign = Paint.Align.CENTER; canvas.drawText(group[0].optInt("_sequence").toString(), 26f, 35f, paint); paint.textAlign = Paint.Align.LEFT
             }
-            if (group.any { point -> activities.any { activity -> sameMapPlace(point, activity.o("payload").o("place")) } } && group[0].optInt("_sequence") == 0) { paint.color = android.graphics.Color.WHITE; canvas.drawCircle(image.width - 10f, 46f, 6f, paint); paint.color = routeColor; canvas.drawCircle(image.width - 10f, 46f, 4f, paint) }
+            if (group.any { point -> isPlaceArranged(point, filtered.activeActivities) } && group[0].optInt("_sequence") == 0) { paint.color = android.graphics.Color.WHITE; canvas.drawCircle(image.width - 10f, 46f, 6f, paint); paint.color = routeColor; canvas.drawCircle(image.width - 10f, 46f, 4f, paint) }
             if (group.size > 1) { paint.textSize = 18f; paint.color = android.graphics.Color.WHITE; paint.style = Paint.Style.STROKE; paint.strokeWidth = 4f; canvas.drawText(group.size.toString(), image.width - 20f, 18f, paint); paint.style = Paint.Style.FILL; paint.color = android.graphics.Color.BLACK; canvas.drawText(group.size.toString(), image.width - 20f, 18f, paint) }
             val imageId = "favorite-group-$index"
             style.addImage(imageId, image)
@@ -206,26 +242,32 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
             }
         }
     }
-    LaunchedEffect(nativeMap, points.map { it.toString() }, route?.toString(), routeColor) {
+    LaunchedEffect(nativeMap, points.map { it.toString() }, filtered.routes.map { it.toString() }, filter.layer, route?.toString(), routeColor) {
         nativeMap?.let { map ->
             map.clear()
             render(map)
-            route?.a("path")?.let { path ->
+            fun addPolyline(path: JSONArray) {
                 val coords =
                     (0 until path.length())
-                        .map { path.getJSONArray(it) }
-                        .map { v ->
-                            Coordinates.toWgs(v.getDouble(0), v.getDouble(1)).let {
+                        .mapNotNull { path.optJSONArray(it) }
+                        .mapNotNull { v ->
+                            if (v.length() < 2) null
+                            else Coordinates.toWgs(v.optDouble(0), v.optDouble(1)).let {
                                 LatLng(it.second, it.first)
                             }
                         }
-                if (coords.size > 1)
+                if (coords.size > 1) {
                     map.addPolyline(
                         PolylineOptions()
                             .addAll(coords)
                             .color(routeColor)
                             .width(5f)
                     )
+                }
+            }
+            if (filter.layer != "收藏") {
+                filtered.routes.forEach { addPolyline(it.o("payload").a("path")) }
+                route?.a("path")?.let(::addPolyline)
             }
         }
     }
@@ -239,6 +281,24 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
             }
         }
     }
+    LaunchedEffect(selected?.s("providerPlaceId")) {
+        val pid = selected?.s("providerPlaceId").orEmpty()
+        if (pid.isBlank()) {
+            placeInfoLoading = false
+            return@LaunchedEffect
+        }
+        placeInfoLoading = true
+        val fetched =
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { fetchPlaceDetail(s.api, pid) }.getOrNull()
+            }
+        if (selected?.s("providerPlaceId") == pid) {
+            if (fetched != null) {
+                placeInfoMap[pid] = fetched.second
+            }
+            placeInfoLoading = false
+        }
+    }
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.padding(horizontal = 16.dp),
@@ -248,8 +308,17 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
             SecondaryButton(
                 {
                     s.action {
-                        results =
-                            s.api.search(query, s.snapshot?.o("trip")?.s("destination").orEmpty())
+                        val items =
+                            searchPlacesWithInfo(
+                                s.api,
+                                query,
+                                s.snapshot?.o("trip")?.s("destination").orEmpty(),
+                            )
+                        items.forEach { (p, info) ->
+                            val pid = p.s("providerPlaceId")
+                            if (pid.isNotBlank() && !info.isEmpty) placeInfoMap[pid] = info
+                        }
+                        results = items.map { it.first }
                     }
                 },
                 enabled = query.isNotBlank(),
@@ -258,6 +327,17 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
                 Text("搜索")
             }
         }
+        MapFilterBar(
+            trip = s.snapshot?.optJSONObject("trip"),
+            days = filtered.days,
+            routeDayId = routeDayId,
+            onRouteDayChange = { routeDayId = it },
+            filter = filter,
+            legend = filtered.legend,
+            onOpenFilter = { filterSheetOpen = true },
+            onOpenLegend = { legendSheetOpen = true },
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
         Box(Modifier.fillMaxWidth().weight(1f)) {
             AndroidView(
                 { view },
@@ -279,7 +359,7 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
         }
         Column(
             Modifier.fillMaxWidth()
-                .heightIn(max = 300.dp)
+                .heightIn(max = 220.dp)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -296,86 +376,30 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
                     }
                 }
             }
-            selected?.let { p ->
-                Panel {
-                    Text(p.s("name"), style = MaterialTheme.typography.titleMedium)
-                    if (p.s("address").isNotBlank()) Text(p.s("address"))
-                    val currentFavorite = favorites.firstOrNull { it.s("id") == p.s("_id") || sameMapPlace(it.o("payload"), p) }
-                    Row {
-                        if (currentFavorite == null) TextButton({
-                            s.action { val place = p.copyJson().apply { remove("_id"); remove("_priority"); remove("_sequence"); put("mark", lastMark) }; s.mutate("create", objectType = "favorite", patch = place) }
-                        }) {
-                            Text("收藏地点")
-                        } else Text("已收藏")
-                        TextButton({ onActivity(mapPlacePayload(p)) }) { Text("加入行程") }
-                        TextButton({
-                            origin = p
-                            route = null
-                            routeText = ""
-                        }) {
-                            Text("从这里出发")
-                        }
-                    }
-                    currentFavorite?.let { favorite ->
-                        Text("标记")
-                        presets.forEach { preset -> TextButton({ s.action { val mark = obj("icon" to preset.o("payload").s("icon"), "color" to preset.o("payload").s("color")); s.mutate("patch", favorite.s("id"), patch = obj("mark" to mark)); lastMark = mark; s.saveDraft("last-favorite-mark", mark) } }) { Text(markTitle(preset.o("payload")) + " " + preset.o("payload").s("name").ifBlank { "未命名" }) } }
-                        TextButton({ customizing = favorite }) { Text("自定义") }
-                    }
-                    if (origin != null) {
-                        Text("从 ${origin!!.s("name")} 到这里")
-                        Choice("交通", mode, listOf("步行", "驾车", "骑行")) { mode = it }
-                        Button({
-                            s.action {
-                                require(!origin!!.isNull("lng") && !p.isNull("lng")) { "地点缺少坐标" }
-                                val type =
-                                    when (mode) {
-                                        "驾车" -> "driving"
-                                        "骑行" -> "bicycling"
-                                        else -> "walking"
-                                    }
-                                val url =
-                                    "/_AMapService/${if(type=="bicycling")"v4" else "v3"}/direction/$type?origin=${origin!!.optDouble("lng")},${origin!!.optDouble("lat")}&destination=${p.optDouble("lng")},${p.optDouble("lat")}&extensions=all"
-                                val r = s.api.request(url)
-                                val paths =
-                                    if (type == "bicycling") r.o("data").a("paths")
-                                    else r.o("route").a("paths")
-                                val path =
-                                    paths.rows().firstOrNull()
-                                        ?: throw IllegalStateException("暂时没有可用路线")
-                                val coords =
-                                    path.a("steps").rows().flatMap { step ->
-                                        step.s("polyline").split(';').mapNotNull { v ->
-                                            val ll = v.split(',')
-                                            val lng = ll.getOrNull(0)?.toDoubleOrNull()
-                                            val lat = ll.getOrNull(1)?.toDoubleOrNull()
-                                            if (lng == null || lat == null) null
-                                            else JSONArray(listOf(lng, lat))
-                                        }
-                                    }
-                                val minutes = path.optDouble("duration") / 60
-                                route =
-                                    obj(
-                                        "path" to JSONArray(coords),
-                                        "minutes" to minutes,
-                                        "distance" to path.optDouble("distance"),
-                                    )
-                                routeText =
-                                    "约 ${kotlin.math.ceil(minutes).toInt()} 分钟 · ${path.optInt("distance")} 米"
-                            }
-                        }) {
-                            Text("查看路线")
-                        }
-                        if (routeText.isNotBlank()) Text(routeText)
-                    }
-                }
-            }
             Row { TextButton({ managingPresets = true }) { Text("管理预设") } }
-            favorites.groupBy { markKey(pointMark(it.o("payload"))) }.forEach { (key, rows) -> FilterChip(markFilter == key, { markFilter = if (markFilter == key) null else key }, label = { Text(markTitle(pointMark(rows[0].o("payload"))) + " " + presetName(rows[0].o("payload")) + " · ${rows.size}") }) }
+            MapLegendStrip(
+                legend = filtered.legend,
+                activeMark = filter.mark,
+                onToggleMark = { filter = filter.copy(mark = it) },
+            )
             Text("我的收藏", style = MaterialTheme.typography.titleMedium)
             if (favorites.isEmpty()) Text("搜索地点，或长按地图选择一个地方。")
-            favorites.forEach { o ->
+            else if (filtered.visibleFavorites.isEmpty()) Text("没有符合筛选的收藏。")
+            filtered.visibleFavorites.forEach { o ->
+                val payload = o.o("payload")
+                val arrangedSuffix =
+                    if (isPlaceArranged(payload, filtered.activeActivities)) " · 已安排" else ""
                 Panel {
-                    TextButton({ selected = o.o("payload").copyJson().put("_id", o.s("id")) }) { Text(markTitle(pointMark(o.o("payload"))) + " " + o.o("payload").s("name")) }
+                    TextButton({ selected = payload.copyJson().put("_id", o.s("id")) }) {
+                        Column {
+                            Text(markTitle(pointMark(payload)) + " " + payload.s("name"))
+                            Text(
+                                placeCategory(payload) + arrangedSuffix,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = LocalJourneyPalette.current.muted,
+                            )
+                        }
+                    }
                     ObjectActions(s, o)
                 }
             }
@@ -389,6 +413,58 @@ fun NativeMapScreen(s: JourneyStore, onActivity: (JSONObject) -> Unit) {
             }
             Spacer(Modifier.height(12.dp))
         }
+    }
+    selected?.let { p ->
+        val pid = p.s("providerPlaceId")
+        MapPlaceDetailSheet(
+            s = s,
+            place = p,
+            placeInfo = if (pid.isNotBlank()) placeInfoMap[pid] else null,
+            placeInfoLoading = placeInfoLoading,
+            favorites = favorites,
+            presets = presets,
+            origin = origin,
+            mode = mode,
+            routeText = routeText,
+            lastMark = lastMark,
+            onDismiss = { selected = null },
+            onAddActivity = onActivity,
+            onSetOrigin = {
+                origin = it
+                route = null
+                routeText = ""
+            },
+            onModeChange = { mode = it },
+            onRouteResult = { routeObj, summary ->
+                route = routeObj
+                routeText = summary
+            },
+            onMarkApplied = {
+                lastMark = it
+                s.launch { s.saveDraft("last-favorite-mark", it) }
+            },
+            onCustomizeFavorite = { customizing = it },
+            pointMark = ::pointMark,
+        )
+    }
+    if (filterSheetOpen) {
+        MapFilterBottomSheet(
+            current = filter,
+            legend = filtered.legend,
+            onDismiss = { filterSheetOpen = false },
+            onApply = {
+                filter = it
+                filterSheetOpen = false
+            },
+        )
+    }
+    if (legendSheetOpen) {
+        MapLegendBottomSheet(
+            legend = filtered.legend,
+            activeMark = filter.mark,
+            onSelectMark = { filter = filter.copy(mark = it) },
+            onDismiss = { legendSheetOpen = false },
+        )
     }
     if (managingPresets) MarkPresetManager(s) { managingPresets = false }
     customizing?.let { favorite -> MarkEditor(s, pointMark(favorite.o("payload")), favorite = favorite, close = { customizing = null }, applied = { lastMark = it; s.launch { s.saveDraft("last-favorite-mark", it) } }) }

@@ -31,19 +31,63 @@ final class BoardSyncTests: XCTestCase {
 
   func testReconcilePendingMatchesTheWebClient() throws {
     let cases = Fixtures.cases(try Fixtures.load("board-sync"), "reconcilePending")
-    XCTAssertGreaterThanOrEqual(cases.count, 10)
+    XCTAssertGreaterThanOrEqual(cases.count, 20)
     for c in cases {
+      // The case stores the pending Map as an object, whose key order JSON decoding
+      // does not keep. Appended items follow the Map's order, so the entries are put in
+      // the order the web result appends them; that order itself is checked by
+      // testPendingItemsAreAppendedInTheOrderTheyChanged.
+      let expectedOrder = c.result["items"].array.map { $0["id"].string }
+      let ids = c.args[2].dictionary.keys.sorted { a, b in
+        (expectedOrder.firstIndex(of: a) ?? .max, a) < (expectedOrder.firstIndex(of: b) ?? .max, b)
+      }
       var pending = BoardPending.Changes(
-        c.args[2].array.map { pair in
-          (pair.array[0].string, .init(expect: pair.array[1]["expect"], at: pair.array[1]["at"].number))
+        ids.map { id in
+          let entry = c.args[2][id]
+          return (id, .init(expect: entry["expect"], at: entry["at"].number))
         })
       let items = BoardPending.reconcile(
         c.args[0].array, local: c.args[1].array, pending: &pending, now: c.args[3].number)
-      XCTAssertTrue(Fixtures.same(c.result["items"], .array(items)), "\(c.args[2])")
-      let left: JSON = .array(
-        pending.pairs.map { .array([.string($0.0), .object(["expect": $0.1.expect, "at": .number($0.1.at)])]) })
-      XCTAssertTrue(Fixtures.same(c.result["pending"], left), "\(c.args[2]) → \(left)")
+      XCTAssertTrue(Fixtures.same(c.result["items"], .array(items)), "\(c.args[2]) → \(items)")
+      var left: [String: JSON] = [:]
+      for (id, entry) in pending.pairs {
+        left[id] = .object(["expect": entry.expect, "at": .number(entry.at)])
+      }
+      XCTAssertTrue(Fixtures.same(c.result["pending"], .object(left)), "\(c.args[2]) → \(left)")
     }
+  }
+
+  /// Expected values from app/src/board-pending.js `reconcilePending` (not in the shared
+  /// fixture: its object form of the Map cannot carry the order on every platform).
+  func testPendingItemsAreAppendedInTheOrderTheyChanged() {
+    let now = 1_764_230_400_000.0
+    func item(_ id: String) -> JSON {
+      .object(["id": .string(id), "state": .string("active"), "z": .number(1)])
+    }
+    let active: JSON = .object(["state": .string("active")])
+    var pending = BoardPending.Changes([
+      ("new-1", .init(expect: active, at: now - 1000)),
+      ("new-2", .init(expect: active, at: now - 1005)),
+      ("new-3", .init(expect: active, at: now - BoardPending.ttl - 1)),
+      ("gone", .init(expect: active, at: now - 1000)),
+    ])
+    let items = BoardPending.reconcile(
+      [item("a")], local: [item("new-2"), item("new-1"), item("new-3"), item("a")],
+      pending: &pending, now: now)
+    XCTAssertEqual(items.map { $0["id"].string }, ["a", "new-1", "new-2"])
+    XCTAssertEqual(pending.order, ["new-1", "new-2", "gone"])
+  }
+
+  /// JavaScript `Number()` on epochs the server never sends (a string, null); expected
+  /// values from app/src/board-pending.js `isStaleResponse`. Kept out of the shared
+  /// fixture because the Android port only accepts numeric epochs.
+  func testStaleResponseFollowsJavaScriptNumbers() {
+    XCTAssertTrue(
+      BoardPending.isStaleResponse(
+        .object(["cursor": .number(3), "epoch": .string("1")]), cursor: .number(5), epoch: .number(1)))
+    XCTAssertTrue(
+      BoardPending.isStaleResponse(
+        .object(["cursor": .number(3), "epoch": .null]), cursor: .number(5), epoch: .number(0)))
   }
 
   func testIsStaleResponseMatchesTheWebClient() throws {
