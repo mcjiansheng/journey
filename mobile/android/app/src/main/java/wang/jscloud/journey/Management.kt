@@ -9,6 +9,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import org.json.JSONObject
 
 @Composable
@@ -92,7 +93,7 @@ fun ManagementScreen(s: JourneyStore, onInvite: () -> Unit, onRename: () -> Unit
     val deleted = deletedContent(s.objects())
     Panel {
         Text("已删除的内容 · ${deleted.size}")
-        deleted.forEach { o -> Text(o.o("payload").s("title").ifBlank { o.o("payload").s("name", "计划内容") }); ObjectActions(s, o) }
+        deleted.forEach { o -> Text(deletedObjectTitle(o, s.objects())); ObjectActions(s, o) }
     }
     val archived = s.trips.find { it.s("id") == trip.s("id") }?.optBoolean("archived") ?: false
     SecondaryButton({ archiveConfirm = true }, modifier = Modifier.fillMaxWidth()) { Text(if (archived) "取消归档" else "归档旅程") }
@@ -173,6 +174,7 @@ fun RenameSheet(s: JourneyStore, close: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun InvitesSheet(s: JourneyStore, close: () -> Unit) {
     val id = s.tripId ?: return
@@ -183,21 +185,33 @@ fun InvitesSheet(s: JourneyStore, close: () -> Unit) {
             } == true
     var invites by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var latest by remember { mutableStateOf<JSONObject?>(null) }
-    var hours by remember { mutableStateOf("72") }
+    var hours by remember { mutableIntStateOf(24) }
     val ctx = LocalContext.current
     LaunchedEffect(id) {
         if (canManage)
             s.launch { invites = s.api.request("/api/trips/$id/invites").a("invites").rows() }
     }
     Sheet("邀请同行伙伴", close) {
-        Field("有效小时数", hours, { hours = it })
+        Text("有效期", style = MaterialTheme.typography.labelLarge)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf(1 to "1 小时", 24 to "1 天", 72 to "3 天", 168 to "7 天").forEach { (value, label) ->
+                FilterChip(
+                    selected = hours == value,
+                    onClick = { hours = value },
+                    label = { Text(label, maxLines = 1, softWrap = false) },
+                )
+            }
+        }
         Button({
             s.action {
                 latest =
                     s.api.request(
                         "/api/trips/$id/invites",
                         "POST",
-                        obj("expiresInHours" to hours.toInt()),
+                        obj("expiresInHours" to hours),
                     )
                 if (canManage) invites = s.api.request("/api/trips/$id/invites").a("invites").rows()
             }
@@ -205,10 +219,10 @@ fun InvitesSheet(s: JourneyStore, close: () -> Unit) {
             Text("生成邀请")
         }
         latest?.let { r ->
-            Panel {
-                Text(r.s("code"), style = MaterialTheme.typography.headlineSmall)
-                Text(r.s("url"))
-                SecondaryButton({
+            InviteQrCard(
+                invite = r,
+                tripName = s.snapshot?.o("trip")?.s("name").orEmpty(),
+                onShare = {
                     ctx.startActivity(
                         Intent.createChooser(
                             Intent(Intent.ACTION_SEND)
@@ -220,10 +234,8 @@ fun InvitesSheet(s: JourneyStore, close: () -> Unit) {
                             "分享邀请",
                         )
                     )
-                }) {
-                    Text("分享邀请")
-                }
-            }
+                },
+            )
         }
         invites.forEach { i ->
             Panel {

@@ -13,7 +13,7 @@ import org.junit.Test
  * `Fixtures.cases(file, "<fn>")` through the port and checks it with `Fixtures.same`.
  */
 object Fixtures {
-    val files = listOf("rich-text.json", "board-geometry.json", "board-widgets.json", "itinerary.json")
+    val files = listOf("rich-text.json", "board-geometry.json", "board-widgets.json", "itinerary.json", "place-information.json")
 
     fun load(name: String): JSONObject =
         JSONObject(
@@ -103,6 +103,28 @@ class SharedFixturesTest {
                 c.result,
                 routeSignature(c.args.getJSONObject(0), c.args.getJSONObject(1), c.args.getString(2)),
             )
+    }
+
+    @Test
+    fun safePlaceUrlMatchesTheWebClient() {
+        val file = Fixtures.load("place-information.json")
+        val cases = Fixtures.cases(file, "safePlaceUrl")
+        assertTrue(cases.isNotEmpty())
+        for (c in cases) {
+            val expected = c.result as? String ?: ""
+            assertEquals(c.args.opt(0)?.toString(), expected, safePlaceUrl(c.args.opt(0)))
+        }
+    }
+
+    @Test
+    fun normalizePlaceInformationMatchesTheWebClient() {
+        val file = Fixtures.load("place-information.json")
+        val cases = Fixtures.cases(file, "normalizePlaceInformation")
+        assertTrue(cases.isNotEmpty())
+        for (c in cases) {
+            val actual = normalizePlaceInformation(c.args.optJSONObject(0))
+            assertTrue("Mismatch for ${c.args}: expected=${c.result}, actual=$actual", Fixtures.same(c.result, actual))
+        }
     }
 
     @Test

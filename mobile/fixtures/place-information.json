@@ -1,0 +1,468 @@
+{
+  "$comment": "由 mobile/tools/generate-fixtures.mjs 从网页端代码生成，不要手改。网页端函数改动后重新运行该脚本。",
+  "sources": [
+    "app/src/place-information.js"
+  ],
+  "cases": [
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        ""
+      ],
+      "result": ""
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        "   "
+      ],
+      "result": ""
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        null
+      ],
+      "result": ""
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        []
+      ],
+      "result": ""
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        123
+      ],
+      "result": ""
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        "javascript:alert(1)"
+      ],
+      "result": ""
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        "data:image/png;base64,a"
+      ],
+      "result": ""
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        "//example.com"
+      ],
+      "result": ""
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        "/place/1"
+      ],
+      "result": ""
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        "https://user:password@example.com"
+      ],
+      "result": ""
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        "https://user@example.com"
+      ],
+      "result": ""
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        " https://example.com/info "
+      ],
+      "result": "https://example.com/info"
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        "https://example.com"
+      ],
+      "result": "https://example.com/"
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        "HTTP://EXAMPLE.COM:80/Path?a=1#h"
+      ],
+      "result": "http://example.com/Path?a=1#h"
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        "https://example.com:443/a"
+      ],
+      "result": "https://example.com/a"
+    },
+    {
+      "fn": "safePlaceUrl",
+      "args": [
+        "http://example.com:8080/a"
+      ],
+      "result": "http://example.com:8080/a"
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "id": "B00190BBCZ",
+          "type": "风景名胜;风景名胜;国家级景点",
+          "tel": "025-83614286",
+          "website": [],
+          "open_time": "24小时营业",
+          "opentime2": "周一至周日 00:00-24:00",
+          "photos": [
+            {
+              "title": "夏季",
+              "url": "http://store.is.autonavi.com/showpic/example"
+            }
+          ],
+          "rating": "4.8"
+        }
+      ],
+      "result": {
+        "type": "国家级景点",
+        "photo": {
+          "url": "https://store.is.autonavi.com/showpic/example",
+          "title": "夏季"
+        },
+        "openingHours": "周一至周日 00:00-24:00",
+        "telephone": "025-83614286",
+        "telephoneUrl": "tel:02583614286",
+        "website": "",
+        "introduction": "",
+        "detailUrl": "https://www.amap.com/place/B00190BBCZ"
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "id": "a/b",
+          "tel": "400-123-4567;025-12345678",
+          "website": "https://example.com",
+          "photos": [
+            {
+              "url": "javascript:alert(1)"
+            }
+          ],
+          "scenic": {
+            "intro": " 景区简介 ",
+            "opentime": "09:00–17:00",
+            "photos": [
+              {
+                "url": "https://example.com/photo.jpg",
+                "title": "景区"
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "type": "",
+        "photo": {
+          "url": "https://example.com/photo.jpg",
+          "title": "景区"
+        },
+        "openingHours": "09:00–17:00",
+        "telephone": "400-123-4567;025-12345678",
+        "telephoneUrl": "tel:4001234567",
+        "website": "https://example.com/",
+        "introduction": "景区简介",
+        "detailUrl": "https://www.amap.com/place/a%2Fb"
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "type": [],
+          "photos": [],
+          "tel": [],
+          "website": []
+        }
+      ],
+      "result": {
+        "type": "",
+        "photo": null,
+        "openingHours": "",
+        "telephone": "",
+        "telephoneUrl": "",
+        "website": "",
+        "introduction": "",
+        "detailUrl": ""
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {}
+      ],
+      "result": {
+        "type": "",
+        "photo": null,
+        "openingHours": "",
+        "telephone": "",
+        "telephoneUrl": "",
+        "website": "",
+        "introduction": "",
+        "detailUrl": ""
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "tel": "请到现场咨询"
+        }
+      ],
+      "result": {
+        "type": "",
+        "photo": null,
+        "openingHours": "",
+        "telephone": "请到现场咨询",
+        "telephoneUrl": "",
+        "website": "",
+        "introduction": "",
+        "detailUrl": ""
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "tel": "+86 25-8361 4286，025-11111111"
+        }
+      ],
+      "result": {
+        "type": "",
+        "photo": null,
+        "openingHours": "",
+        "telephone": "+86 25-8361 4286，025-11111111",
+        "telephoneUrl": "tel:+862583614286",
+        "website": "",
+        "introduction": "",
+        "detailUrl": ""
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "cinema": {
+            "openingtime": "10:00–22:00"
+          }
+        }
+      ],
+      "result": {
+        "type": "",
+        "photo": null,
+        "openingHours": "10:00–22:00",
+        "telephone": "",
+        "telephoneUrl": "",
+        "website": "",
+        "introduction": "",
+        "detailUrl": ""
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "dining": {
+            "opentime": "11:00-21:00",
+            "intro": "老字号菜馆"
+          }
+        }
+      ],
+      "result": {
+        "type": "",
+        "photo": null,
+        "openingHours": "11:00-21:00",
+        "telephone": "",
+        "telephoneUrl": "",
+        "website": "",
+        "introduction": "老字号菜馆",
+        "detailUrl": ""
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "hotel": {
+            "intro": "近地铁口"
+          }
+        }
+      ],
+      "result": {
+        "type": "",
+        "photo": null,
+        "openingHours": "",
+        "telephone": "",
+        "telephoneUrl": "",
+        "website": "",
+        "introduction": "近地铁口",
+        "detailUrl": ""
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "photos": [
+            {
+              "url": "http://sub.amap.com/p.jpg"
+            }
+          ]
+        }
+      ],
+      "result": {
+        "type": "",
+        "photo": {
+          "url": "https://sub.amap.com/p.jpg",
+          "title": ""
+        },
+        "openingHours": "",
+        "telephone": "",
+        "telephoneUrl": "",
+        "website": "",
+        "introduction": "",
+        "detailUrl": ""
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "photos": [
+            {
+              "url": "http://sub.amap.com:80/p.jpg"
+            }
+          ]
+        }
+      ],
+      "result": {
+        "type": "",
+        "photo": {
+          "url": "https://sub.amap.com/p.jpg",
+          "title": ""
+        },
+        "openingHours": "",
+        "telephone": "",
+        "telephoneUrl": "",
+        "website": "",
+        "introduction": "",
+        "detailUrl": ""
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "photos": [
+            {
+              "url": "http://amap.com/p.jpg"
+            }
+          ]
+        }
+      ],
+      "result": {
+        "type": "",
+        "photo": {
+          "url": "http://amap.com/p.jpg",
+          "title": ""
+        },
+        "openingHours": "",
+        "telephone": "",
+        "telephoneUrl": "",
+        "website": "",
+        "introduction": "",
+        "detailUrl": ""
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "photos": [
+            {
+              "url": "http://example.com/photo.jpg"
+            }
+          ]
+        }
+      ],
+      "result": {
+        "type": "",
+        "photo": {
+          "url": "http://example.com/photo.jpg",
+          "title": ""
+        },
+        "openingHours": "",
+        "telephone": "",
+        "telephoneUrl": "",
+        "website": "",
+        "introduction": "",
+        "detailUrl": ""
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "photos": [
+            {
+              "url": "http://autonavi.com.evil.test/photo.jpg"
+            }
+          ]
+        }
+      ],
+      "result": {
+        "type": "",
+        "photo": {
+          "url": "http://autonavi.com.evil.test/photo.jpg",
+          "title": ""
+        },
+        "openingHours": "",
+        "telephone": "",
+        "telephoneUrl": "",
+        "website": "",
+        "introduction": "",
+        "detailUrl": ""
+      }
+    },
+    {
+      "fn": "normalizePlaceInformation",
+      "args": [
+        {
+          "id": "id with/space"
+        }
+      ],
+      "result": {
+        "type": "",
+        "photo": null,
+        "openingHours": "",
+        "telephone": "",
+        "telephoneUrl": "",
+        "website": "",
+        "introduction": "",
+        "detailUrl": "https://www.amap.com/place/id%20with%2Fspace"
+      }
+    }
+  ]
+}

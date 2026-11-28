@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
             JourneyTheme(store) {
                 JourneyApp(
                     store,
-                    intent?.data?.getQueryParameter("invite") ?: intent?.data?.lastPathSegment,
+                    intent?.dataString?.let(::normalizeInvite),
                 )
             }
         }
@@ -529,6 +529,7 @@ fun CreateSheet(s: JourneyStore, close: () -> Unit) {
 @Composable
 fun JoinSheet(s: JourneyStore, code: String, setCode: (String) -> Unit, close: () -> Unit) {
     var preview by remember { mutableStateOf<JSONObject?>(null) }
+    var scanning by remember { mutableStateOf(false) }
     val normalized = normalizeInvite(code)
     Sheet("加入旅程", close) {
         Field(
@@ -539,6 +540,11 @@ fun JoinSheet(s: JourneyStore, code: String, setCode: (String) -> Unit, close: (
                 preview = null
             },
         )
+        SecondaryButton({ scanning = true }, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Outlined.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("扫描二维码")
+        }
         SecondaryButton(
             {
                 s.action {
@@ -564,6 +570,16 @@ fun JoinSheet(s: JourneyStore, code: String, setCode: (String) -> Unit, close: (
             }
         }
     }
+    if (scanning) {
+        QrScannerDialog(
+            onScanned = { raw ->
+                setCode(normalizeInvite(raw))
+                preview = null
+                scanning = false
+            },
+            onDismiss = { scanning = false },
+        )
+    }
 }
 
 @Composable
@@ -573,6 +589,16 @@ fun ItineraryScreen(
     onSchedule: () -> Unit,
     onRoute: (JSONObject?, JSONObject, JSONObject?) -> Unit,
 ) {
+    val trip = s.snapshot?.o("trip") ?: JSONObject()
+    val members = s.snapshot?.a("members")?.rows() ?: emptyList()
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60000)
+            now = System.currentTimeMillis()
+        }
+    }
+    val tripClock = tripClockAt(trip.s("timezone"), now)
     val days =
         s.objects("day")
             .filter { it.s("state") == "active" }
@@ -582,6 +608,9 @@ fun ItineraryScreen(
             )
     val day = days.find { it.s("id") == s.selectedDay } ?: days.firstOrNull()
     val id = day?.s("id")
+    val todayDay = findTodayDay(days, tripClock.today)
+    val rows = orderedActivities(s.objects(), id.orEmpty())
+    val nextActivity = findNextActivity(day, rows, tripClock.today, tripClock.clock)
     LaunchedEffect(id) { s.selectedDay = id }
     Row(
         Modifier.fillMaxWidth(),
@@ -596,6 +625,7 @@ fun ItineraryScreen(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         days.forEach { d ->
+            val chipDate = d.o("payload").s("date")
             FilterChip(
                 d.s("id") == id,
                 { s.selectedDay = d.s("id") },
@@ -603,7 +633,7 @@ fun ItineraryScreen(
                     Column {
                         Text("第 ${d.o("payload").optInt("ordinal")} 天")
                         Text(
-                            d.o("payload").s("date", "日期待定"),
+                            if (chipDate == tripClock.today) "今天" else chipDate.ifBlank { "日期待定" },
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }
@@ -611,6 +641,13 @@ fun ItineraryScreen(
             )
         }
     }
+    ItineraryJumpBar(
+        todayDay = todayDay,
+        currentDayId = id,
+        nextActivity = nextActivity,
+        onJumpToday = { s.selectedDay = it },
+        onJumpNext = { s.highlightedActivity = it },
+    )
     Button({ onEdit(null) }, enabled = id != null) {
         Icon(Icons.Outlined.Add, null)
         Text("添加活动")
@@ -620,30 +657,100 @@ fun ItineraryScreen(
     var dragging by remember(id) { mutableStateOf<String?>(null) }
     var dayMenu by remember { mutableStateOf(false) }
     var swap by remember { mutableStateOf(false) }
-    Row {
-        if (sorting) { Text("按住 ⋮⋮ 拖动调整顺序；有具体时间的安排会按时间自动排列", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall); TextButton({ sorting = false }) { Text("完成") } }
-        else Box {
-            IconButton({ dayMenu = true }) { Icon(Icons.Outlined.MoreHoriz, "当天菜单") }
-            DropdownMenu(dayMenu, { dayMenu = false }) {
-                DropdownMenuItem(text = { Text("调整顺序") }, onClick = { sorting = true; dayMenu = false })
-                DropdownMenuItem(text = { Text("与另一天交换") }, onClick = { swap = true; dayMenu = false })
+    val undoScope = LocalUndoScope.current
+    val undoHost = LocalUndoHost.current
+    val dayWishDelete = day?.a("expressions")?.rows()?.count { it.optBoolean("wishDelete") } ?: 0
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (sorting) {
+            Text("按住 ⋮⋮ 拖动调整顺序；有具体时间的安排会按时间自动排列", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+            TextButton({ sorting = false }) { Text("完成") }
+        } else {
+            Box {
+                IconButton({ dayMenu = true }) { Icon(Icons.Outlined.MoreHoriz, "当天菜单") }
+                DropdownMenu(dayMenu, { dayMenu = false }) {
+                    DropdownMenuItem(text = { Text("调整顺序") }, onClick = { sorting = true; dayMenu = false })
+                    DropdownMenuItem(
+                        text = { Text("与另一天交换") },
+                        enabled = days.size >= 2,
+                        onClick = { swap = true; dayMenu = false },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("调整日期与天数") },
+                        onClick = { dayMenu = false; onSchedule() },
+                    )
+                    day?.let { currentDay ->
+                        HorizontalDivider()
+                        val directDeleteDay = canDeleteDirectly(trip, members, s.user?.s("id"))
+                        val ownWishDelete =
+                            currentDay.a("expressions").rows()
+                                .find { it.s("userId") == s.user?.s("id") }
+                                ?.optBoolean("wishDelete") == true
+                        if (directDeleteDay) {
+                            DropdownMenuItem(
+                                text = { Text("删除这一天", color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error)
+                                },
+                                onClick = {
+                                    dayMenu = false
+                                    s.action {
+                                        s.mutate("delete", currentDay.s("id"), generation = currentDay.optInt("generation"))
+                                        val undoGen =
+                                            s.objects().find { it.s("id") == currentDay.s("id") }?.optInt("generation")
+                                                ?: (currentDay.optInt("generation") + 1)
+                                        undoScope.launch {
+                                            if (
+                                                undoHost.showSnackbar("已删除", "撤销", duration = SnackbarDuration.Long) ==
+                                                    SnackbarResult.ActionPerformed
+                                            ) {
+                                                s.action { s.mutate("restore", currentDay.s("id"), generation = undoGen) }
+                                            }
+                                        }
+                                    }
+                                },
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text(if (ownWishDelete) "撤回删除意见" else "希望删除这一天") },
+                                onClick = {
+                                    dayMenu = false
+                                    s.action {
+                                        s.mutate(
+                                            "express",
+                                            currentDay.s("id"),
+                                            generation = currentDay.optInt("generation"),
+                                            expression = obj("wishDelete" to !ownWishDelete),
+                                        )
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+            if (dayWishDelete > 0) {
+                Text(
+                    "$dayWishDelete/${members.size} 人希望删除这一天",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
     if (swap) AlertDialog(onDismissRequest = { swap = false }, title = { Text("与哪一天交换") }, text = { Column { days.filter { it.s("id") != id }.forEach { target -> TextButton({
         s.action {
             val moves = s.objects("activity").filter { it.s("state") == "active" && it.o("payload").s("dayId") in listOf(id, target.s("id")) }.map { obj("activityId" to it.s("id"), "dayId" to if (it.o("payload").s("dayId") == id) target.s("id") else id) }
-            val trip = s.snapshot!!.o("trip")
-            s.mutate("reschedule", trip.s("id"), patch = obj("startDate" to trip.opt("startDate"), "dayCount" to trip.optInt("dayCount"), "moves" to org.json.JSONArray(moves))); swap = false
+            val currentTrip = s.snapshot!!.o("trip")
+            s.mutate("reschedule", currentTrip.s("id"), patch = obj("startDate" to currentTrip.opt("startDate"), "dayCount" to currentTrip.optInt("dayCount"), "moves" to org.json.JSONArray(moves))); swap = false
         }
     }) { Text("第 ${target.o("payload").optInt("ordinal")} 天 · ${target.o("payload").s("date")}") } } } }, confirmButton = { TextButton({ swap = false }) { Text("取消") } })
-    val rows = orderedActivities(s.objects(), id.orEmpty())
     val currentRows by rememberUpdatedState(rows)
     if (rows.isEmpty()) Panel { Text("这一天还没有安排，添上第一站吧。") }
     rows.forEachIndexed { i, o ->
         val p = o.o("payload")
         val placeName = p.o("place").s("name")
         val displayPlace = placeName.takeIf { it.isNotBlank() && it.trim() != p.s("title").trim() }
+        val isNext = nextActivity?.s("id") == o.s("id")
         if (!sorting) RouteLink(s, rows.getOrNull(i - 1), o, onRoute, showEmpty = false)
         key(o.s("id")) {
         var distance by remember { mutableFloatStateOf(0f) }
@@ -688,15 +795,33 @@ fun ItineraryScreen(
             }
             if (!sorting) {
             val t = p.o("time")
-            Text(
-                if (t.s("mode") == "precise")
-                    listOf(t.s("start"), t.s("end"))
-                        .filter { it.isNotEmpty() }
-                        .joinToString(" – ") +
-                        if (t.optInt("endDayOffset") > 0) "（+${t.optInt("endDayOffset")}天）" else ""
-                else t.s("period", "时间灵活"),
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (t.s("mode") == "precise")
+                        listOf(t.s("start"), t.s("end"))
+                            .filter { it.isNotEmpty() }
+                            .joinToString(" – ") +
+                            if (t.optInt("endDayOffset") > 0) "（+${t.optInt("endDayOffset")}天）" else ""
+                    else t.s("period", "时间灵活"),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                if (isNext) {
+                    Surface(
+                        color = LocalJourneyPalette.current.selected,
+                        shape = RoundedCornerShape(999.dp),
+                    ) {
+                        Text(
+                            "下一项",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+            }
             if (displayPlace != null) Text("⌖ " + displayPlace)
             if (!sorting && p.s("notes").isNotEmpty()) Text(p.s("notes"), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             if (p.s("url").isNotEmpty()) {
@@ -721,7 +846,15 @@ fun ItineraryScreen(
         Text("已删除的安排", style = MaterialTheme.typography.titleMedium)
         deleted.forEach {
             Panel {
-                Text(it.o("payload").s("title", "第 ${it.o("payload").optInt("ordinal")} 天"))
+                Text(deletedObjectTitle(it, s.objects()))
+                if (it.s("kind") == "day") {
+                    val linkedCount = s.objects("activity").count { a -> a.o("payload").s("dayId") == it.s("id") }
+                    Text(
+                        "保留 $linkedCount 项关联活动",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 ObjectActions(s, it)
             }
         }
@@ -771,7 +904,7 @@ fun ObjectActions(s: JourneyStore, o: JSONObject, onEdit: (() -> Unit)? = null, 
                 })
                 if (if (deleted) canRestore else canDelete) {
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text(if (deleted) "恢复" else "删除",
+                    DropdownMenuItem(text = { Text(if (deleted) "恢复" else if (o.s("kind") == "day") "删除这一天" else "删除",
                         color = if (deleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) },
                         leadingIcon = { Icon(if (deleted) Icons.Outlined.Restore else Icons.Outlined.Delete, null) },
                         onClick = {

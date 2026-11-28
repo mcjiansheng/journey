@@ -23,6 +23,7 @@ import * as geo from '../../app/src/board-geometry.js';
 import * as widgets from '../../app/src/board-widgets.js';
 import * as domain from '../../app/src/domain.js';
 import * as expenses from '../../app/src/expenses.js';
+import * as placeInfo from '../../app/src/place-information.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.resolve(here, '..', 'fixtures');
@@ -758,11 +759,81 @@ function itineraryFixture() {
 }
 
 // ---------------------------------------------------------------------------
+// place-information.json (app/src/place-information.js)
+// ---------------------------------------------------------------------------
+function placeInformationFixture() {
+  const { cases, call } = recorder(placeInfo, 'app/src/place-information.js');
+  for (const candidate of [
+    '',
+    '   ',
+    null,
+    [],
+    123,
+    'javascript:alert(1)',
+    'data:image/png;base64,a',
+    '//example.com',
+    '/place/1',
+    'https://user:password@example.com',
+    'https://user@example.com',
+    ' https://example.com/info ',
+    'https://example.com',
+    'HTTP://EXAMPLE.COM:80/Path?a=1#h',
+    'https://example.com:443/a',
+    'http://example.com:8080/a',
+  ])
+    call('safePlaceUrl', candidate);
+
+  for (const poi of [
+    {
+      id: 'B00190BBCZ',
+      type: '风景名胜;风景名胜;国家级景点',
+      tel: '025-83614286',
+      website: [],
+      open_time: '24小时营业',
+      opentime2: '周一至周日 00:00-24:00',
+      photos: [{ title: '夏季', url: 'http://store.is.autonavi.com/showpic/example' }],
+      rating: '4.8',
+    },
+    {
+      id: 'a/b',
+      tel: '400-123-4567;025-12345678',
+      website: 'https://example.com',
+      photos: [{ url: 'javascript:alert(1)' }],
+      scenic: {
+        intro: ' 景区简介 ',
+        opentime: '09:00–17:00',
+        photos: [{ url: 'https://example.com/photo.jpg', title: '景区' }],
+      },
+    },
+    { type: [], photos: [], tel: [], website: [] },
+    {},
+    { tel: '请到现场咨询' },
+    { tel: '+86 25-8361 4286，025-11111111' },
+    { cinema: { openingtime: '10:00–22:00' } },
+    { dining: { opentime: '11:00-21:00', intro: '老字号菜馆' } },
+    { hotel: { intro: '近地铁口' } },
+    { photos: [{ url: 'http://sub.amap.com/p.jpg' }] },
+    { photos: [{ url: 'http://sub.amap.com:80/p.jpg' }] },
+    { photos: [{ url: 'http://amap.com/p.jpg' }] },
+    { photos: [{ url: 'http://example.com/photo.jpg' }] },
+    { photos: [{ url: 'http://autonavi.com.evil.test/photo.jpg' }] },
+    { id: 'id with/space' },
+  ])
+    call('normalizePlaceInformation', poi);
+
+  return {
+    ...header(['app/src/place-information.js']),
+    cases,
+  };
+}
+
+// ---------------------------------------------------------------------------
 const files = {
   'rich-text.json': richTextFixture(),
   'board-geometry.json': boardGeometryFixture(),
   'board-widgets.json': boardWidgetsFixture(),
   'itinerary.json': itineraryFixture(),
+  'place-information.json': placeInformationFixture(),
 };
 
 const check = process.argv.includes('--check');
