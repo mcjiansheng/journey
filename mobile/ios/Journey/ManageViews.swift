@@ -153,11 +153,7 @@ struct ManageView: View {
             }
             Button("确认退出", role: .destructive) {
               store.perform {
-                _ = try await store.api(
-                  "/api/trips/\(store.trip.id)/leave", method: "POST",
-                  body: .object(["confirmPurge": .bool(purge)]))
-                store.selectedTrip = nil
-                try await store.refreshTrips()
+                try await store.leaveTrip(store.trip.id, confirmPurge: purge)
                 leave = false
               }
             }.disabled(store.snapshot["members"].array.count == 1 && !purge)

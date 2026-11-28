@@ -31,7 +31,7 @@ JSON 请求/响应；错误 {error:{code,message,details?}}。Cookie HttpOnly �
 - reschedule 操作 objectId=tripId，patch={startDate,dayCount,moves:[{activityId,dayId?,date?,ordinal?}]}；事务中建/复用计划日，保留未选活动原日期/时间；缩短范围不删对象。具体实现可补充合同，但先通知协调者。
 - PATCH /api/trips/:id/members/:userId {isAdmin?,canInvite?}，DELETE 同 URL 移除，POST /api/trips/:id/leave {confirmPurge:boolean} -> {purged:boolean}；PATCH /api/trips/:id/team {teamMode}；POST /api/trips/:id/archive {archived:boolean} 是本人旅程列表整理。
 - POST /api/trips/:id/invites {expiresInHours} -> {id,code,url,expiresAt}；GET 同 URL -> {invites:[{id,issuedBy,expiresAt,revokedAt}]}；DELETE /api/trips/:id/invites/:inviteId；GET /api/invites/:code 仅最小预览 {name,teamMode}；POST /api/invites/accept {code} -> Snapshot。
-- GET /api/trips/:id/events 是 SSE，只推 event:change / data:{cursor,epoch}，变更时客户端重读快照；连接立即发当前游标避免读取订阅间隙。授权变化立即关闭并发 event:revoked，周期复查会话。
+- GET /api/trips/:id/events 是 SSE（未登录 401，非成员或旅程不存在 / 已清除同读取快照 403 / 404 / 410）。事件：event:change / data:{cursor,epoch}，变更时客户端重读快照，连接建立立即发一次当前游标避免读取订阅间隙；event:presence（白板在线提示，见上；连接时补发 15 秒内的条目）；event:revoked / data:{}，成员被移出、旅程被清除、该会话登出或会话失效时发出并关闭连接。服务端每 15 秒复查会话与成员资格，有效时发注释行 `: heartbeat` 保活。连接数上限见上（每用户每旅程 4 条，超限 429）。
 - PUT /api/navigation {lastTripId?,tripId?,context?} -> {ok:true}，context 账号隔离，包含 page/dayId/scroll/selection/draft/map。
 - 地图安全代理 /_AMapService/*，服务端注入 jscode，限定高德域名与路径并鉴权限流。前端通过 SDK 插件搜索/逆编码/路线，不能输出安全密钥；/api/config 只暴露公开 JS key。
 

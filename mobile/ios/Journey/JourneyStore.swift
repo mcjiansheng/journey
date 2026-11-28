@@ -5,7 +5,9 @@ import SwiftUI
 @MainActor final class JourneyStore: ObservableObject {
   @Published var user: JSON = .null
   @Published var cache = AccountCache()
-  @Published var selectedTrip: String?
+  @Published var selectedTrip: String? {
+    didSet { if selectedTrip != oldValue { updateLiveUpdates() } }
+  }
   @Published var error: String?
   @Published var undoDeletion: JSON?
   private var undoTrip = ""
@@ -16,7 +18,9 @@ import SwiftUI
   @Published private(set) var savingAppearance = false
   @Published var recoveryBusy = false
   @Published var loadedTrips = false
-  @Published var sessionExpired = false
+  @Published var sessionExpired = false {
+    didSet { if sessionExpired != oldValue { updateLiveUpdates() } }
+  }
   @Published var baseURL: String
   private var csrf = ""
   private var lease: TimeLease?
@@ -26,6 +30,8 @@ import SwiftUI
   private let session: URLSession
   private let storageDirectory: URL?
   private var pollTask: Task<Void, Never>?
+  /// Server-sent events for the open trip (EventStream.swift).
+  lazy var live = LiveUpdates(session: session)
   private var accountID = ""
   private var storageFailure: String?
   var snapshot: JSON {
@@ -224,10 +230,7 @@ import SwiftUI
   func open(_ id: String) async throws {
     selectedTrip = id
     if cache.snapshots[id] != nil { status = "正在更新…" }
-    let r = try await api("/api/trips/\(id)")
-    accept(r)
-    try persist()
-    status = cache.queue.isEmpty ? "已同步" : "有修改等待同步"
+    try await rereadTrip(id)
     _ = try? await api("/api/navigation", method: "PUT", body: .object(["lastTripId": .string(id)]))
   }
   func refresh() async throws {
@@ -235,10 +238,7 @@ import SwiftUI
       try await refreshTrips()
       return
     }
-    let r = try await api("/api/trips/\(id)")
-    accept(r)
-    try persist()
-    status = cache.queue.isEmpty ? "已同步" : "有修改等待同步"
+    try await rereadTrip(id)
   }
   func create(_ body: JSON) async throws {
     let r = try await api("/api/trips", method: "POST", body: body)
@@ -529,7 +529,7 @@ import SwiftUI
         try await renewLease()
       }
       await flush()
-      try await refresh()
+      if pollShouldRefresh { try await refresh() }
     } catch { status = "暂时离线" }
   }
   func startPolling() {
@@ -569,7 +569,7 @@ import SwiftUI
       throw APIError(message: "本机保存的修改读取失败：\(error.localizedDescription)", code: "LOCAL_STORAGE")
     }
   }
-  private func persist() throws {
+  func persist() throws {
     if let failure = storageFailure {
       throw APIError(message: "本机保存的修改无法读取：" + failure, code: "LOCAL_STORAGE")
     }

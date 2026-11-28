@@ -28,6 +28,7 @@ import SwiftUI
         store.startPolling()
       }.onChange(of: phase) { _, phase in
         if phase == .active { store.startPolling() } else { store.stopPolling() }
+        store.setForeground(phase != .background)
       }
     }
   }
