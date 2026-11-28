@@ -28,6 +28,8 @@ import SwiftUI
   private var pollTask: Task<Void, Never>?
   private var accountID = ""
   private var storageFailure: String?
+  /// The open board's items (BoardStore.swift); boards themselves are in the snapshot.
+  lazy var boards = BoardStore(journey: self)
   var snapshot: JSON {
     guard let id = selectedTrip, let snap = cache.snapshots[id] else { return .null }
     return SnapshotProjection.apply(
@@ -345,16 +347,20 @@ import SwiftUI
       do {
         let r = try await api("/api/trips/\(op.tripID)/operations", method: "POST", body: op.body)
         guard captured == epoch else { return }
-        guard r["receipt"]["operationId"].string == op.id, r["snapshot"]["trip"].id == op.tripID,
-          !r["snapshot"]["objects"].isNull
+        // Board item operations are answered with the receipt only; the items are read
+        // back through the board's incremental endpoint.
+        let boardItem = op.body["objectType"].string == "boardItem"
+        let snapshotFits = r["snapshot"]["trip"].id == op.tripID && !r["snapshot"]["objects"].isNull
+        guard r["receipt"]["operationId"].string == op.id, boardItem || snapshotFits
         else { throw APIError(message: "服务器回复未能确认，保留修改等待重试", code: "RECEIPT_UNKNOWN") }
         let previous = cache
-        accept(r["snapshot"])
+        if snapshotFits { accept(r["snapshot"]) }
         cache.queue.removeAll { $0.id == op.id }
         do { try persist() } catch {
           cache = previous
           throw error
         }
+        if boardItem { boards.operationAccepted(tripID: op.tripID) }
         status = cache.queue.isEmpty ? "已同步" : "正在上传…"
       } catch {
         guard captured == epoch else { return }
@@ -435,6 +441,7 @@ import SwiftUI
       cache = old
       throw error
     }
+    boards.queueDiscarded(tripID: tripID)
   }
   func draft(_ key: String) -> JSON { cache.drafts[key] ?? .null }
   func setDraft(_ key: String, _ value: JSON) throws {
@@ -550,6 +557,11 @@ import SwiftUI
   func stopPolling() {
     pollTask?.cancel()
     pollTask = nil
+  }
+  /// Board item caches of the signed-in account, beside its account cache.
+  func boardCacheDirectory() -> URL? {
+    accountID.isEmpty
+      ? nil : cacheURL(for: accountID).deletingPathExtension().appendingPathExtension("boards")
   }
   private var cacheURL: URL { cacheURL(for: accountID) }
   private func cacheURL(for owner: String) -> URL {

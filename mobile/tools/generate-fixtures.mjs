@@ -23,6 +23,7 @@ import * as geo from '../../app/src/board-geometry.js';
 import * as widgets from '../../app/src/board-widgets.js';
 import * as domain from '../../app/src/domain.js';
 import * as expenses from '../../app/src/expenses.js';
+import * as boardPending from '../../app/src/board-pending.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.resolve(here, '..', 'fixtures');
@@ -758,11 +759,266 @@ function itineraryFixture() {
 }
 
 // ---------------------------------------------------------------------------
+// board-sync.json (app/src/board-pending.js): the rules the board sync layer
+// uses to keep local changes the server has not echoed yet and to drop item
+// responses older than what is on screen. board-sync.js itself imports React
+// and the browser sync layer, so its normalizeBoardItem / cleanBoardItemPatch
+// are checked by native unit tests instead.
+// ---------------------------------------------------------------------------
+function boardSyncFixture() {
+  // reconcilePending prunes its `pending` Map in place. The case records the Map
+  // as its entries ([[id, { expect, at }], …] in insertion order) and the result
+  // as { items, pending } with the entries left after the call.
+  const reconcile = {
+    reconcilePending(serverItems, localItems, entries, now) {
+      const map = new Map(entries);
+      const items = boardPending.reconcilePending(serverItems, localItems, map, now);
+      return { items, pending: [...map.entries()] };
+    },
+  };
+  const m = recorder(boardPending, 'app/src/board-pending.js');
+  const r = recorder(reconcile, 'app/src/board-pending.js');
+  const NOW = Date.parse('2026-11-27T08:00:00Z');
+  const TTL = boardPending.PENDING_TTL;
+
+  m.call('mergeExpected');
+  m.call('mergeExpected', {}, { state: 'active' });
+  m.call(
+    'mergeExpected',
+    { frame: { x: 1, y: 2, w: 10, h: 10, rotation: 0, scale: 1 }, z: 3 },
+    { frame: { x: 5 }, z: 4 },
+  );
+  m.call(
+    'mergeExpected',
+    { style: { color: 'yellow' } },
+    { style: { locked: true }, content: { type: 'note', text: '集合' } },
+  );
+  m.call(
+    'mergeExpected',
+    {
+      content: {
+        type: 'stroke',
+        tool: 'pen',
+        points: [
+          [0, 0],
+          [1, 1],
+        ],
+      },
+    },
+    { content: { points: [[2, 2]] } },
+  );
+  m.call(
+    'mergeExpected',
+    { linkedActivityId: 'act-1', state: 'active' },
+    { linkedActivityId: null },
+  );
+  m.call('mergeExpected', { state: 'active' }, { state: 'deleted' });
+  m.call('mergeExpected', { z: 1 }, { frame: { x: 1, y: 2 } });
+  m.call('mergeExpected', { tags: ['a', 'b'] }, { tags: ['c'] });
+
+  const frame = (x, y, w = 160, h = 120) => ({ x, y, w, h, rotation: 0, scale: 1 });
+  const item = (id, fields = {}) => ({
+    id,
+    kind: 'boardItem',
+    state: 'active',
+    generation: 0,
+    boardId: 'default-board',
+    frame: frame(0, 0),
+    z: 1,
+    content: { type: 'note', text: id },
+    style: { color: 'yellow' },
+    linkedActivityId: null,
+    ...fields,
+  });
+  const server = [
+    item('a', { frame: frame(10, 20) }),
+    item('b', { frame: frame(300, 40), z: 2 }),
+    item('c', { state: 'deleted', generation: 1, z: 3 }),
+  ];
+  const fresh = NOW - 1000;
+  const expired = NOW - TTL - 1;
+
+  // Nothing pending: the server copy is used as it is.
+  r.call('reconcilePending', server, [], [], NOW);
+  // The server already reflects the change (numbers within 0.01): use it, forget the change.
+  r.call(
+    'reconcilePending',
+    server,
+    [item('a', { frame: frame(10.004, 19.996) })],
+    [['a', { expect: { frame: { x: 10.004, y: 19.996 } }, at: fresh }]],
+    NOW,
+  );
+  // Not reflected yet and still fresh: keep the local copy in the server's place.
+  r.call(
+    'reconcilePending',
+    server,
+    [item('a', { frame: frame(80, 90) }), item('b', { frame: frame(300, 40), z: 2 })],
+    [['a', { expect: { frame: { x: 80, y: 90 } }, at: fresh }]],
+    NOW,
+  );
+  // Exactly PENDING_TTL old is still fresh; one millisecond more and the server wins.
+  r.call(
+    'reconcilePending',
+    server,
+    [item('a', { frame: frame(80, 90) })],
+    [['a', { expect: { frame: { x: 80, y: 90 } }, at: NOW - TTL }]],
+    NOW,
+  );
+  r.call(
+    'reconcilePending',
+    server,
+    [item('a', { frame: frame(80, 90) })],
+    [['a', { expect: { frame: { x: 80, y: 90 } }, at: expired }]],
+    NOW,
+  );
+  // A change the server copy only differs from by 0.02 is not reflected yet.
+  r.call(
+    'reconcilePending',
+    [item('a', { z: 3.02 })],
+    [item('a', { z: 3 })],
+    [['a', { expect: { z: 3 }, at: fresh }]],
+    NOW,
+  );
+  r.call(
+    'reconcilePending',
+    [item('a', { z: 3.005 })],
+    [item('a', { z: 3 })],
+    [['a', { expect: { z: 3 }, at: fresh }]],
+    NOW,
+  );
+  // Numbers and strings never match; a missing value matches null.
+  r.call(
+    'reconcilePending',
+    [item('a', { z: '3' }), item('b')],
+    [item('a', { z: 3 }), item('b', { linkedActivityId: null })],
+    [
+      ['a', { expect: { z: 3 }, at: fresh }],
+      ['b', { expect: { linkedActivityId: null }, at: fresh }],
+    ],
+    NOW,
+  );
+  r.call(
+    'reconcilePending',
+    [{ id: 'a', state: 'active' }],
+    [item('a')],
+    [['a', { expect: { linkedActivityId: null, frame: { x: 0 } }, at: fresh }]],
+    NOW,
+  );
+  // Only the listed fields of a group are compared; whole values (arrays) must be equal.
+  r.call(
+    'reconcilePending',
+    [
+      item('a', { style: { color: 'yellow', locked: true, size: 'M' } }),
+      item('b', {
+        content: {
+          type: 'stroke',
+          tool: 'pen',
+          points: [
+            [0, 0],
+            [4, 4],
+          ],
+        },
+      }),
+    ],
+    [
+      item('a', { style: { color: 'yellow', locked: true } }),
+      item('b', {
+        content: {
+          type: 'stroke',
+          tool: 'pen',
+          points: [
+            [0, 0],
+            [5, 5],
+          ],
+        },
+      }),
+    ],
+    [
+      ['a', { expect: { style: { color: 'yellow', locked: true } }, at: fresh }],
+      [
+        'b',
+        {
+          expect: {
+            content: {
+              type: 'stroke',
+              tool: 'pen',
+              points: [
+                [0, 0],
+                [5, 5],
+              ],
+            },
+          },
+          at: fresh,
+        },
+      ],
+    ],
+    NOW,
+  );
+  // Deleted locally, still active on the server; restored locally, deleted on the server.
+  r.call(
+    'reconcilePending',
+    server,
+    [item('a', { state: 'deleted', generation: 1 }), item('c', { generation: 2, z: 3 })],
+    [
+      ['a', { expect: { state: 'deleted' }, at: fresh }],
+      ['c', { expect: { state: 'active' }, at: fresh }],
+    ],
+    NOW,
+  );
+  // Items the server does not return yet: fresh local ones are appended in the
+  // order the changes were made; expired or unknown ones are dropped.
+  r.call(
+    'reconcilePending',
+    server,
+    [item('new-2'), item('new-1'), item('new-3'), item('a')],
+    [
+      ['new-1', { expect: { state: 'active' }, at: fresh }],
+      ['new-2', { expect: { state: 'active' }, at: fresh - 5 }],
+      ['new-3', { expect: { state: 'active' }, at: expired }],
+      ['gone', { expect: { state: 'active' }, at: fresh }],
+    ],
+    NOW,
+  );
+  // A change that matches and has also expired is forgotten either way.
+  r.call(
+    'reconcilePending',
+    server,
+    [item('b', { frame: frame(300, 40), z: 2 })],
+    [['b', { expect: { z: 2 }, at: expired }]],
+    NOW,
+  );
+
+  m.call('isStaleResponse', null, 5, 1);
+  m.call('isStaleResponse', { items: [], cursor: 3, epoch: 1 }, 5, null);
+  m.call('isStaleResponse', { items: [], cursor: 3, epoch: 1 }, 0, 1);
+  m.call('isStaleResponse', { items: [], cursor: 3, epoch: 1 }, 5, 1);
+  m.call('isStaleResponse', { items: [], cursor: 5, epoch: 1 }, 5, 1);
+  m.call('isStaleResponse', { items: [], cursor: 7, epoch: 1 }, 5, 1);
+  m.call('isStaleResponse', { items: [], cursor: 3, epoch: 2 }, 5, 1);
+  m.call('isStaleResponse', { items: [], cursor: 3, epoch: '1' }, 5, 1);
+  m.call('isStaleResponse', { items: [], epoch: 1 }, 5, 1);
+  m.call('isStaleResponse', { items: [], cursor: 0, epoch: 1 }, 5, 1);
+  m.call('isStaleResponse', { items: [], cursor: 3 }, 5, 1);
+  m.call('isStaleResponse', { items: [], cursor: 3, epoch: null }, 5, 0);
+  m.call('isStaleResponse', { items: [], cursor: 3, epoch: 0 }, 5, 0);
+
+  return {
+    ...header(
+      ['app/src/board-pending.js'],
+      'reconcilePending 的第 3 个参数是 pending Map 的条目数组 [[id, { expect, at }], …]（按插入顺序），结果为 { items, pending }，pending 是调用后剩下的条目。',
+    ),
+    constants: { PENDING_TTL: TTL },
+    cases: [...m.cases, ...r.cases],
+  };
+}
+
+// ---------------------------------------------------------------------------
 const files = {
   'rich-text.json': richTextFixture(),
   'board-geometry.json': boardGeometryFixture(),
   'board-widgets.json': boardWidgetsFixture(),
   'itinerary.json': itineraryFixture(),
+  'board-sync.json': boardSyncFixture(),
 };
 
 const check = process.argv.includes('--check');

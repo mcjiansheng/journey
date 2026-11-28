@@ -1,0 +1,2916 @@
+{
+  "$comment": "由 mobile/tools/generate-fixtures.mjs 从网页端代码生成，不要手改。网页端函数改动后重新运行该脚本。 reconcilePending 的第 3 个参数是 pending Map 的条目数组 [[id, { expect, at }], …]（按插入顺序），结果为 { items, pending }，pending 是调用后剩下的条目。",
+  "sources": [
+    "app/src/board-pending.js"
+  ],
+  "constants": {
+    "PENDING_TTL": 15000
+  },
+  "cases": [
+    {
+      "fn": "mergeExpected",
+      "args": [],
+      "result": {}
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        {},
+        {
+          "state": "active"
+        }
+      ],
+      "result": {
+        "state": "active"
+      }
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        {
+          "frame": {
+            "x": 1,
+            "y": 2,
+            "w": 10,
+            "h": 10,
+            "rotation": 0,
+            "scale": 1
+          },
+          "z": 3
+        },
+        {
+          "frame": {
+            "x": 5
+          },
+          "z": 4
+        }
+      ],
+      "result": {
+        "frame": {
+          "x": 5,
+          "y": 2,
+          "w": 10,
+          "h": 10,
+          "rotation": 0,
+          "scale": 1
+        },
+        "z": 4
+      }
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        {
+          "style": {
+            "color": "yellow"
+          }
+        },
+        {
+          "style": {
+            "locked": true
+          },
+          "content": {
+            "type": "note",
+            "text": "集合"
+          }
+        }
+      ],
+      "result": {
+        "style": {
+          "color": "yellow",
+          "locked": true
+        },
+        "content": {
+          "type": "note",
+          "text": "集合"
+        }
+      }
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        {
+          "content": {
+            "type": "stroke",
+            "tool": "pen",
+            "points": [
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "content": {
+            "points": [
+              [
+                2,
+                2
+              ]
+            ]
+          }
+        }
+      ],
+      "result": {
+        "content": {
+          "type": "stroke",
+          "tool": "pen",
+          "points": [
+            [
+              2,
+              2
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        {
+          "linkedActivityId": "act-1",
+          "state": "active"
+        },
+        {
+          "linkedActivityId": null
+        }
+      ],
+      "result": {
+        "linkedActivityId": null,
+        "state": "active"
+      }
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        {
+          "state": "active"
+        },
+        {
+          "state": "deleted"
+        }
+      ],
+      "result": {
+        "state": "deleted"
+      }
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        {
+          "z": 1
+        },
+        {
+          "frame": {
+            "x": 1,
+            "y": 2
+          }
+        }
+      ],
+      "result": {
+        "z": 1,
+        "frame": {
+          "x": 1,
+          "y": 2
+        }
+      }
+    },
+    {
+      "fn": "mergeExpected",
+      "args": [
+        {
+          "tags": [
+            "a",
+            "b"
+          ]
+        },
+        {
+          "tags": [
+            "c"
+          ]
+        }
+      ],
+      "result": {
+        "tags": [
+          "c"
+        ]
+      }
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        null,
+        5,
+        1
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 3,
+          "epoch": 1
+        },
+        5,
+        null
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 3,
+          "epoch": 1
+        },
+        0,
+        1
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 3,
+          "epoch": 1
+        },
+        5,
+        1
+      ],
+      "result": true
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 5,
+          "epoch": 1
+        },
+        5,
+        1
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 7,
+          "epoch": 1
+        },
+        5,
+        1
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 3,
+          "epoch": 2
+        },
+        5,
+        1
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 3,
+          "epoch": "1"
+        },
+        5,
+        1
+      ],
+      "result": true
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "epoch": 1
+        },
+        5,
+        1
+      ],
+      "result": true
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 0,
+          "epoch": 1
+        },
+        5,
+        1
+      ],
+      "result": true
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 3
+        },
+        5,
+        1
+      ],
+      "result": false
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 3,
+          "epoch": null
+        },
+        5,
+        0
+      ],
+      "result": true
+    },
+    {
+      "fn": "isStaleResponse",
+      "args": [
+        {
+          "items": [],
+          "cursor": 3,
+          "epoch": 0
+        },
+        5,
+        0
+      ],
+      "result": true
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10,
+              "y": 20,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [],
+        [],
+        1795766400000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10,
+              "y": 20,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        "pending": []
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10,
+              "y": 20,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10.004,
+              "y": 19.996,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          [
+            "a",
+            {
+              "expect": {
+                "frame": {
+                  "x": 10.004,
+                  "y": 19.996
+                }
+              },
+              "at": 1795766399000
+            }
+          ]
+        ],
+        1795766400000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10,
+              "y": 20,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        "pending": []
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10,
+              "y": 20,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 80,
+              "y": 90,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          [
+            "a",
+            {
+              "expect": {
+                "frame": {
+                  "x": 80,
+                  "y": 90
+                }
+              },
+              "at": 1795766399000
+            }
+          ]
+        ],
+        1795766400000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 80,
+              "y": 90,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        "pending": [
+          [
+            "a",
+            {
+              "expect": {
+                "frame": {
+                  "x": 80,
+                  "y": 90
+                }
+              },
+              "at": 1795766399000
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10,
+              "y": 20,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 80,
+              "y": 90,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          [
+            "a",
+            {
+              "expect": {
+                "frame": {
+                  "x": 80,
+                  "y": 90
+                }
+              },
+              "at": 1795766385000
+            }
+          ]
+        ],
+        1795766400000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 80,
+              "y": 90,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        "pending": [
+          [
+            "a",
+            {
+              "expect": {
+                "frame": {
+                  "x": 80,
+                  "y": 90
+                }
+              },
+              "at": 1795766385000
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10,
+              "y": 20,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 80,
+              "y": 90,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          [
+            "a",
+            {
+              "expect": {
+                "frame": {
+                  "x": 80,
+                  "y": 90
+                }
+              },
+              "at": 1795766384999
+            }
+          ]
+        ],
+        1795766400000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10,
+              "y": 20,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        "pending": []
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3.02,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          [
+            "a",
+            {
+              "expect": {
+                "z": 3
+              },
+              "at": 1795766399000
+            }
+          ]
+        ],
+        1795766400000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        "pending": [
+          [
+            "a",
+            {
+              "expect": {
+                "z": 3
+              },
+              "at": 1795766399000
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3.005,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          [
+            "a",
+            {
+              "expect": {
+                "z": 3
+              },
+              "at": 1795766399000
+            }
+          ]
+        ],
+        1795766400000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3.005,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        "pending": []
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": "3",
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          [
+            "a",
+            {
+              "expect": {
+                "z": 3
+              },
+              "at": 1795766399000
+            }
+          ],
+          [
+            "b",
+            {
+              "expect": {
+                "linkedActivityId": null
+              },
+              "at": 1795766399000
+            }
+          ]
+        ],
+        1795766400000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        "pending": [
+          [
+            "a",
+            {
+              "expect": {
+                "z": 3
+              },
+              "at": 1795766399000
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "state": "active"
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          [
+            "a",
+            {
+              "expect": {
+                "linkedActivityId": null,
+                "frame": {
+                  "x": 0
+                }
+              },
+              "at": 1795766399000
+            }
+          ]
+        ],
+        1795766400000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        "pending": [
+          [
+            "a",
+            {
+              "expect": {
+                "linkedActivityId": null,
+                "frame": {
+                  "x": 0
+                }
+              },
+              "at": 1795766399000
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow",
+              "locked": true,
+              "size": "M"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "stroke",
+              "tool": "pen",
+              "points": [
+                [
+                  0,
+                  0
+                ],
+                [
+                  4,
+                  4
+                ]
+              ]
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow",
+              "locked": true
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "stroke",
+              "tool": "pen",
+              "points": [
+                [
+                  0,
+                  0
+                ],
+                [
+                  5,
+                  5
+                ]
+              ]
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          [
+            "a",
+            {
+              "expect": {
+                "style": {
+                  "color": "yellow",
+                  "locked": true
+                }
+              },
+              "at": 1795766399000
+            }
+          ],
+          [
+            "b",
+            {
+              "expect": {
+                "content": {
+                  "type": "stroke",
+                  "tool": "pen",
+                  "points": [
+                    [
+                      0,
+                      0
+                    ],
+                    [
+                      5,
+                      5
+                    ]
+                  ]
+                }
+              },
+              "at": 1795766399000
+            }
+          ]
+        ],
+        1795766400000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow",
+              "locked": true,
+              "size": "M"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "stroke",
+              "tool": "pen",
+              "points": [
+                [
+                  0,
+                  0
+                ],
+                [
+                  5,
+                  5
+                ]
+              ]
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        "pending": [
+          [
+            "b",
+            {
+              "expect": {
+                "content": {
+                  "type": "stroke",
+                  "tool": "pen",
+                  "points": [
+                    [
+                      0,
+                      0
+                    ],
+                    [
+                      5,
+                      5
+                    ]
+                  ]
+                }
+              },
+              "at": 1795766399000
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10,
+              "y": 20,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 2,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          [
+            "a",
+            {
+              "expect": {
+                "state": "deleted"
+              },
+              "at": 1795766399000
+            }
+          ],
+          [
+            "c",
+            {
+              "expect": {
+                "state": "active"
+              },
+              "at": 1795766399000
+            }
+          ]
+        ],
+        1795766400000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 2,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        "pending": [
+          [
+            "a",
+            {
+              "expect": {
+                "state": "deleted"
+              },
+              "at": 1795766399000
+            }
+          ],
+          [
+            "c",
+            {
+              "expect": {
+                "state": "active"
+              },
+              "at": 1795766399000
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10,
+              "y": 20,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          {
+            "id": "new-2",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "new-2"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "new-1",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "new-1"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "new-3",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "new-3"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          [
+            "new-1",
+            {
+              "expect": {
+                "state": "active"
+              },
+              "at": 1795766399000
+            }
+          ],
+          [
+            "new-2",
+            {
+              "expect": {
+                "state": "active"
+              },
+              "at": 1795766398995
+            }
+          ],
+          [
+            "new-3",
+            {
+              "expect": {
+                "state": "active"
+              },
+              "at": 1795766384999
+            }
+          ],
+          [
+            "gone",
+            {
+              "expect": {
+                "state": "active"
+              },
+              "at": 1795766399000
+            }
+          ]
+        ],
+        1795766400000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10,
+              "y": 20,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "new-1",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "new-1"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "new-2",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "new-2"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        "pending": [
+          [
+            "new-1",
+            {
+              "expect": {
+                "state": "active"
+              },
+              "at": 1795766399000
+            }
+          ],
+          [
+            "new-2",
+            {
+              "expect": {
+                "state": "active"
+              },
+              "at": 1795766398995
+            }
+          ],
+          [
+            "gone",
+            {
+              "expect": {
+                "state": "active"
+              },
+              "at": 1795766399000
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "fn": "reconcilePending",
+      "args": [
+        [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10,
+              "y": 20,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        [
+          [
+            "b",
+            {
+              "expect": {
+                "z": 2
+              },
+              "at": 1795766384999
+            }
+          ]
+        ],
+        1795766400000
+      ],
+      "result": {
+        "items": [
+          {
+            "id": "a",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 10,
+              "y": 20,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 1,
+            "content": {
+              "type": "note",
+              "text": "a"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "b",
+            "kind": "boardItem",
+            "state": "active",
+            "generation": 0,
+            "boardId": "default-board",
+            "frame": {
+              "x": 300,
+              "y": 40,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 2,
+            "content": {
+              "type": "note",
+              "text": "b"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          },
+          {
+            "id": "c",
+            "kind": "boardItem",
+            "state": "deleted",
+            "generation": 1,
+            "boardId": "default-board",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "w": 160,
+              "h": 120,
+              "rotation": 0,
+              "scale": 1
+            },
+            "z": 3,
+            "content": {
+              "type": "note",
+              "text": "c"
+            },
+            "style": {
+              "color": "yellow"
+            },
+            "linkedActivityId": null
+          }
+        ],
+        "pending": []
+      }
+    }
+  ]
+}
