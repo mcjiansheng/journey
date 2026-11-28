@@ -8,9 +8,22 @@ import org.json.JSONObject
 import kotlin.math.hypot
 
 val markIcons = linkedMapOf("circle" to "●", "triangle" to "▲", "square" to "■", "diamond" to "◆", "hexagon" to "⬢", "star" to "★", "heart" to "♥", "flag" to "⚑")
+val markIconNames = linkedMapOf("circle" to "圆", "triangle" to "三角", "square" to "方块", "diamond" to "菱形", "hexagon" to "六边形", "star" to "星", "heart" to "心", "flag" to "旗")
 val markColors = linkedMapOf("blue" to "#176b88", "green" to "#2f7a5a", "coral" to "#c8553d", "amber" to "#b7791f", "purple" to "#7a4f9a", "rose" to "#b8457a", "sky" to "#3f7fbf", "graphite" to "#4a5560")
 val markColorNames = linkedMapOf("blue" to "海图蓝", "green" to "森林绿", "coral" to "珊瑚红", "amber" to "琥珀", "purple" to "梅紫", "rose" to "玫红", "sky" to "天蓝", "graphite" to "石墨")
-fun markKey(mark: JSONObject) = mark.s("icon") + ":" + mark.s("color")
+fun defaultMark(): JSONObject = obj("icon" to "star", "color" to "amber")
+fun rawMark(payload: JSONObject): JSONObject? {
+    val mark = payload.optJSONObject("mark") ?: return null
+    return if (mark.s("icon").isEmpty() && mark.s("color").isEmpty()) null else mark
+}
+fun effectiveMark(payload: JSONObject): JSONObject = rawMark(payload) ?: defaultMark()
+fun markKey(mark: JSONObject?): String =
+    if (mark == null || (mark.s("icon").isEmpty() && mark.s("color").isEmpty())) "default"
+    else mark.s("icon") + ":" + mark.s("color")
+fun markLabel(mark: JSONObject): String =
+    (markColorNames[mark.s("color")] ?: "") + (markIconNames[mark.s("icon")] ?: "")
+fun markGlyph(mark: JSONObject): String = markIcons[mark.s("icon")] ?: "★"
+fun markColorHex(mark: JSONObject): String = markColors[mark.s("color")] ?: "#b7791f"
 fun markTitle(mark: JSONObject) = (markIcons[mark.s("icon")] ?: "●") + " " + (markColorNames[mark.s("color")] ?: "海图蓝")
 
 data class ClusterPoint(val id: String, val x: Double, val y: Double, val mark: String, val priority: Int = 0)
@@ -42,7 +55,7 @@ fun MarkEditor(s: JourneyStore, initial: JSONObject, favorite: JSONObject? = nul
     var savePreset by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
     val mark = obj("icon" to icon, "color" to color)
-    val used = s.objects("favorite").count { it.s("state") == "active" && markKey(it.o("payload").o("mark")) == markKey(initial) }
+    val used = s.objects("favorite").count { it.s("state") == "active" && markKey(rawMark(it.o("payload"))) == markKey(initial) }
     fun save() { s.action {
         if (favorite != null) s.mutate("patch", favorite.s("id"), patch = obj("mark" to mark))
         if (preset != null) s.mutate("patch", preset.s("id"), patch = obj("icon" to icon, "color" to color, "name" to name))
@@ -66,7 +79,7 @@ fun MarkPresetManager(s: JourneyStore, close: () -> Unit) {
     Sheet("管理预设", close) {
         presets.forEachIndexed { index, preset ->
             Panel {
-                TextButton({ editing = preset }) { Text(markTitle(preset.o("payload")) + " · " + preset.o("payload").s("name").ifBlank { "未命名" }) }
+                TextButton({ editing = preset }) { Text(markTitle(preset.o("payload")) + " · " + preset.o("payload").s("name").ifBlank { markLabel(preset.o("payload")) }) }
                 Row {
                     TextButton({ s.action { val reordered = presets.toMutableList().apply { add(index - 1, removeAt(index)) }; reordered.forEachIndexed { n, row -> s.mutate("patch", row.s("id"), patch = obj("order" to n * 1024)) } } }, enabled = index > 0) { Text("上移") }
                     TextButton({ s.action { val reordered = presets.toMutableList().apply { add(index + 1, removeAt(index)) }; reordered.forEachIndexed { n, row -> s.mutate("patch", row.s("id"), patch = obj("order" to n * 1024)) } } }, enabled = index < presets.lastIndex) { Text("下移") }
